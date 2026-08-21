@@ -57,7 +57,7 @@ go run ./cmd/niimcli print \
   --config ./config.example.json \
   --printer d110-desk \
   --preset d110-12x40 \
-  --image ./label.png \
+  --image ./example.png \
   --preview-out ./preview.png
 ```
 
