@@ -15,7 +15,10 @@ import (
 	"tinygo.org/x/bluetooth"
 )
 
-const defaultScanTimeout = 10 * time.Second
+const (
+	defaultScanTimeout = 5 * time.Second
+	writeInterval      = 10 * time.Millisecond
+)
 
 type Backend struct {
 	adapter *bluetooth.Adapter
@@ -33,10 +36,34 @@ func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (t
 		return nil, fmt.Errorf("enable ble adapter: %w", err)
 	}
 
-	address, name, err := b.scanForDevice(ctx, printer)
+	var (
+		address     bluetooth.Address
+		name        string
+		connectMode string
+		err         error
+	)
+
+	if printer.Identifier != "" {
+		address.Set(printer.Identifier)
+		device, directErr := b.adapter.Connect(address, bluetooth.ConnectionParams{})
+		if directErr == nil {
+			return &connection{
+				device: device,
+				meta: map[string]any{
+					"address":      address.String(),
+					"matched_name": printer.DeviceName,
+					"connect_mode": "identifier",
+				},
+			}, nil
+		}
+		// fall through to scan-based discovery when direct identifier connect fails
+	}
+
+	address, name, err = b.scanForDevice(ctx, printer)
 	if err != nil {
 		return nil, err
 	}
+	connectMode = "scan"
 
 	device, err := b.adapter.Connect(address, bluetooth.ConnectionParams{})
 	if err != nil {
@@ -48,6 +75,7 @@ func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (t
 		meta: map[string]any{
 			"address":      address.String(),
 			"matched_name": name,
+			"connect_mode": connectMode,
 		},
 	}, nil
 }
@@ -664,7 +692,7 @@ func (c *connection) writePacket(name string, packet []byte) error {
 		"name":  name,
 		"bytes": append([]byte(nil), packet...),
 	}
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(writeInterval)
 	return nil
 }
 
