@@ -1,4 +1,8 @@
 # niimcli (beta)
+<div align="center">
+  <img width="360" alt="d110clidemo" src="https://github.com/user-attachments/assets/3196c342-9ff2-4710-bc47-cdceb10ce2d3" />
+  <img width="244" height="400" alt="d110printingDemo2" src="https://github.com/user-attachments/assets/765fe6f6-bdcb-482d-b689-de1105338455" />
+</div>
 
 `niimcli` is a local CLI and HTTP service written for printing PNG label images to Niimbot printers over Bluetooth Low Energy written in Go.
 
