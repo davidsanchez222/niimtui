@@ -11,13 +11,6 @@ Currently, it has only been verified using macOS BLE print paths for:
 - `D110_M` v4-class devices
 - `B1`
 
-## Demo
-
-Demo links will live here:
-
-- CLI demo video: coming soon
-- Real printer demo video: coming soon
-
 ## Why
 
 Printing to Niimbot printers from macOS can be awkward, especially when the practical options are tied to browser-specific BLE support or a web app workflow.
