@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"image"
-	"image/color"
 	"image/png"
 	"testing"
 
@@ -12,11 +11,11 @@ import (
 	"niimcli/internal/config"
 )
 
-func TestValidateRequestUsesDefaultPresetAndFullImageDefaultLayout(t *testing.T) {
+func TestValidateRequestUsesDefaultPresetAndQROnlyDefaultLayout(t *testing.T) {
 	svc := mustService(t)
 	req := api.PrintRequest{
 		Printer: api.PrinterSelector{Selector: "d110-desk"},
-		Image:   api.ImageRequest{PNGBase64: testPNG(t, 320, 96)},
+		QR:      api.QRRequest{Text: "https://example.test/item/1"},
 	}
 
 	printer, preset, errResp := svc.validateRequest(req)
@@ -29,21 +28,38 @@ func TestValidateRequestUsesDefaultPresetAndFullImageDefaultLayout(t *testing.T)
 	if preset.Name != "d110-12x40" {
 		t.Fatalf("preset = %q, want d110-12x40", preset.Name)
 	}
-	if got := normalizedLayout(req.Label.Layout); got != api.LayoutFullImage {
-		t.Fatalf("normalizedLayout() = %q, want %q", got, api.LayoutFullImage)
+	if got := normalizedLayout(req.Label.Layout); got != api.LayoutQROnly {
+		t.Fatalf("normalizedLayout() = %q, want %q", got, api.LayoutQROnly)
 	}
 }
 
-func TestValidateRequestAcceptsLegacyQRField(t *testing.T) {
+func TestValidateRequestRejectsMissingQRText(t *testing.T) {
+	svc := mustService(t)
+	req := api.PrintRequest{Printer: api.PrinterSelector{Selector: "d110-desk"}}
+
+	_, _, errResp := svc.validateRequest(req)
+	if errResp == nil || errResp.Error == nil {
+		t.Fatalf("validateRequest() expected error")
+	}
+	if errResp.Error.Code != ErrInvalidRequest {
+		t.Fatalf("error code = %q, want %q", errResp.Error.Code, ErrInvalidRequest)
+	}
+}
+
+func TestValidateRequestRejectsUnsupportedLayout(t *testing.T) {
 	svc := mustService(t)
 	req := api.PrintRequest{
 		Printer: api.PrinterSelector{Selector: "d110-desk"},
-		QR:      api.QRRequest{PNGBase64: testPNG(t, 320, 96)},
+		Label:   api.LabelRequest{Layout: api.Layout("full-image")},
+		QR:      api.QRRequest{Text: "https://example.test/item/1"},
 	}
 
 	_, _, errResp := svc.validateRequest(req)
-	if errResp != nil {
-		t.Fatalf("validateRequest() unexpected error for legacy qr field = %#v", errResp)
+	if errResp == nil || errResp.Error == nil {
+		t.Fatalf("validateRequest() expected error")
+	}
+	if errResp.Error.Code != ErrInvalidRequest {
+		t.Fatalf("error code = %q, want %q", errResp.Error.Code, ErrInvalidRequest)
 	}
 }
 
@@ -51,7 +67,7 @@ func TestValidateRequestRejectsUnknownPrinter(t *testing.T) {
 	svc := mustService(t)
 	req := api.PrintRequest{
 		Printer: api.PrinterSelector{Selector: "missing"},
-		Image:   api.ImageRequest{PNGBase64: testPNG(t, 320, 96)},
+		QR:      api.QRRequest{Text: "https://example.test/item/1"},
 	}
 
 	_, _, errResp := svc.validateRequest(req)
@@ -63,39 +79,62 @@ func TestValidateRequestRejectsUnknownPrinter(t *testing.T) {
 	}
 }
 
-func TestValidateRequestRejectsInvalidImage(t *testing.T) {
+func TestRenderPreviewProducesPNG(t *testing.T) {
 	svc := mustService(t)
-	req := api.PrintRequest{
-		Printer: api.PrinterSelector{Selector: "d110-desk"},
-		Image:   api.ImageRequest{PNGBase64: api.Base64PNG([]byte("not-a-png"))},
+	requests := []api.PrintRequest{
+		{
+			Printer: api.PrinterSelector{Selector: "b1-50x30"},
+			Label:   api.LabelRequest{Preset: "b1-50x30", Layout: api.LayoutQRTitle},
+			QR:      api.QRRequest{Text: "https://example.test/item/50x30"},
+			Content: api.ContentRequest{Title: "Bin 30"},
+		},
+		{
+			Printer: api.PrinterSelector{Selector: "b1-round"},
+			Label:   api.LabelRequest{Preset: "b1-50x50-round", Layout: api.LayoutQRTitleSubtitle},
+			QR:      api.QRRequest{Text: "https://example.test/item/50x50"},
+			Content: api.ContentRequest{Title: "Decor", Subtitle: "Shelf 2"},
+		},
+		{
+			Printer: api.PrinterSelector{Selector: "b1-50x80"},
+			Label:   api.LabelRequest{Preset: "b1-50x80", Layout: api.LayoutQRTitleSubtitle},
+			QR:      api.QRRequest{Text: "https://example.test/item/50x80"},
+			Content: api.ContentRequest{Title: "Hardware", Subtitle: "Wall Rack"},
+		},
 	}
 
-	_, _, errResp := svc.validateRequest(req)
-	if errResp == nil || errResp.Error == nil {
-		t.Fatalf("validateRequest() expected error")
-	}
-	if errResp.Error.Code != ErrInvalidImage {
-		t.Fatalf("error code = %q, want %q", errResp.Error.Code, ErrInvalidImage)
+	for _, req := range requests {
+		preview, err := svc.RenderPreview(context.Background(), req)
+		if err != nil {
+			t.Fatalf("RenderPreview() error for %q = %v", req.Label.Preset, err)
+		}
+		if len(preview) == 0 {
+			t.Fatalf("RenderPreview() returned empty preview for %q", req.Label.Preset)
+		}
+		if _, err := png.Decode(bytes.NewReader(preview)); err != nil {
+			t.Fatalf("preview for %q is not a valid PNG: %v", req.Label.Preset, err)
+		}
 	}
 }
 
-func TestRenderPreviewProducesPNG(t *testing.T) {
+func TestRoundPreviewUsesExpectedCanvasSize(t *testing.T) {
 	svc := mustService(t)
 	req := api.PrintRequest{
 		Printer: api.PrinterSelector{Selector: "b1-round"},
-		Label:   api.LabelRequest{Preset: "round-40mm"},
-		Image:   api.ImageRequest{PNGBase64: testPNG(t, 320, 320)},
+		Label:   api.LabelRequest{Preset: "b1-50x50-round", Layout: api.LayoutQRTitleSubtitle},
+		QR:      api.QRRequest{Text: "https://example.test/item/round"},
+		Content: api.ContentRequest{Title: "Decor", Subtitle: "Shelf 2"},
 	}
 
 	preview, err := svc.RenderPreview(context.Background(), req)
 	if err != nil {
 		t.Fatalf("RenderPreview() error = %v", err)
 	}
-	if len(preview) == 0 {
-		t.Fatal("RenderPreview() returned empty preview")
+	img, err := png.Decode(bytes.NewReader(preview))
+	if err != nil {
+		t.Fatalf("png.Decode() error = %v", err)
 	}
-	if _, err := png.Decode(bytes.NewReader(preview)); err != nil {
-		t.Fatalf("preview is not a valid PNG: %v", err)
+	if img.Bounds() != image.Rect(0, 0, 384, 384) {
+		t.Fatalf("preview bounds = %v, want %v", img.Bounds(), image.Rect(0, 0, 384, 384))
 	}
 }
 
@@ -113,7 +152,7 @@ func TestResolvePrinterIncludesIdentifierProfiles(t *testing.T) {
 func mustService(t *testing.T) *Service {
 	t.Helper()
 	cfg := config.Config{
-		Server: config.ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "test-token"},
+		Server: config.ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "test-token", AllowedOrigins: []string{"https://homebox.example"}},
 		Printers: []config.PrinterProfile{
 			{
 				Name:          "d110-desk",
@@ -125,18 +164,38 @@ func mustService(t *testing.T) *Service {
 				Defaults:      config.PrinterDefaults{Density: 3},
 			},
 			{
+				Name:          "b1-50x30",
+				Model:         "B1",
+				Transport:     "ble",
+				DeviceName:    "B1-I427031488",
+				Identifier:    "e6bc3bef-5a60-3bc7-ffab-50edc0e9f122",
+				DefaultPreset: "b1-50x30",
+				Defaults:      config.PrinterDefaults{Density: 3},
+			},
+			{
 				Name:          "b1-round",
 				Model:         "B1",
 				Transport:     "ble",
 				DeviceName:    "B1-I427031488",
 				Identifier:    "e6bc3bef-5a60-3bc7-ffab-50edc0e9f122",
-				DefaultPreset: "round-40mm",
+				DefaultPreset: "b1-50x50-round",
+				Defaults:      config.PrinterDefaults{Density: 3},
+			},
+			{
+				Name:          "b1-50x80",
+				Model:         "B1",
+				Transport:     "ble",
+				DeviceName:    "B1-I427031488",
+				Identifier:    "e6bc3bef-5a60-3bc7-ffab-50edc0e9f122",
+				DefaultPreset: "b1-50x80",
 				Defaults:      config.PrinterDefaults{Density: 3},
 			},
 		},
 		Presets: []config.LabelPreset{
-			{Name: "d110-12x40", WidthMM: 40, HeightMM: 12, Shape: "rect", Layout: "full-image", MarginsMM: 1},
-			{Name: "round-40mm", WidthMM: 40, HeightMM: 40, Shape: "round", Layout: "full-image", MarginsMM: 2},
+			{Name: "d110-12x40", WidthMM: 40, HeightMM: 12, Shape: "rect", Layout: "qr-only", MarginsMM: 1},
+			{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 1},
+			{Name: "b1-50x50-round", WidthMM: 50, HeightMM: 50, Shape: "round", Layout: "qr-title-subtitle", MarginsMM: 2},
+			{Name: "b1-50x80", WidthMM: 50, HeightMM: 80, Shape: "rect", Layout: "qr-title-subtitle", MarginsMM: 2},
 		},
 	}
 	svc, err := New(cfg)
@@ -144,24 +203,4 @@ func mustService(t *testing.T) *Service {
 		t.Fatalf("New() error = %v", err)
 	}
 	return svc
-}
-
-func testPNG(t *testing.T, width, height int) api.Base64PNG {
-	t.Helper()
-	img := image.NewGray(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			img.SetGray(x, y, color.Gray{Y: 255})
-		}
-	}
-	for y := height / 4; y < (height/4)*3; y++ {
-		for x := width / 4; x < (width/4)*3; x++ {
-			img.SetGray(x, y, color.Gray{Y: 0})
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatalf("png.Encode() error = %v", err)
-	}
-	return api.Base64PNG(buf.Bytes())
 }

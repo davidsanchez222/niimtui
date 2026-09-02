@@ -1,10 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image/png"
 	"strings"
 	"time"
 
@@ -202,21 +200,12 @@ func (s *Service) validateRequest(req api.PrintRequest) (config.PrinterProfile, 
 		return config.PrinterProfile{}, config.LabelPreset{}, errorResponse(ErrInvalidRequest, "options.copies must be greater than zero")
 	}
 
-	pngData := sourcePNG(req)
-	if len(pngData) == 0 {
-		return config.PrinterProfile{}, config.LabelPreset{}, errorResponse(ErrInvalidImage, "image.png_base64 is required")
-	}
-
-	if len(pngData) > 4<<20 {
-		return config.PrinterProfile{}, config.LabelPreset{}, errorResponse(ErrInvalidImage, "image.png_base64 exceeds maximum size")
-	}
-
-	if _, err := png.DecodeConfig(bytes.NewReader(pngData)); err != nil {
-		return config.PrinterProfile{}, config.LabelPreset{}, errorResponse(ErrInvalidImage, "image.png_base64 must contain a valid PNG image")
+	if strings.TrimSpace(req.QR.Text) == "" {
+		return config.PrinterProfile{}, config.LabelPreset{}, errorResponse(ErrInvalidRequest, "qr.text is required")
 	}
 
 	layout := normalizedLayout(req.Label.Layout)
-	if layout != api.LayoutFullImage && layout != api.LayoutQROnly && layout != api.LayoutQRTitle && layout != api.LayoutQRTitleSubtitle {
+	if layout != api.LayoutQROnly && layout != api.LayoutQRTitle && layout != api.LayoutQRTitleSubtitle {
 		return config.PrinterProfile{}, config.LabelPreset{}, errorResponse(ErrInvalidRequest, "label.layout is not supported")
 	}
 
@@ -242,7 +231,7 @@ func (s *Service) resolvePrinter(selector string) (config.PrinterProfile, *api.P
 
 func normalizedLayout(layout api.Layout) api.Layout {
 	if layout == "" {
-		return api.LayoutFullImage
+		return api.LayoutQROnly
 	}
 	return layout
 }
@@ -268,11 +257,4 @@ func errorResponse(code, message string) *api.PrintResponse {
 			Message: message,
 		},
 	}
-}
-
-func sourcePNG(req api.PrintRequest) []byte {
-	if len(req.Image.PNGBase64) > 0 {
-		return req.Image.PNGBase64
-	}
-	return req.QR.PNGBase64
 }

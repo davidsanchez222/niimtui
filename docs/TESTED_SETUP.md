@@ -7,7 +7,7 @@ This document captures the currently verified local setup and the commands that 
 - OS: macOS
 - Transport: BLE
 - Config format: JSON
-- Input mode: full PNG label image
+- Input mode: `qr.text` plus optional title/subtitle
 
 ## Verified Printers
 
@@ -72,8 +72,24 @@ go run ./cmd/niimcli print \
   --config ./config.example.json \
   --printer d110-desk \
   --preset d110-12x40 \
-  --image ./label.png \
+  --layout qr-only \
+  --qr-text https://homebox.example/items/123 \
   --preview-out ./preview.png
+```
+
+### Preview Without Printing
+
+```bash
+go run ./cmd/niimcli print \
+  --config ./config.example.json \
+  --printer b1-round \
+  --preset b1-50x50-round \
+  --layout qr-title-subtitle \
+  --qr-text https://homebox.example/items/123 \
+  --title "Garage Bin 4" \
+  --subtitle "Top Shelf" \
+  --preview-out ./preview.png \
+  --no-print
 ```
 
 ### Print On B1
@@ -82,8 +98,11 @@ go run ./cmd/niimcli print \
 go run ./cmd/niimcli print \
   --config ./config.example.json \
   --printer b1-round \
-  --preset round-40mm \
-  --image ./label.png \
+  --preset b1-50x50-round \
+  --layout qr-title-subtitle \
+  --qr-text https://homebox.example/items/123 \
+  --title "Garage Bin 4" \
+  --subtitle "Top Shelf" \
   --preview-out ./preview.png
 ```
 
@@ -91,21 +110,21 @@ go run ./cmd/niimcli print \
 
 The currently validated path is:
 
-- full PNG label image in
+- `qr.text` plus optional title/subtitle in
 - printer-specific raster/protocol handling in `niimcli`
 - BLE print out
 
-This means the tested CLI and service path expects the image to already represent the final label layout.
+This means the tested CLI and service path expects `niimcli` to generate the QR and compose the final label layout locally.
 
-Example:
+`--preview-out` writes that exact rendered print job to disk as a PNG. Add `--no-print` to stop before the BLE print step.
 
-- QR on the left and text on the right as one rendered PNG
+First-pass B1 layout heuristics:
 
-Future work can add separate composition modes such as:
+- `50x30` rect: QR left, text right
+- `50x50` round: QR centered, text below
+- `50x80` rect: large QR above, text below
 
-- QR-only input
-- title/subtitle fields
-- service-side label layout templates
+Later work should define how Homebox maps page data into `content.title` and `content.subtitle`.
 
 ## Debugging Notes
 

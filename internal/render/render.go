@@ -8,6 +8,12 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
+	"strings"
+
+	"github.com/skip2/go-qrcode"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 
 	"niimcli/internal/api"
 	"niimcli/internal/config"
@@ -31,13 +37,9 @@ func QRLabel(req api.PrintRequest, printer config.PrinterProfile, preset config.
 		return Result{}, fmt.Errorf("invalid preset dimensions")
 	}
 
-	sourceImage, err := png.Decode(bytes.NewReader(sourcePNG(req)))
-	if err != nil {
-		return Result{}, fmt.Errorf("decode source png: %w", err)
-	}
-
 	widthPx := mmToPx(preset.WidthMM)
 	heightPx := mmToPx(preset.HeightMM)
+	widthPx, heightPx = constrainToPrinter(printer, widthPx, heightPx)
 	marginPx := mmToPx(preset.MarginsMM)
 	if widthPx <= 0 || heightPx <= 0 {
 		return Result{}, fmt.Errorf("invalid output size")
@@ -51,12 +53,10 @@ func QRLabel(req api.PrintRequest, printer config.PrinterProfile, preset config.
 	canvas := image.NewGray(image.Rect(0, 0, widthPx, heightPx))
 	draw.Draw(canvas, canvas.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
 
-	if sourceImage.Bounds().Dx() == widthPx && sourceImage.Bounds().Dy() == heightPx {
-		scaleNearest(canvas, canvas.Bounds(), sourceImage, sourceImage.Bounds())
-	} else {
-		qrBounds := fitCentered(sourceImage.Bounds(), printable)
-		scaleNearest(canvas, qrBounds, sourceImage, sourceImage.Bounds())
+	if err := composeLabel(canvas, printable, preset, req); err != nil {
+		return Result{}, err
 	}
+
 	thresholdToMonochrome(canvas)
 	if preset.Shape == "round" {
 		maskRound(canvas)
@@ -88,11 +88,220 @@ func QRLabel(req api.PrintRequest, printer config.PrinterProfile, preset config.
 	}, nil
 }
 
-func sourcePNG(req api.PrintRequest) []byte {
-	if len(req.Image.PNGBase64) > 0 {
-		return req.Image.PNGBase64
+func composeLabel(canvas *image.Gray, printable image.Rectangle, preset config.LabelPreset, req api.PrintRequest) error {
+	qrImage, err := qrcode.New(strings.TrimSpace(req.QR.Text), qrcode.Medium)
+	if err != nil {
+		return fmt.Errorf("generate qr: %w", err)
 	}
-	return req.QR.PNGBase64
+	qrImage.DisableBorder = true
+
+	layout := normalizedLayout(req.Label.Layout)
+	if layout == api.LayoutQROnly {
+		return drawQR(canvas, qrImage, fitCentered(image.Rect(0, 0, 1, 1), printable))
+	}
+
+	face := basicfont.Face7x13
+	spacing := 6
+	textLines := make([]string, 0, 2)
+	if layout == api.LayoutQRTitle || layout == api.LayoutQRTitleSubtitle {
+		textLines = append(textLines, strings.TrimSpace(req.Content.Title))
+	}
+	if layout == api.LayoutQRTitleSubtitle {
+		textLines = append(textLines, strings.TrimSpace(req.Content.Subtitle))
+	}
+
+	qrRect, textRect, stacked := chooseLayout(printable, preset, layout, face, spacing)
+	if err := drawQR(canvas, qrImage, qrRect); err != nil {
+		return err
+	}
+	if textRect.Dx() <= 0 || textRect.Dy() <= 0 {
+		return nil
+	}
+	drawTextBlock(canvas, textRect, textLines, face, spacing, stacked)
+	return nil
+}
+
+func chooseLayout(printable image.Rectangle, preset config.LabelPreset, layout api.Layout, face font.Face, spacing int) (image.Rectangle, image.Rectangle, bool) {
+	if layout == api.LayoutQROnly {
+		return printable, image.Rectangle{}, false
+	}
+
+	isRound := strings.EqualFold(preset.Shape, "round")
+	if isRound {
+		textHeight := face.Metrics().Height.Ceil()
+		lineCount := 1
+		if layout == api.LayoutQRTitleSubtitle {
+			lineCount = 2
+		}
+		textBlockHeight := lineCount*textHeight + (lineCount-1)*spacing
+		gap := 6
+		textRect := image.Rect(printable.Min.X, printable.Max.Y-textBlockHeight, printable.Max.X, printable.Max.Y)
+		qrRect := image.Rect(printable.Min.X, printable.Min.Y, printable.Max.X, textRect.Min.Y-gap)
+		if qrRect.Dy() < mmToPx(12) {
+			return printable, image.Rectangle{}, true
+		}
+		return roundSafeQRRect(qrRect), textRect, true
+	}
+	if preset.HeightMM > preset.WidthMM {
+		return chooseStackedRectLayout(printable, layout, face, spacing)
+	}
+
+	gap := 8
+	textWidth := printable.Dx() / 2
+	if preset.WidthMM >= 70 {
+		textWidth = int(float64(printable.Dx()) * 0.4)
+	}
+	if textWidth < mmToPx(12) {
+		textWidth = mmToPx(12)
+	}
+	textRect := image.Rect(printable.Max.X-textWidth, printable.Min.Y, printable.Max.X, printable.Max.Y)
+	qrRect := image.Rect(printable.Min.X, printable.Min.Y, textRect.Min.X-gap, printable.Max.Y)
+	if qrRect.Dx() <= 0 || qrRect.Dy() <= 0 {
+		return fitCentered(image.Rect(0, 0, 1, 1), printable), image.Rectangle{}, false
+	}
+	return fitCentered(image.Rect(0, 0, 1, 1), qrRect), textRect, false
+}
+
+func chooseStackedRectLayout(printable image.Rectangle, layout api.Layout, face font.Face, spacing int) (image.Rectangle, image.Rectangle, bool) {
+	textHeight := face.Metrics().Height.Ceil()
+	lineCount := 1
+	if layout == api.LayoutQRTitleSubtitle {
+		lineCount = 2
+	}
+	textBlockHeight := lineCount*textHeight + (lineCount-1)*spacing
+	gap := 8
+	textRect := image.Rect(printable.Min.X, printable.Max.Y-textBlockHeight, printable.Max.X, printable.Max.Y)
+	qrRect := image.Rect(printable.Min.X, printable.Min.Y, printable.Max.X, textRect.Min.Y-gap)
+	if qrRect.Dx() <= 0 || qrRect.Dy() <= 0 {
+		return fitCentered(image.Rect(0, 0, 1, 1), printable), image.Rectangle{}, true
+	}
+	return fitCentered(image.Rect(0, 0, 1, 1), qrRect), textRect, true
+}
+
+func constrainToPrinter(printer config.PrinterProfile, widthPx, heightPx int) (int, int) {
+	maxWidth := maxPrintableWidthPx(printer.Model)
+	if maxWidth == 0 {
+		return widthPx, heightPx
+	}
+	shortSide := min(widthPx, heightPx)
+	if shortSide <= maxWidth {
+		return widthPx, heightPx
+	}
+	scale := float64(maxWidth) / float64(shortSide)
+	return int(math.Round(float64(widthPx) * scale)), int(math.Round(float64(heightPx) * scale))
+}
+
+func maxPrintableWidthPx(model string) int {
+	switch strings.ToUpper(strings.TrimSpace(model)) {
+	case "B1", "B18", "B21":
+		return 384
+	case "D11":
+		return 96
+	default:
+		return 0
+	}
+}
+
+func roundSafeQRRect(bounds image.Rectangle) image.Rectangle {
+	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
+		return image.Rectangle{}
+	}
+
+	size := min(bounds.Dx(), bounds.Dy())
+	if size <= 0 {
+		return image.Rectangle{}
+	}
+
+	// Keep the QR inside the inscribed circle rather than the full square bounds.
+	safeSize := int(math.Floor(float64(size) / math.Sqrt2))
+	padding := max(4, size/20)
+	safeSize -= padding * 2
+	if safeSize < 1 {
+		safeSize = 1
+	}
+
+	centerX := bounds.Min.X + bounds.Dx()/2
+	centerY := bounds.Min.Y + bounds.Dy()/2
+	half := safeSize / 2
+	minX := centerX - half
+	minY := centerY - half
+	return image.Rect(minX, minY, minX+safeSize, minY+safeSize)
+}
+
+func drawQR(dst draw.Image, code *qrcode.QRCode, rect image.Rectangle) error {
+	if rect.Dx() <= 0 || rect.Dy() <= 0 {
+		return nil
+	}
+	size := min(rect.Dx(), rect.Dy())
+	if size <= 0 {
+		return nil
+	}
+	pngData, err := code.PNG(size)
+	if err != nil {
+		return fmt.Errorf("encode qr: %w", err)
+	}
+	img, err := png.Decode(bytes.NewReader(pngData))
+	if err != nil {
+		return fmt.Errorf("decode qr: %w", err)
+	}
+	centered := fitCentered(img.Bounds(), rect)
+	scaleNearest(dst, centered, img, img.Bounds())
+	return nil
+}
+
+func drawTextBlock(dst draw.Image, rect image.Rectangle, lines []string, face font.Face, spacing int, centered bool) {
+	if len(lines) == 0 {
+		return
+	}
+	metrics := face.Metrics()
+	lineHeight := metrics.Height.Ceil()
+	blockHeight := len(lines)*lineHeight + (len(lines)-1)*spacing
+	baseline := rect.Min.Y + metrics.Ascent.Ceil()
+	if centered {
+		baseline = rect.Min.Y + max(0, (rect.Dy()-blockHeight)/2) + metrics.Ascent.Ceil()
+	}
+
+	for i, line := range lines {
+		trimmed := fitText(line, face, rect.Dx())
+		if trimmed == "" {
+			continue
+		}
+		y := baseline + i*(lineHeight+spacing)
+		if y > rect.Max.Y {
+			break
+		}
+		x := rect.Min.X
+		if centered {
+			lineWidth := font.MeasureString(face, trimmed).Ceil()
+			x = rect.Min.X + max(0, (rect.Dx()-lineWidth)/2)
+		}
+		d := font.Drawer{
+			Dst:  dst,
+			Src:  image.Black,
+			Face: face,
+			Dot:  fixed.P(x, y),
+		}
+		d.DrawString(trimmed)
+	}
+}
+
+func fitText(s string, face font.Face, maxWidth int) string {
+	s = strings.TrimSpace(s)
+	if s == "" || maxWidth <= 0 {
+		return ""
+	}
+	if font.MeasureString(face, s).Ceil() <= maxWidth {
+		return s
+	}
+	runes := []rune(s)
+	for len(runes) > 0 {
+		runes = runes[:len(runes)-1]
+		candidate := strings.TrimSpace(string(runes)) + "..."
+		if font.MeasureString(face, candidate).Ceil() <= maxWidth {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func mmToPx(mm float64) int {
@@ -271,4 +480,25 @@ func rotateRect(r image.Rectangle, width, height, rotation int) image.Rectangle 
 	}
 
 	return image.Rect(minX, minY, maxX, maxY)
+}
+
+func normalizedLayout(layout api.Layout) api.Layout {
+	if layout == "" {
+		return api.LayoutQROnly
+	}
+	return layout
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

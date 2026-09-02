@@ -1,6 +1,6 @@
 # niimcli (beta)
 
-`niimcli` is a local CLI and HTTPS service for printing to Niimbot label printers over Bluetooth Low Energy.
+`niimcli` is a local CLI and HTTP or HTTPS service for printing to Niimbot label printers over Bluetooth Low Energy.
 
 It is designed for workflows where another tool, script, or automation needs to send a label image or print request to a nearby machine that has access to a Niimbot printer.
 
@@ -9,14 +9,14 @@ It is designed for workflows where another tool, script, or automation needs to 
 Typical usage:
 
 ```text
-Client or automation
+Browser UI or automation
 -> POST /print
 -> niimcli resolves printer + preset
--> niimcli renders or accepts the final label image
+-> niimcli generates QR and composes the final label
 -> niimcli prints over BLE
 ```
 
-The current working path sends a PNG label image and print options. `niimcli` handles printer-specific transport and protocol details, and can later support service-side composition modes.
+The current working path sends QR text plus optional label text. `niimcli` handles local QR generation, preset-aware composition, and printer-specific transport/protocol details.
 
 ## Status
 
@@ -32,7 +32,7 @@ The next implementation target is to expand the service contract cleanly for fut
 | Transport        | BLE                           |
 | Printers         | D110_M v4 working, B1 working |
 | Service API      | HTTPS                         |
-| Input            | PNG label image               |
+| Input            | QR text plus optional text    |
 | Config format    | JSON                          |
 
 ## Features
@@ -41,17 +41,17 @@ The next implementation target is to expand the service contract cleanly for fut
 - HTTPS service mode for remote print requests
 - BLE-first support for Niimbot printers
 - named printer profiles for selecting between configured printers
-- full label image input for direct printing
+- semantic QR-first label requests
 - model-aware BLE protocol handling
 - device-type-aware print task selection
-- service-side label composition for future QR-only workflows
+- service-side QR composition with preset-aware layouts
 - JSON configuration for printers, presets, and service settings
 
 ## Design Principles
 
 - keep printer-specific logic out of upstream applications
 - select printers through named local profiles
-- render final labels inside the service, not the caller
+- render final labels inside the service, not the caller or Homebox backend
 - start with one narrow BLE path and expand after it is reliable
 - keep the external API simple and stable
 
@@ -77,9 +77,9 @@ Version 1 focuses on one narrow, reliable path:
 - D110_M v4-class devices and B1
 - HTTPS service mode via `niimcli serve`
 - synchronous `POST /print`
-- PNG label image input
-- direct image print path first
-- service-rendered composition modes later
+- QR text input
+- service-rendered composition
+- browser-to-loopback integration first
 - JSON configuration for printer profiles and label presets
 
 ## Non-Goals
@@ -133,7 +133,7 @@ The first request format is JSON and sends:
 
 - a named printer selector
 - a label preset that includes device and label type (ex: d110-12x40mm)
-- a PNG label image payload
+- a QR text payload
 - optional text fields
 - optional print options such as copy count
 
@@ -148,8 +148,8 @@ Example:
     "preset": "round-40mm",
     "layout": "full-image"
   },
-  "image": {
-    "png_base64": "iVBORw0KGgoAAA..."
+  "qr": {
+    "text": "https://homebox.example/items/123"
   },
   "content": {
     "title": "Box 42",
@@ -161,7 +161,7 @@ Example:
 }
 ```
 
-The first version only requires a PNG label image. Text fields are optional and future composition modes can use them later.
+The first version requires `qr.text`. Text fields are optional and are used for human-readable label content next to or below the QR depending on the preset.
 
 ## Printer Profiles
 
@@ -277,12 +277,22 @@ Future composition modes can allow `niimcli` to build the final output based on:
 
 Initial layout plan:
 
-- `full-image`
 - `qr-only`
 - `qr-title`
 - `qr-title-subtitle`
 
-The current working implementation uses `full-image` first. QR-only composition modes remain planned.
+The current implementation is text-driven and generates the QR inside `niimcli`. The first layout heuristics are tuned for known B1 stock sizes, with `50x30` using QR-left/text-right, `50x50` round using centered QR with text below, and `50x80` using a large QR above a text block.
+
+## Browser Integration
+
+When Homebox is remote but viewed in a browser on the same Mac as the printer, the browser calls the local `niimcli` service directly.
+
+- Homebox backend stores `niimcli_base_url` as a browser-side setting
+- the browser resolves `http://127.0.0.1:8443` or `https://127.0.0.1:8443`
+- `niimcli` enforces an origin allowlist for browser requests
+- requests without an `Origin` header remain valid for local tools such as `curl`
+
+Later work should define how Homebox page data maps into `content.title` and `content.subtitle` for different page types.
 
 ## Model Notes
 

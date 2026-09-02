@@ -1,6 +1,12 @@
 module niimcli
 
-go 1.23.8
+go 1.25.0
+
+require (
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	golang.org/x/image v0.45.0
+	tinygo.org/x/bluetooth v0.15.0
+)
 
 require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -13,6 +19,5 @@ require (
 	github.com/tinygo-org/cbgo v0.0.4 // indirect
 	github.com/tinygo-org/pio v0.3.0 // indirect
 	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	tinygo.org/x/bluetooth v0.15.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )

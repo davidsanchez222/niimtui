@@ -14,9 +14,10 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Listen    string     `json:"listen"`
-	AuthToken string     `json:"auth_token"`
-	TLS       *TLSConfig `json:"tls,omitempty"`
+	Listen         string     `json:"listen"`
+	AuthToken      string     `json:"auth_token"`
+	AllowedOrigins []string   `json:"allowed_origins,omitempty"`
+	TLS            *TLSConfig `json:"tls,omitempty"`
 }
 
 type TLSConfig struct {

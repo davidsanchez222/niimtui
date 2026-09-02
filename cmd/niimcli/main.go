@@ -80,26 +80,22 @@ func runPrint(args []string) error {
 	configPath := fs.String("config", "config.example.json", "path to config JSON")
 	printer := fs.String("printer", "", "printer profile selector")
 	preset := fs.String("preset", "", "label preset")
-	imagePath := fs.String("image", "", "path to full label PNG file")
-	qrPath := fs.String("qr", "", "deprecated alias for --image")
+	layout := fs.String("layout", string(api.LayoutQROnly), "label layout: qr-only, qr-title, qr-title-subtitle")
+	qrText := fs.String("qr-text", "", "text to encode into the QR code")
 	title := fs.String("title", "", "optional label title")
 	subtitle := fs.String("subtitle", "", "optional label subtitle")
 	copies := fs.Int("copies", 1, "number of copies")
 	previewOut := fs.String("preview-out", "", "write rendered preview PNG to this path")
+	noPrint := fs.Bool("no-print", false, "render preview only and skip printing; requires --preview-out")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	if *imagePath == "" && *qrPath == "" {
-		return errors.New("-image is required")
+	if *qrText == "" {
+		return errors.New("-qr-text is required")
 	}
-	if *imagePath == "" {
-		*imagePath = *qrPath
-	}
-
-	pngData, err := os.ReadFile(*imagePath)
-	if err != nil {
-		return fmt.Errorf("read source image: %w", err)
+	if *noPrint && *previewOut == "" {
+		return errors.New("-no-print requires -preview-out")
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -116,9 +112,9 @@ func runPrint(args []string) error {
 		Printer: api.PrinterSelector{Selector: *printer},
 		Label: api.LabelRequest{
 			Preset: *preset,
-			Layout: api.LayoutFullImage,
+			Layout: api.Layout(*layout),
 		},
-		Image: api.ImageRequest{PNGBase64: api.Base64PNG(pngData)},
+		QR: api.QRRequest{Text: *qrText},
 		Content: api.ContentRequest{
 			Title:    *title,
 			Subtitle: *subtitle,
@@ -133,6 +129,9 @@ func runPrint(args []string) error {
 		}
 		if err := os.WriteFile(*previewOut, preview, 0o644); err != nil {
 			return fmt.Errorf("write preview: %w", err)
+		}
+		if *noPrint {
+			return nil
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,11 +25,17 @@ func New(cfg config.Config, svc *service.Service) *Server {
 	s := &Server{cfg: cfg, svc: svc}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("OPTIONS /health", s.handleHealth)
 	mux.HandleFunc("GET /printers", s.handlePrinters)
+	mux.HandleFunc("OPTIONS /printers", s.handlePrinters)
 	mux.HandleFunc("GET /presets", s.handlePresets)
+	mux.HandleFunc("OPTIONS /presets", s.handlePresets)
 	mux.HandleFunc("POST /probe", s.handleProbe)
+	mux.HandleFunc("OPTIONS /probe", s.handleProbe)
 	mux.HandleFunc("POST /render-preview", s.handleRenderPreview)
+	mux.HandleFunc("OPTIONS /render-preview", s.handleRenderPreview)
 	mux.HandleFunc("POST /print", s.handlePrint)
+	mux.HandleFunc("OPTIONS /print", s.handlePrint)
 
 	s.httpServer = &http.Server{
 		Addr:              cfg.Server.Listen,
@@ -66,6 +73,13 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeOrigin(w, r) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
 		"service": "niimcli",
@@ -74,6 +88,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePrinters(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeOrigin(w, r) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if !s.authorized(r) {
 		writeUnauthorized(w)
 		return
@@ -82,6 +103,13 @@ func (s *Server) handlePrinters(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeOrigin(w, r) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if !s.authorized(r) {
 		writeUnauthorized(w)
 		return
@@ -90,6 +118,13 @@ func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeOrigin(w, r) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if !s.authorized(r) {
 		writeUnauthorized(w)
 		return
@@ -122,6 +157,13 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRenderPreview(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeOrigin(w, r) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if !s.authorized(r) {
 		writeUnauthorized(w)
 		return
@@ -151,6 +193,13 @@ func (s *Server) handleRenderPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeOrigin(w, r) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if !s.authorized(r) {
 		writeUnauthorized(w)
 		return
@@ -222,6 +271,28 @@ func (s *Server) authorized(r *http.Request) bool {
 		return false
 	}
 	return strings.TrimPrefix(auth, prefix) == s.cfg.Server.AuthToken
+}
+
+func (s *Server) authorizeOrigin(w http.ResponseWriter, r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	if !slices.Contains(s.cfg.Server.AllowedOrigins, origin) {
+		writeJSON(w, http.StatusForbidden, api.PrintResponse{
+			OK: false,
+			Error: &api.ErrorBody{
+				Code:    service.ErrUnauthorized,
+				Message: "origin not allowed",
+			},
+		})
+		return false
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+	w.Header().Set("Vary", "Origin")
+	return true
 }
 
 func writeUnauthorized(w http.ResponseWriter) {

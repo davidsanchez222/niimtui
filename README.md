@@ -4,7 +4,7 @@
   <img width="244" height="400" alt="d110printingDemo2" src="https://github.com/user-attachments/assets/765fe6f6-bdcb-482d-b689-de1105338455" />
 </div>
 
-`niimcli` is a local CLI and HTTP service written for printing PNG label images to Niimbot printers over Bluetooth Low Energy written in Go.
+`niimcli` is a local CLI and HTTP service written for printing QR-driven labels to Niimbot printers over Bluetooth Low Energy written in Go.
 
 Currently, it has only been verified using macOS BLE print paths for:
 
@@ -20,9 +20,11 @@ Printing to Niimbot printers from macOS can be awkward, especially when the prac
 ## Features
 
 - macOS BLE printing for Niimbot printers
-- verified direct image printing for `D110_M` v4 and `B1`
+- local QR generation from `qr.text`
+- B1-first semantic label layouts for common stock sizes
 - local CLI for print, scan, and probe workflows
 - HTTP service mode for remote print requests
+- browser-facing loopback CORS support for Homebox-style integrations
 - JSON-configured printer profiles and label presets
 - device-type-aware print task selection
 
@@ -47,31 +49,51 @@ Probe a configured printer:
 go run ./cmd/niimcli probe --config ./config.example.json --printer d110-desk
 ```
 
-Print a full label image:
+Print a QR label:
 
 ```bash
 go run ./cmd/niimcli print \
   --config ./config.example.json \
-  --printer d110-desk \
-  --preset d110-12x40 \
-  --image ./example.png \
+  --printer b1-round \
+  --preset b1-50x50-round \
+  --layout qr-title-subtitle \
+  --qr-text https://homebox.example/items/123 \
+  --title "Garage Bin 4" \
+  --subtitle "Top Shelf" \
   --preview-out ./preview.png
+```
+
+Generate the exact rendered print-job preview without printing:
+
+```bash
+go run ./cmd/niimcli print \
+  --config ./config.example.json \
+  --printer b1-round \
+  --preset b1-50x50-round \
+  --layout qr-title-subtitle \
+  --qr-text https://homebox.example/items/123 \
+  --title "Garage Bin 4" \
+  --subtitle "Top Shelf" \
+  --preview-out ./preview.png \
+  --no-print
 ```
 
 ## How It Works
 
-1. A caller provides a PNG label image and a target printer profile (device name and label size)
-2. `niimcli` resolves the preset, prepares raster data, and selects the correct model-specific print task.
+1. A caller provides QR text, optional human-readable label text, and a target printer profile.
+2. `niimcli` resolves the preset, composes the label locally, prepares raster data, and selects the correct model-specific print task.
 3. `niimcli` sends the print job over BLE and tracks printer status until completion.
+
+When `--preview-out` is used, the saved PNG is the same rendered label image that would be sent into the printer path. Add `--no-print` to stop after writing the preview.
 
 ## Current Input Mode
 
-The validated path today is direct full-image printing:
+The validated path today is text-driven QR label printing:
 
-- input: final PNG label image
+- input: `qr.text` plus optional title/subtitle
 - output: BLE print job to the configured Niimbot printer
 
-Future composition modes such as QR-only input and service-side label layout are planned, but they are not the primary path yet.
+The current browser integration target is Homebox in a normal browser on the same Mac as `niimcli`, with the browser calling the local service directly.
 
 ## Documentation
 
