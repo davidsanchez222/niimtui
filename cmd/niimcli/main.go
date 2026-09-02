@@ -14,6 +14,7 @@ import (
 	"niimcli/internal/config"
 	"niimcli/internal/server"
 	"niimcli/internal/service"
+	"niimcli/internal/tui"
 )
 
 func main() {
@@ -42,6 +43,8 @@ func run(args []string) error {
 		return runPrinters(args[1:])
 	case "presets":
 		return runPresets(args[1:])
+	case "tui":
+		return runTUI(args[1:])
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -225,6 +228,23 @@ func runPresets(args []string) error {
 	return printJSON(cfg.Presets)
 }
 
+func runTUI(args []string) error {
+	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
+	widthMM := fs.Float64("width-mm", 0, "label width in millimeters")
+	heightMM := fs.Float64("height-mm", 0, "label height in millimeters")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *widthMM <= 0 {
+		return errors.New("-width-mm is required and must be greater than zero")
+	}
+	if *heightMM <= 0 {
+		return errors.New("-height-mm is required and must be greater than zero")
+	}
+
+	return tui.Run(*widthMM, *heightMM)
+}
+
 func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -241,5 +261,6 @@ Usage:
   niimcli scan --config ./config.example.json --transport ble
   niimcli printers --config ./config.example.json
   niimcli presets --config ./config.example.json
+  niimcli tui --width-mm 50 --height-mm 30
 `)
 }
