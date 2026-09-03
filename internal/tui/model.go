@@ -2,11 +2,37 @@ package tui
 
 import (
 	"fmt"
+	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"niimcli/internal/label"
 )
+
+type DragMode int
+
+const (
+	DragNone DragMode = iota
+	DragMove
+	DragResize
+)
+
+type ResizeHandle int
+
+const (
+	HandleNone ResizeHandle = iota
+	HandleBottomRight
+)
+
+type DragState struct {
+	Mode   DragMode
+	Handle ResizeHandle
+
+	StartMouseX int
+	StartMouseY int
+
+	OriginalElement label.Element
+}
 
 type Model struct {
 	Width  int
@@ -15,18 +41,59 @@ type Model struct {
 	Document label.Document
 	Canvas   Canvas
 
+	SelectedID string
+	Drag       DragState
+	NextID     int
+
+	EditingText bool
+	TextBuffer  string
+	StatusBase  string
+
 	Status string
 	Ready  bool
 }
 
 func NewModel(widthMM, heightMM float64) Model {
 	doc := label.NewDocument(widthMM, heightMM)
+	sample := label.NewTextElement(
+		"text-1",
+		"Storage Box 12",
+		math.Max(widthMM*0.15, 2),
+		math.Max(heightMM*0.20, 2),
+		math.Max(math.Min(widthMM*0.45, widthMM-4), 10),
+		math.Max(math.Min(heightMM*0.22, heightMM-4), 6),
+		18,
+	)
+	clampElementToDocument(&sample, doc)
+	_ = doc.AddElement(sample)
+	status := "Click to select. Drag to move. Drag bottom-right handle to resize."
+
 	return Model{
-		Document: doc,
-		Status:   fmt.Sprintf("Label %.1fmm x %.1fmm", widthMM, heightMM),
+		Document:   doc,
+		SelectedID: sample.ID,
+		NextID:     2,
+		StatusBase: status,
+		Status:     status,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	return nil
+}
+
+func (m *Model) setStatus(format string, args ...any) {
+	if len(args) == 0 {
+		m.StatusBase = format
+	} else {
+		m.StatusBase = fmt.Sprintf(format, args...)
+	}
+	m.refreshStatus()
+}
+
+func (m *Model) refreshStatus() {
+	if m.EditingText {
+		m.Status = fmt.Sprintf("Editing text: %s", m.TextBuffer)
+		return
+	}
+	m.Status = m.StatusBase
 }

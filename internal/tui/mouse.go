@@ -1,0 +1,208 @@
+package tui
+
+import (
+	"math"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"niimcli/internal/label"
+)
+
+const (
+	minElementWidthMM  = 6.0
+	minElementHeightMM = 4.0
+)
+
+type screenRect struct {
+	left   int
+	top    int
+	right  int
+	bottom int
+}
+
+func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Action {
+	case tea.MouseActionPress:
+		if msg.Button != tea.MouseButtonLeft {
+			return m, nil
+		}
+		m.handleMousePress(msg)
+	case tea.MouseActionMotion:
+		if m.Drag.Mode == DragNone {
+			return m, nil
+		}
+		m.handleMouseMotion(msg)
+	case tea.MouseActionRelease:
+		if m.Drag.Mode != DragNone {
+			m.setStatus("Drag complete.")
+		}
+		m.Drag = DragState{}
+	}
+
+	return m, nil
+}
+
+func (m *Model) handleMousePress(msg tea.MouseMsg) {
+	if element, ok := m.selectedElement(); ok {
+		if m.hitBottomRightHandle(element, msg.X, msg.Y) {
+			m.Drag = DragState{
+				Mode:            DragResize,
+				Handle:          HandleBottomRight,
+				StartMouseX:     msg.X,
+				StartMouseY:     msg.Y,
+				OriginalElement: element,
+			}
+			m.setStatus("Resizing selected element.")
+			return
+		}
+		if m.hitElement(element, msg.X, msg.Y) {
+			m.Drag = DragState{
+				Mode:            DragMove,
+				StartMouseX:     msg.X,
+				StartMouseY:     msg.Y,
+				OriginalElement: element,
+			}
+			m.setStatus("Moving selected element.")
+			return
+		}
+	}
+
+	if element, ok := m.elementAt(msg.X, msg.Y); ok {
+		m.SelectedID = element.ID
+		m.setStatus("Selected %q.", selectedLabel(element))
+		return
+	}
+
+	m.SelectedID = ""
+	m.setStatus("No selection.")
+}
+
+func (m *Model) handleMouseMotion(msg tea.MouseMsg) {
+	if m.SelectedID == "" {
+		m.Drag = DragState{}
+		return
+	}
+
+	dxCells := msg.X - m.Drag.StartMouseX
+	dyCells := msg.Y - m.Drag.StartMouseY
+	dxMM, dyMM := m.Canvas.CellsToMM(dxCells, dyCells)
+
+	updated := m.Drag.OriginalElement
+	switch m.Drag.Mode {
+	case DragMove:
+		updated.XMM = m.Drag.OriginalElement.XMM + dxMM
+		updated.YMM = m.Drag.OriginalElement.YMM + dyMM
+	case DragResize:
+		updated.WidthMM = math.Max(minElementWidthMM, m.Drag.OriginalElement.WidthMM+dxMM)
+		updated.HeightMM = math.Max(minElementHeightMM, m.Drag.OriginalElement.HeightMM+dyMM)
+	}
+
+	clampElementToDocument(&updated, m.Document)
+	m.Document.UpdateElement(updated)
+	if m.Drag.Mode == DragMove {
+		m.setStatus("Moving: x %.1fmm y %.1fmm", updated.XMM, updated.YMM)
+	} else {
+		m.setStatus("Resizing: %.1fmm x %.1fmm", updated.WidthMM, updated.HeightMM)
+	}
+}
+
+func (m Model) elementAt(x, y int) (label.Element, bool) {
+	for i := len(m.Document.Elements) - 1; i >= 0; i-- {
+		element := m.Document.Elements[i]
+		if m.hitElement(element, x, y) {
+			return element, true
+		}
+	}
+	return label.Element{}, false
+}
+
+func (m Model) hitElement(element label.Element, x, y int) bool {
+	r := m.elementScreenRect(element)
+	return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
+}
+
+func (m Model) hitBottomRightHandle(element label.Element, x, y int) bool {
+	r := m.elementScreenRect(element)
+	return x == r.right && y == r.bottom
+}
+
+func (m Model) elementScreenRect(element label.Element) screenRect {
+	left, top := m.Canvas.LabelToScreen(element.XMM, element.YMM)
+	right, bottom := m.Canvas.LabelToScreen(element.XMM+element.WidthMM, element.YMM+element.HeightMM)
+
+	maxX := m.Canvas.X + m.Canvas.Width - 2
+	maxY := m.Canvas.Y + m.Canvas.Height - 2
+
+	left = clampInt(left, m.Canvas.X+1, maxX)
+	top = clampInt(top, m.Canvas.Y+1, maxY)
+	right = clampInt(right, left, maxX)
+	bottom = clampInt(bottom, top, maxY)
+
+	return screenRect{left: left, top: top, right: right, bottom: bottom}
+}
+
+func (m Model) selectedElement() (label.Element, bool) {
+	if m.SelectedID == "" {
+		return label.Element{}, false
+	}
+	return m.Document.ElementByID(m.SelectedID)
+}
+
+func clampElementToDocument(element *label.Element, doc label.Document) bool {
+	if element == nil {
+		return false
+	}
+	changed := false
+
+	if element.WidthMM < minElementWidthMM {
+		element.WidthMM = minElementWidthMM
+		changed = true
+	}
+	if element.HeightMM < minElementHeightMM {
+		element.HeightMM = minElementHeightMM
+		changed = true
+	}
+	if element.WidthMM > doc.WidthMM {
+		element.WidthMM = doc.WidthMM
+		changed = true
+	}
+	if element.HeightMM > doc.HeightMM {
+		element.HeightMM = doc.HeightMM
+		changed = true
+	}
+	if element.XMM < 0 {
+		element.XMM = 0
+		changed = true
+	}
+	if element.YMM < 0 {
+		element.YMM = 0
+		changed = true
+	}
+	if element.XMM+element.WidthMM > doc.WidthMM {
+		element.XMM = math.Max(0, doc.WidthMM-element.WidthMM)
+		changed = true
+	}
+	if element.YMM+element.HeightMM > doc.HeightMM {
+		element.YMM = math.Max(0, doc.HeightMM-element.HeightMM)
+		changed = true
+	}
+
+	return changed
+}
+
+func clampInt(v, minValue, maxValue int) int {
+	if v < minValue {
+		return minValue
+	}
+	if v > maxValue {
+		return maxValue
+	}
+	return v
+}
+
+func selectedLabel(element label.Element) string {
+	if element.Text == nil || element.Text.Value == "" {
+		return element.ID
+	}
+	return element.Text.Value
+}
