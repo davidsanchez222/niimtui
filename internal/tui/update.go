@@ -64,17 +64,17 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "t":
 		m.addTextElement()
 		return true
-	case "enter":
+	case "i":
 		return m.beginEditingSelected()
 	case "delete", "backspace":
 		return m.deleteSelected()
-	case "up":
+	case "k":
 		return m.nudgeSelected(0, -1)
-	case "down":
+	case "j":
 		return m.nudgeSelected(0, 1)
-	case "left":
+	case "h":
 		return m.nudgeSelected(-1, 0)
-	case "right":
+	case "l":
 		return m.nudgeSelected(1, 0)
 	case "shift+up":
 		return m.nudgeSelected(0, -5)

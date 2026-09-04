@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"math"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -11,7 +10,6 @@ import (
 )
 
 const (
-	defaultTextValue    = "New Label"
 	defaultTextFontSize = 18.0
 	minFontSize         = 8.0
 	maxFontSize         = 72.0
@@ -23,7 +21,7 @@ func (m *Model) addTextElement() {
 
 	element := label.NewTextElement(
 		id,
-		defaultTextValue,
+		"",
 		math.Max(m.Document.WidthMM*0.1, 1),
 		math.Max(m.Document.HeightMM*0.1, 1),
 		math.Max(math.Min(m.Document.WidthMM*0.4, m.Document.WidthMM-2), 10),
@@ -106,18 +104,20 @@ func (m *Model) handleTextEditing(msg tea.KeyMsg) {
 	case "esc":
 		m.EditingText = false
 		m.TextBuffer = ""
-		m.setStatus("Edit cancelled.")
+		m.setStatus("Exited text editing.")
 		return
 	case "enter":
-		m.commitTextEdit()
+		m.finishTextEdit()
 		return
 	case "backspace":
 		if len(m.TextBuffer) == 0 {
+			_ = m.applyTextBuffer("")
 			m.refreshStatus()
 			return
 		}
 		runes := []rune(m.TextBuffer)
 		m.TextBuffer = string(runes[:len(runes)-1])
+		_ = m.applyTextBuffer(m.TextBuffer)
 		m.refreshStatus()
 		return
 	}
@@ -126,27 +126,29 @@ func (m *Model) handleTextEditing(msg tea.KeyMsg) {
 		return
 	}
 	m.TextBuffer += string(msg.Runes)
+
+	_ = m.applyTextBuffer(m.TextBuffer)
 	m.refreshStatus()
 }
 
-func (m *Model) commitTextEdit() {
+func (m *Model) finishTextEdit() {
+	m.EditingText = false
+	m.TextBuffer = ""
+	m.setStatus("Exited text editing.")
+}
+
+func (m *Model) applyTextBuffer(value string) bool {
 	element, ok := m.selectedElement()
 	if !ok || element.Text == nil {
 		m.EditingText = false
 		m.TextBuffer = ""
 		m.setStatus("No selected text element.")
-		return
-	}
-	value := strings.TrimSpace(m.TextBuffer)
-	if value == "" {
-		value = defaultTextValue
+		return false
 	}
 	element.Text.Value = value
 	if !m.Document.UpdateElement(element) {
 		m.setStatus("Save text failed.")
-		return
+		return false
 	}
-	m.EditingText = false
-	m.TextBuffer = ""
-	m.setStatus("Updated text to %q.", value)
+	return true
 }

@@ -102,6 +102,10 @@ func renderCanvas(m Model) string {
 			grid[y][right] = '│'
 		}
 
+		if m.SelectedID == element.ID && m.EditingText {
+			drawEditingCursor(grid, left, top, right, bottom, m.TextBuffer)
+		}
+
 		if m.SelectedID == element.ID {
 			for _, handle := range m.handlePoints(element) {
 				hx := handle.x - canvas.X
@@ -124,12 +128,12 @@ func toolPanelLines(width int) []string {
 	return padLines([]string{
 		"Tools",
 		"",
-		"[T] Text",
-		"[Enter] Edit",
-		"[Del] Delete",
-		"[Arrows] Move",
+		"[t] Text",
+		"[i] Edit",
+		"[del] Delete",
+		"[hjkl] Move",
 		"[+/-] Font",
-		"[P] Preview",
+		"[p] Preview",
 	}, width)
 }
 
@@ -295,5 +299,22 @@ func brailleBit(x, y int) int {
 		return 0x80
 	default:
 		return 0
+	}
+}
+
+func drawEditingCursor(grid [][]rune, left, top, right, bottom int, text string) {
+	if bottom <= top || right <= left {
+		return
+	}
+	contentWidth := max(right-left-1, 1)
+	preview := truncateText(text+"|", contentWidth)
+	y := top + max(1, (bottom-top)/2)
+	x := left + 1
+	for i, r := range []rune(preview) {
+		cellX := x + i
+		if cellX >= right {
+			break
+		}
+		grid[y][cellX] = r
 	}
 }
