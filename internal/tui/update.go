@@ -88,6 +88,8 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.adjustSelectedFont(1)
 	case "-":
 		return m.adjustSelectedFont(-1)
+	case "p":
+		return m.exportPreview()
 	default:
 		return false
 	}

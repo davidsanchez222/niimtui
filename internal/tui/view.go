@@ -2,7 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"image"
 	"strings"
+
+	"niimcli/internal/label"
+	"niimcli/internal/render"
 )
 
 func (m Model) View() string {
@@ -36,7 +40,7 @@ func (m Model) View() string {
 		lines = append(lines, toolLines[i]+strings.Repeat(" ", gap)+canvasLines[i]+strings.Repeat(" ", gap)+propertyLines[i])
 	}
 	lines = append(lines, strings.Repeat("─", max(m.Width, 24)))
-	lines = append(lines, fitLine(m.Status+" • t add • enter edit • +/- font • q quit • esc clear", max(m.Width, 24)))
+	lines = append(lines, fitLine(m.Status+" • t add • enter edit • +/- font • p preview • q quit • esc clear", max(m.Width, 24)))
 
 	return strings.Join(lines, "\n")
 }
@@ -68,6 +72,8 @@ func renderCanvas(m Model) string {
 		grid[y][canvas.Width-1] = '│'
 	}
 
+	drawDocumentPreview(grid, canvas, m.Document)
+
 	for _, element := range m.Document.Elements {
 		r := m.elementScreenRect(element)
 		left := r.left - canvas.X
@@ -95,19 +101,6 @@ func renderCanvas(m Model) string {
 			grid[y][left] = '│'
 			grid[y][right] = '│'
 		}
-
-		if element.Text != nil {
-			textY := top + (bottom-top)/2
-			text := truncateText(element.Text.Value, max(right-left-1, 0))
-			textX := left + max(1, (right-left-len([]rune(text)))/2)
-			for i, r := range []rune(text) {
-				x := textX + i
-				if x >= right {
-					break
-				}
-				grid[textY][x] = r
-			}
-		}
 	}
 
 	lines := make([]string, 0, canvas.Height)
@@ -126,6 +119,7 @@ func toolPanelLines(width int) []string {
 		"[Del] Delete",
 		"[Arrows] Move",
 		"[+/-] Font",
+		"[P] Preview",
 	}, width)
 }
 
@@ -201,4 +195,95 @@ func truncateText(s string, width int) string {
 		return string(runes[:width])
 	}
 	return string(runes[:width-3]) + "..."
+}
+
+func drawDocumentPreview(grid [][]rune, canvas Canvas, doc label.Document) {
+	result, err := render.RenderDocument(doc)
+	if err != nil {
+		return
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		return
+	}
+
+	innerWidth := canvas.Width - 2
+	innerHeight := canvas.Height - 2
+	if innerWidth <= 0 || innerHeight <= 0 {
+		return
+	}
+
+	const (
+		brailleCols = 2
+		brailleRows = 4
+	)
+
+	for cellY := 0; cellY < innerHeight; cellY++ {
+		for cellX := 0; cellX < innerWidth; cellX++ {
+			r := brailleRune(gray, cellX, cellY, innerWidth, innerHeight, brailleCols, brailleRows)
+			if r == 0 {
+				continue
+			}
+			grid[cellY+1][cellX+1] = r
+		}
+	}
+}
+
+func brailleRune(gray *image.Gray, cellX, cellY, innerWidth, innerHeight, subCols, subRows int) rune {
+	base := rune(0x2800)
+	bits := 0
+	for sy := 0; sy < subRows; sy++ {
+		for sx := 0; sx < subCols; sx++ {
+			pixelMinX := gray.Bounds().Min.X + ((cellX*subCols+sx)*gray.Bounds().Dx())/(innerWidth*subCols)
+			pixelMaxX := gray.Bounds().Min.X + ((cellX*subCols+sx+1)*gray.Bounds().Dx())/(innerWidth*subCols)
+			pixelMinY := gray.Bounds().Min.Y + ((cellY*subRows+sy)*gray.Bounds().Dy())/(innerHeight*subRows)
+			pixelMaxY := gray.Bounds().Min.Y + ((cellY*subRows+sy+1)*gray.Bounds().Dy())/(innerHeight*subRows)
+			if pixelMaxX <= pixelMinX {
+				pixelMaxX = pixelMinX + 1
+			}
+			if pixelMaxY <= pixelMinY {
+				pixelMaxY = pixelMinY + 1
+			}
+
+			on := false
+			for py := pixelMinY; py < pixelMaxY && !on; py++ {
+				for px := pixelMinX; px < pixelMaxX; px++ {
+					if gray.GrayAt(px, py).Y < 128 {
+						on = true
+						break
+					}
+				}
+			}
+			if on {
+				bits |= brailleBit(sx, sy)
+			}
+		}
+	}
+	if bits == 0 {
+		return 0
+	}
+	return base + rune(bits)
+}
+
+func brailleBit(x, y int) int {
+	switch {
+	case x == 0 && y == 0:
+		return 0x01
+	case x == 0 && y == 1:
+		return 0x02
+	case x == 0 && y == 2:
+		return 0x04
+	case x == 1 && y == 0:
+		return 0x08
+	case x == 1 && y == 1:
+		return 0x10
+	case x == 1 && y == 2:
+		return 0x20
+	case x == 0 && y == 3:
+		return 0x40
+	case x == 1 && y == 3:
+		return 0x80
+	default:
+		return 0
+	}
 }
