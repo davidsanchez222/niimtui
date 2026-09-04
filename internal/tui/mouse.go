@@ -20,6 +20,12 @@ type screenRect struct {
 	bottom int
 }
 
+type handlePoint struct {
+	handle ResizeHandle
+	x      int
+	y      int
+}
+
 func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch msg.Action {
 	case tea.MouseActionPress:
@@ -44,10 +50,10 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleMousePress(msg tea.MouseMsg) {
 	if element, ok := m.selectedElement(); ok {
-		if m.hitBottomRightHandle(element, msg.X, msg.Y) {
+		if handle, ok := m.handleAt(element, msg.X, msg.Y); ok {
 			m.Drag = DragState{
 				Mode:            DragResize,
-				Handle:          HandleBottomRight,
+				Handle:          handle,
 				StartMouseX:     msg.X,
 				StartMouseY:     msg.Y,
 				OriginalElement: element,
@@ -93,8 +99,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMsg) {
 		updated.XMM = m.Drag.OriginalElement.XMM + dxMM
 		updated.YMM = m.Drag.OriginalElement.YMM + dyMM
 	case DragResize:
-		updated.WidthMM = math.Max(minElementWidthMM, m.Drag.OriginalElement.WidthMM+dxMM)
-		updated.HeightMM = math.Max(minElementHeightMM, m.Drag.OriginalElement.HeightMM+dyMM)
+		updated = resizeElement(m.Drag.OriginalElement, m.Drag.Handle, dxMM, dyMM)
 	}
 
 	clampElementToDocument(&updated, m.Document)
@@ -121,9 +126,14 @@ func (m Model) hitElement(element label.Element, x, y int) bool {
 	return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 }
 
-func (m Model) hitBottomRightHandle(element label.Element, x, y int) bool {
-	r := m.elementScreenRect(element)
-	return x == r.right && y == r.bottom
+func (m Model) handleAt(element label.Element, x, y int) (ResizeHandle, bool) {
+	const handleHitRadius = 1
+	for _, point := range m.handlePoints(element) {
+		if absInt(x-point.x) <= handleHitRadius && absInt(y-point.y) <= handleHitRadius {
+			return point.handle, true
+		}
+	}
+	return HandleNone, false
 }
 
 func (m Model) elementScreenRect(element label.Element) screenRect {
@@ -139,6 +149,22 @@ func (m Model) elementScreenRect(element label.Element) screenRect {
 	bottom = clampInt(bottom, top, maxY)
 
 	return screenRect{left: left, top: top, right: right, bottom: bottom}
+}
+
+func (m Model) handlePoints(element label.Element) []handlePoint {
+	r := m.elementScreenRect(element)
+	midX := r.left + (r.right-r.left)/2
+	midY := r.top + (r.bottom-r.top)/2
+	return []handlePoint{
+		{handle: HandleTopLeft, x: r.left, y: r.top},
+		{handle: HandleTop, x: midX, y: r.top},
+		{handle: HandleTopRight, x: r.right, y: r.top},
+		{handle: HandleLeft, x: r.left, y: midY},
+		{handle: HandleRight, x: r.right, y: midY},
+		{handle: HandleBottomLeft, x: r.left, y: r.bottom},
+		{handle: HandleBottom, x: midX, y: r.bottom},
+		{handle: HandleBottomRight, x: r.right, y: r.bottom},
+	}
 }
 
 func (m Model) selectedElement() (label.Element, bool) {
@@ -196,6 +222,67 @@ func clampInt(v, minValue, maxValue int) int {
 	}
 	if v > maxValue {
 		return maxValue
+	}
+	return v
+}
+
+func resizeElement(original label.Element, handle ResizeHandle, dxMM, dyMM float64) label.Element {
+	updated := original
+	left := original.XMM
+	top := original.YMM
+	right := original.XMM + original.WidthMM
+	bottom := original.YMM + original.HeightMM
+
+	switch handle {
+	case HandleTopLeft:
+		left += dxMM
+		top += dyMM
+	case HandleTop:
+		top += dyMM
+	case HandleTopRight:
+		right += dxMM
+		top += dyMM
+	case HandleLeft:
+		left += dxMM
+	case HandleRight:
+		right += dxMM
+	case HandleBottomLeft:
+		left += dxMM
+		bottom += dyMM
+	case HandleBottom:
+		bottom += dyMM
+	case HandleBottomRight:
+		right += dxMM
+		bottom += dyMM
+	}
+
+	if right-left < minElementWidthMM {
+		switch handle {
+		case HandleTopLeft, HandleLeft, HandleBottomLeft:
+			left = right - minElementWidthMM
+		default:
+			right = left + minElementWidthMM
+		}
+	}
+	if bottom-top < minElementHeightMM {
+		switch handle {
+		case HandleTopLeft, HandleTop, HandleTopRight:
+			top = bottom - minElementHeightMM
+		default:
+			bottom = top + minElementHeightMM
+		}
+	}
+
+	updated.XMM = left
+	updated.YMM = top
+	updated.WidthMM = math.Max(minElementWidthMM, right-left)
+	updated.HeightMM = math.Max(minElementHeightMM, bottom-top)
+	return updated
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
 	}
 	return v
 }

@@ -86,7 +86,7 @@ func renderCanvas(m Model) string {
 
 		corner := '┌'
 		if m.SelectedID == element.ID {
-			corner = '●'
+			corner = '·'
 		}
 
 		grid[top][left] = corner
@@ -100,6 +100,16 @@ func renderCanvas(m Model) string {
 		for y := top + 1; y < bottom; y++ {
 			grid[y][left] = '│'
 			grid[y][right] = '│'
+		}
+
+		if m.SelectedID == element.ID {
+			for _, handle := range m.handlePoints(element) {
+				hx := handle.x - canvas.X
+				hy := handle.y - canvas.Y
+				if hy >= 0 && hy < len(grid) && hx >= 0 && hx < len(grid[hy]) {
+					grid[hy][hx] = '●'
+				}
+			}
 		}
 	}
 

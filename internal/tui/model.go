@@ -21,6 +21,13 @@ type ResizeHandle int
 
 const (
 	HandleNone ResizeHandle = iota
+	HandleTopLeft
+	HandleTop
+	HandleTopRight
+	HandleLeft
+	HandleRight
+	HandleBottomLeft
+	HandleBottom
 	HandleBottomRight
 )
 
@@ -66,7 +73,7 @@ func NewModel(widthMM, heightMM float64) Model {
 	)
 	clampElementToDocument(&sample, doc)
 	_ = doc.AddElement(sample)
-	status := "Click to select. Drag to move. Drag bottom-right handle to resize."
+	status := "Click to select. Drag to move. Drag handles to resize."
 
 	return Model{
 		Document:   doc,
