@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"niimcli/internal/label"
+	"niimcli/internal/render"
 )
 
 const (
@@ -92,6 +93,7 @@ func (m *Model) adjustSelectedFont(delta float64) bool {
 		return true
 	}
 	element.Text.FontSize = fontSize
+	autoFitTextElement(&element)
 	if !m.Document.UpdateElement(element) {
 		return false
 	}
@@ -146,9 +148,27 @@ func (m *Model) applyTextBuffer(value string) bool {
 		return false
 	}
 	element.Text.Value = value
+	autoFitTextElement(&element)
 	if !m.Document.UpdateElement(element) {
 		m.setStatus("Save text failed.")
 		return false
 	}
 	return true
+}
+
+func autoFitTextElement(element *label.Element) {
+	if element == nil || element.Text == nil {
+		return
+	}
+	_, minHeightMM := minimumElementSize(*element)
+	if element.HeightMM < minHeightMM {
+		element.HeightMM = minHeightMM
+	}
+	minWidthMM, _ := minimumElementSize(*element)
+	if element.WidthMM < minWidthMM {
+		element.WidthMM = minWidthMM
+	}
+	if requiredHeightMM, err := render.RequiredTextHeightMM(*element, element.WidthMM); err == nil && requiredHeightMM > element.HeightMM {
+		element.HeightMM = requiredHeightMM
+	}
 }

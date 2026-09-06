@@ -103,7 +103,7 @@ func renderCanvas(m Model) string {
 		}
 
 		if m.SelectedID == element.ID && m.EditingText {
-			drawEditingCursor(grid, left, top, right, bottom, m.TextBuffer)
+			drawEditingCursor(grid, left, top, right, bottom, element, m.TextBuffer)
 		}
 
 		if m.SelectedID == element.ID {
@@ -302,19 +302,43 @@ func brailleBit(x, y int) int {
 	}
 }
 
-func drawEditingCursor(grid [][]rune, left, top, right, bottom int, text string) {
+func drawEditingCursor(grid [][]rune, left, top, right, bottom int, element label.Element, text string) {
 	if bottom <= top || right <= left {
 		return
 	}
 	contentWidth := max(right-left-1, 1)
-	preview := truncateText(text+"|", contentWidth)
-	y := top + max(1, (bottom-top)/2)
+	previewLines := wrapCanvasText(element, text+"|", contentWidth)
+	if len(previewLines) == 0 {
+		previewLines = []string{"|"}
+	}
+	y := top + 1 + min(len(previewLines)-1, max(bottom-top-1, 0))
+	if y >= bottom {
+		y = bottom - 1
+	}
 	x := left + 1
-	for i, r := range []rune(preview) {
+	for i, r := range []rune(previewLines[len(previewLines)-1]) {
 		cellX := x + i
 		if cellX >= right {
 			break
 		}
 		grid[y][cellX] = r
 	}
+}
+
+func wrapCanvasText(element label.Element, text string, contentWidth int) []string {
+	if contentWidth <= 0 || element.Text == nil {
+		return nil
+	}
+	layout, err := render.LayoutText(text, element.Text.FontSize, max(int(element.WidthMM*8), 1))
+	if err != nil || len(layout.Lines) == 0 {
+		if text == "" {
+			return nil
+		}
+		return []string{truncateText(text, contentWidth)}
+	}
+	lines := make([]string, 0, len(layout.Lines))
+	for _, line := range layout.Lines {
+		lines = append(lines, truncateText(line, contentWidth))
+	}
+	return lines
 }

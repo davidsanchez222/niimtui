@@ -61,3 +61,31 @@ func TestRenderDocumentDrawsText(t *testing.T) {
 		t.Fatal("expected rendered text to produce black pixels")
 	}
 }
+
+func TestLayoutTextWrapsWordsIntoMultipleLines(t *testing.T) {
+	layout, err := LayoutText("Storage Box", 18, mmToPx(12))
+	if err != nil {
+		t.Fatalf("LayoutText() error = %v", err)
+	}
+	if len(layout.Lines) < 2 {
+		t.Fatalf("line count = %d, want at least 2", len(layout.Lines))
+	}
+	if layout.BlockHeightPx <= layout.LineHeightPx {
+		t.Fatalf("block height = %d, want greater than line height %d", layout.BlockHeightPx, layout.LineHeightPx)
+	}
+}
+
+func TestRequiredTextHeightIncreasesWhenWidthShrinks(t *testing.T) {
+	element := label.NewTextElement("title", "Storage Box 12", 0, 0, 20, 6, 18)
+	wideHeight, err := RequiredTextHeightMM(element, 20)
+	if err != nil {
+		t.Fatalf("RequiredTextHeightMM() wide error = %v", err)
+	}
+	narrowHeight, err := RequiredTextHeightMM(element, 10)
+	if err != nil {
+		t.Fatalf("RequiredTextHeightMM() narrow error = %v", err)
+	}
+	if narrowHeight <= wideHeight {
+		t.Fatalf("narrow height = %.2f, want greater than wide height %.2f", narrowHeight, wideHeight)
+	}
+}

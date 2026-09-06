@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"niimcli/internal/label"
+	"niimcli/internal/render"
 )
 
 const (
@@ -180,12 +181,13 @@ func clampElementToDocument(element *label.Element, doc label.Document) bool {
 	}
 	changed := false
 
-	if element.WidthMM < minElementWidthMM {
-		element.WidthMM = minElementWidthMM
+	minWidthMM, minHeightMM := minimumElementSize(*element)
+	if element.WidthMM < minWidthMM {
+		element.WidthMM = minWidthMM
 		changed = true
 	}
-	if element.HeightMM < minElementHeightMM {
-		element.HeightMM = minElementHeightMM
+	if element.HeightMM < minHeightMM {
+		element.HeightMM = minHeightMM
 		changed = true
 	}
 	if element.WidthMM > doc.WidthMM {
@@ -256,28 +258,52 @@ func resizeElement(original label.Element, handle ResizeHandle, dxMM, dyMM float
 		bottom += dyMM
 	}
 
-	if right-left < minElementWidthMM {
+	proposedWidth := right - left
+	minWidthMM, _ := minimumElementSize(updated)
+	if proposedWidth < minWidthMM {
 		switch handle {
 		case HandleTopLeft, HandleLeft, HandleBottomLeft:
-			left = right - minElementWidthMM
+			left = right - minWidthMM
 		default:
-			right = left + minElementWidthMM
+			right = left + minWidthMM
 		}
 	}
-	if bottom-top < minElementHeightMM {
+	updated.XMM = left
+	updated.YMM = top
+	updated.WidthMM = math.Max(minWidthMM, right-left)
+	updated.HeightMM = math.Max(minElementHeightMM, bottom-top)
+	_, minHeightMM := minimumElementSize(updated)
+	if bottom-top < minHeightMM {
 		switch handle {
 		case HandleTopLeft, HandleTop, HandleTopRight:
-			top = bottom - minElementHeightMM
+			top = bottom - minHeightMM
 		default:
-			bottom = top + minElementHeightMM
+			bottom = top + minHeightMM
 		}
 	}
 
 	updated.XMM = left
 	updated.YMM = top
-	updated.WidthMM = math.Max(minElementWidthMM, right-left)
-	updated.HeightMM = math.Max(minElementHeightMM, bottom-top)
+	updated.WidthMM = math.Max(minWidthMM, right-left)
+	updated.HeightMM = math.Max(minHeightMM, bottom-top)
 	return updated
+}
+
+func minimumElementSize(element label.Element) (float64, float64) {
+	minWidthMM := minElementWidthMM
+	minHeightMM := minElementHeightMM
+	if element.Text == nil {
+		return minWidthMM, minHeightMM
+	}
+	renderMinWidthMM, err := render.MinimumTextWidthMM(element)
+	if err == nil && renderMinWidthMM > minWidthMM {
+		minWidthMM = renderMinWidthMM
+	}
+	requiredHeightMM, err := render.RequiredTextHeightMM(element, math.Max(element.WidthMM, minWidthMM))
+	if err == nil && requiredHeightMM > minHeightMM {
+		minHeightMM = requiredHeightMM
+	}
+	return minWidthMM, minHeightMM
 }
 
 func absInt(v int) int {

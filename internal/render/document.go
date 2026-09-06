@@ -91,34 +91,32 @@ func drawTextElement(dst draw.Image, element label.Element) error {
 		return nil
 	}
 
-	face, err := opentype.NewFace(regularFont, &opentype.FaceOptions{
-		Size:    maxFloat(element.Text.FontSize, 8),
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
+	face, err := newTextFace(element.Text.FontSize)
 	if err != nil {
-		return fmt.Errorf("create font face: %w", err)
+		return err
 	}
 	defer face.Close()
 
-	line := fitText(strings.TrimSpace(element.Text.Value), face, rect.Dx())
-	if line == "" {
+	layout := layoutTextWithFace(element.Text.Value, face, rect.Dx())
+	if len(layout.Lines) == 0 {
 		return nil
 	}
 
-	metrics := face.Metrics()
-	lineHeight := metrics.Height.Ceil()
-	baselineY := rect.Min.Y + max(0, (rect.Dy()-lineHeight)/2) + metrics.Ascent.Ceil()
-	textWidth := font.MeasureString(face, line).Ceil()
-	textX := rect.Min.X + max(0, (rect.Dx()-textWidth)/2)
-
-	d := font.Drawer{
-		Dst:  dst,
-		Src:  image.Black,
-		Face: face,
-		Dot:  fixed.P(textX, baselineY),
+	for i, line := range layout.Lines {
+		baselineY := rect.Min.Y + layout.AscentPx + i*layout.LineHeightPx
+		if baselineY > rect.Max.Y {
+			break
+		}
+		textWidth := font.MeasureString(face, line).Ceil()
+		textX := rect.Min.X + max(0, (rect.Dx()-textWidth)/2)
+		d := font.Drawer{
+			Dst:  dst,
+			Src:  image.Black,
+			Face: face,
+			Dot:  fixed.P(textX, baselineY),
+		}
+		d.DrawString(line)
 	}
-	d.DrawString(line)
 	return nil
 }
 
