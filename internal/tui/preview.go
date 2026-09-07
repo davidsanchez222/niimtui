@@ -6,7 +6,7 @@ import (
 	"niimcli/internal/render"
 )
 
-const previewOutputPath = "preview.png"
+const previewOutputPath = "testlabels/preview.png"
 
 func (m *Model) exportPreview() bool {
 	result, err := render.RenderDocument(m.Document)
