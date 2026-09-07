@@ -84,15 +84,10 @@ func renderCanvas(m Model) string {
 			continue
 		}
 
-		corner := '┌'
-		if m.SelectedID == element.ID {
-			corner = '·'
-		}
-
-		grid[top][left] = corner
-		grid[top][right] = corner
-		grid[bottom][left] = corner
-		grid[bottom][right] = corner
+		grid[top][left] = '┌'
+		grid[top][right] = '┐'
+		grid[bottom][left] = '└'
+		grid[bottom][right] = '┘'
 		for x := left + 1; x < right; x++ {
 			grid[top][x] = '─'
 			grid[bottom][x] = '─'
