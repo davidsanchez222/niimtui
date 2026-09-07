@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -9,6 +10,8 @@ import (
 
 	"niimcli/internal/label"
 )
+
+const textPaddingMM = 1.0
 
 type TextLayout struct {
 	Lines          []string
@@ -36,7 +39,7 @@ func MinimumTextWidthMM(element label.Element) (float64, error) {
 		return 0, err
 	}
 	defer face.Close()
-	widthPx := max(font.MeasureString(face, "W").Ceil(), face.Metrics().Height.Ceil()/2)
+	widthPx := max(font.MeasureString(face, "W").Ceil(), face.Metrics().Height.Ceil()/2) + textPaddingPx()*2
 	return pxToMM(widthPx), nil
 }
 
@@ -44,11 +47,16 @@ func RequiredTextHeightMM(element label.Element, widthMM float64) (float64, erro
 	if element.Text == nil || strings.TrimSpace(element.Text.Value) == "" {
 		return 0, nil
 	}
-	layout, err := LayoutText(element.Text.Value, element.Text.FontSize, mmToPx(widthMM))
+	innerWidthPx := max(1, mmToPx(widthMM)-textPaddingPx()*2)
+	layout, err := LayoutText(element.Text.Value, element.Text.FontSize, innerWidthPx)
 	if err != nil {
 		return 0, err
 	}
-	return pxToMM(layout.BlockHeightPx), nil
+	return pxToMM(layout.BlockHeightPx + textPaddingPx()*2), nil
+}
+
+func textPaddingPx() int {
+	return max(1, int(math.Round(textPaddingMM*dotsPerMM)))
 }
 
 func newTextFace(fontSize float64) (font.Face, error) {

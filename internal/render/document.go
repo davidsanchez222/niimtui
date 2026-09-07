@@ -90,6 +90,10 @@ func drawTextElement(dst draw.Image, element label.Element) error {
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return nil
 	}
+	textRect := rect.Inset(textPaddingPx())
+	if textRect.Dx() <= 0 || textRect.Dy() <= 0 {
+		return nil
+	}
 
 	face, err := newTextFace(element.Text.FontSize)
 	if err != nil {
@@ -97,18 +101,18 @@ func drawTextElement(dst draw.Image, element label.Element) error {
 	}
 	defer face.Close()
 
-	layout := layoutTextWithFace(element.Text.Value, face, rect.Dx())
+	layout := layoutTextWithFace(element.Text.Value, face, textRect.Dx())
 	if len(layout.Lines) == 0 {
 		return nil
 	}
 
 	for i, line := range layout.Lines {
-		baselineY := rect.Min.Y + layout.AscentPx + i*layout.LineHeightPx
-		if baselineY > rect.Max.Y {
+		baselineY := textRect.Min.Y + layout.AscentPx + i*layout.LineHeightPx
+		if baselineY > textRect.Max.Y {
 			break
 		}
 		textWidth := font.MeasureString(face, line).Ceil()
-		textX := rect.Min.X + max(0, (rect.Dx()-textWidth)/2)
+		textX := textRect.Min.X + max(0, (textRect.Dx()-textWidth)/2)
 		d := font.Drawer{
 			Dst:  dst,
 			Src:  image.Black,

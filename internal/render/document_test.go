@@ -89,3 +89,32 @@ func TestRequiredTextHeightIncreasesWhenWidthShrinks(t *testing.T) {
 		t.Fatalf("narrow height = %.2f, want greater than wide height %.2f", narrowHeight, wideHeight)
 	}
 }
+
+func TestRenderDocumentLeavesTextTopPadding(t *testing.T) {
+	element := label.NewTextElement("title", "Storage Box 12", 5, 4, 30, 8, 18)
+	doc := label.NewDocument(50, 30)
+	if err := doc.AddElement(element); err != nil {
+		t.Fatalf("AddElement() error = %v", err)
+	}
+
+	result, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatalf("RenderDocument() error = %v", err)
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		t.Fatalf("render image type = %T, want *image.Gray", result.Image)
+	}
+
+	left := mmToPx(element.XMM)
+	right := mmToPx(element.XMM + element.WidthMM)
+	top := mmToPx(element.YMM)
+	paddingBottom := top + textPaddingPx()
+	for y := top; y < paddingBottom; y++ {
+		for x := left; x < right; x++ {
+			if gray.GrayAt(x, y).Y == 0 {
+				t.Fatalf("found black pixel in top padding at (%d,%d)", x, y)
+			}
+		}
+	}
+}
