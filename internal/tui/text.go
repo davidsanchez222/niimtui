@@ -13,7 +13,7 @@ import (
 const (
 	defaultTextFontSize = 18.0
 	minFontSize         = 8.0
-	maxFontSize         = 72.0
+	maxFontSize         = 200.0
 )
 
 func (m *Model) addTextElement() {
