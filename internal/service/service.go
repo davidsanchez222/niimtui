@@ -149,6 +149,59 @@ func (s *Service) Print(ctx context.Context, req api.PrintRequest) api.PrintResp
 	}
 }
 
+func (s *Service) PrintImage(ctx context.Context, selector string, rendered render.Result, copies int) api.PrintResponse {
+	printer, errResp := s.resolvePrinter(selector)
+	if errResp != nil {
+		return *errResp
+	}
+	if normalizedCopies(copies) <= 0 {
+		return *errorResponse(ErrInvalidRequest, "options.copies must be greater than zero")
+	}
+
+	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	conn, err := s.transport.Connect(connectCtx, printer)
+	if err != nil {
+		return *errorResponse(ErrBLEConnectFailed, fmt.Sprintf("connect printer: %v", err))
+	}
+	defer conn.Close()
+
+	err = conn.Print(ctx, printer, transport.Job{Rendered: rendered, Copies: normalizedCopies(copies)})
+	meta := map[string]any{
+		"model":       printer.Model,
+		"transport":   printer.Transport,
+		"device_name": printer.DeviceName,
+		"identifier":  printer.Identifier,
+		"source":      "image",
+		"render": map[string]any{
+			"width_px":      rendered.WidthPx,
+			"height_px":     rendered.HeightPx,
+			"preview_bytes": rendered.PreviewBytes,
+		},
+		"connection": conn.Metadata(),
+	}
+	if err != nil {
+		return api.PrintResponse{
+			OK:      false,
+			Printer: printer.Name,
+			Copies:  normalizedCopies(copies),
+			Error: &api.ErrorBody{
+				Code:    ErrPrintFailed,
+				Message: err.Error(),
+			},
+			Meta: meta,
+		}
+	}
+
+	return api.PrintResponse{
+		OK:      true,
+		Printer: printer.Name,
+		Copies:  normalizedCopies(copies),
+		Meta:    meta,
+	}
+}
+
 func (s *Service) RenderPreview(_ context.Context, req api.PrintRequest) ([]byte, error) {
 	_, _, rendered, errResp := s.preparePrint(req)
 	if errResp != nil {

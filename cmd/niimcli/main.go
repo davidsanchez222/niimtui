@@ -12,6 +12,7 @@ import (
 
 	"niimcli/internal/api"
 	"niimcli/internal/config"
+	"niimcli/internal/render"
 	"niimcli/internal/server"
 	"niimcli/internal/service"
 	"niimcli/internal/tui"
@@ -85,6 +86,7 @@ func runPrint(args []string) error {
 	preset := fs.String("preset", "", "label preset")
 	layout := fs.String("layout", string(api.LayoutQROnly), "label layout: qr-only, qr-title, qr-title-subtitle")
 	qrText := fs.String("qr-text", "", "text to encode into the QR code")
+	imagePath := fs.String("image", "", "PNG image to print directly")
 	title := fs.String("title", "", "optional label title")
 	subtitle := fs.String("subtitle", "", "optional label subtitle")
 	copies := fs.Int("copies", 1, "number of copies")
@@ -94,7 +96,7 @@ func runPrint(args []string) error {
 		return err
 	}
 
-	if *qrText == "" {
+	if *imagePath == "" && *qrText == "" {
 		return errors.New("-qr-text is required")
 	}
 	if *noPrint && *previewOut == "" {
@@ -109,6 +111,23 @@ func runPrint(args []string) error {
 	svc, err := service.New(cfg)
 	if err != nil {
 		return err
+	}
+
+	if *imagePath != "" {
+		rendered, err := render.PNGFile(*imagePath)
+		if err != nil {
+			return err
+		}
+		if *previewOut != "" {
+			if err := os.WriteFile(*previewOut, rendered.PreviewPNG, 0o644); err != nil {
+				return fmt.Errorf("write preview: %w", err)
+			}
+			if *noPrint {
+				return nil
+			}
+		}
+		resp := svc.PrintImage(context.Background(), *printer, rendered, *copies)
+		return printJSON(resp)
 	}
 
 	req := api.PrintRequest{
@@ -257,7 +276,7 @@ func printUsage() {
 
 Usage:
   niimcli serve --config ./config.example.json
-  niimcli print --config ./config.example.json --printer d110-desk --preset d110-12x40 --image ./label.png --preview-out ./preview.png
+  niimcli print --config ./config.example.json --printer d110-desk --image ./preview.png
   niimcli probe --config ./config.example.json --printer d110-desk
   niimcli scan --config ./config.example.json --transport ble
   niimcli printers --config ./config.example.json
