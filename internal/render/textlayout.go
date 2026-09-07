@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -13,6 +14,8 @@ import (
 
 const textPaddingMM = 1.0
 
+const textThreshold = 192
+
 type TextLayout struct {
 	Lines          []string
 	LineHeightPx   int
@@ -22,7 +25,11 @@ type TextLayout struct {
 }
 
 func LayoutText(text string, fontSize float64, maxWidthPx int) (TextLayout, error) {
-	face, err := newTextFace(fontSize)
+	return LayoutTextWithFontPath(text, fontSize, "", maxWidthPx)
+}
+
+func LayoutTextWithFontPath(text string, fontSize float64, fontPath string, maxWidthPx int) (TextLayout, error) {
+	face, err := newTextFace(fontSize, fontPath)
 	if err != nil {
 		return TextLayout{}, err
 	}
@@ -34,7 +41,7 @@ func MinimumTextWidthMM(element label.Element) (float64, error) {
 	if element.Text == nil {
 		return 0, nil
 	}
-	face, err := newTextFace(element.Text.FontSize)
+	face, err := newTextFace(element.Text.FontSize, element.Text.FontPath)
 	if err != nil {
 		return 0, err
 	}
@@ -48,7 +55,7 @@ func RequiredTextHeightMM(element label.Element, widthMM float64) (float64, erro
 		return 0, nil
 	}
 	innerWidthPx := max(1, mmToPx(widthMM)-textPaddingPx()*2)
-	layout, err := LayoutText(element.Text.Value, element.Text.FontSize, innerWidthPx)
+	layout, err := LayoutTextWithFontPath(element.Text.Value, element.Text.FontSize, element.Text.FontPath, innerWidthPx)
 	if err != nil {
 		return 0, err
 	}
@@ -59,8 +66,22 @@ func textPaddingPx() int {
 	return max(1, int(math.Round(textPaddingMM*dotsPerMM)))
 }
 
-func newTextFace(fontSize float64) (font.Face, error) {
-	face, err := opentype.NewFace(regularFont, &opentype.FaceOptions{
+func ValidateFontPath(fontPath string) error {
+	if strings.TrimSpace(fontPath) == "" {
+		return nil
+	}
+	if _, err := loadFont(fontPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+func newTextFace(fontSize float64, fontPath string) (font.Face, error) {
+	loadedFont, err := loadFont(fontPath)
+	if err != nil {
+		return nil, err
+	}
+	face, err := opentype.NewFace(loadedFont, &opentype.FaceOptions{
 		Size:    maxFloat(fontSize, 8),
 		DPI:     72,
 		Hinting: font.HintingFull,
@@ -69,6 +90,22 @@ func newTextFace(fontSize float64) (font.Face, error) {
 		return nil, fmt.Errorf("create font face: %w", err)
 	}
 	return face, nil
+}
+
+func loadFont(fontPath string) (*opentype.Font, error) {
+	fontPath = strings.TrimSpace(fontPath)
+	if fontPath == "" {
+		return textFont, nil
+	}
+	data, err := os.ReadFile(fontPath)
+	if err != nil {
+		return nil, fmt.Errorf("read font %q: %w", fontPath, err)
+	}
+	parsed, err := opentype.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse font %q: %w", fontPath, err)
+	}
+	return parsed, nil
 }
 
 func layoutTextWithFace(text string, face font.Face, maxWidthPx int) TextLayout {

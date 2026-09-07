@@ -118,3 +118,68 @@ func TestRenderDocumentLeavesTextTopPadding(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderDocumentOutputIsMonochrome(t *testing.T) {
+	doc := label.NewDocument(50, 30)
+	if err := doc.AddElement(label.NewTextElement("title", "Storage Box 12", 5, 4, 30, 8, 18)); err != nil {
+		t.Fatalf("AddElement() error = %v", err)
+	}
+
+	result, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatalf("RenderDocument() error = %v", err)
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		t.Fatalf("render image type = %T, want *image.Gray", result.Image)
+	}
+	for y := gray.Bounds().Min.Y; y < gray.Bounds().Max.Y; y++ {
+		for x := gray.Bounds().Min.X; x < gray.Bounds().Max.X; x++ {
+			v := gray.GrayAt(x, y).Y
+			if v != 0 && v != 255 {
+				t.Fatalf("pixel at (%d,%d) = %d, want monochrome", x, y, v)
+			}
+		}
+	}
+}
+
+func TestRenderDocumentForTUIUsesSameCanvasSize(t *testing.T) {
+	doc := label.NewDocument(50, 30)
+	if err := doc.AddElement(label.NewTextElement("title", "Storage Box 12", 5, 4, 30, 8, 18)); err != nil {
+		t.Fatalf("AddElement() error = %v", err)
+	}
+
+	printResult, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatalf("RenderDocument() error = %v", err)
+	}
+	tuiResult, err := RenderDocumentForTUI(doc)
+	if err != nil {
+		t.Fatalf("RenderDocumentForTUI() error = %v", err)
+	}
+	if tuiResult.WidthPx != printResult.WidthPx || tuiResult.HeightPx != printResult.HeightPx {
+		t.Fatalf("TUI render size = %dx%d, want %dx%d", tuiResult.WidthPx, tuiResult.HeightPx, printResult.WidthPx, printResult.HeightPx)
+	}
+	if len(tuiResult.PreviewPNG) == 0 {
+		t.Fatal("RenderDocumentForTUI() returned empty preview")
+	}
+}
+
+func TestRenderDocumentRejectsInvalidFontPath(t *testing.T) {
+	doc := label.NewDocument(50, 30)
+	element := label.NewTextElement("title", "Storage Box 12", 5, 4, 30, 8, 18)
+	element.Text.FontPath = "/no/such/font.ttf"
+	if err := doc.AddElement(element); err != nil {
+		t.Fatalf("AddElement() error = %v", err)
+	}
+
+	if _, err := RenderDocument(doc); err == nil {
+		t.Fatal("RenderDocument() error = nil, want invalid font path error")
+	}
+}
+
+func TestValidateFontPathAllowsFallback(t *testing.T) {
+	if err := ValidateFontPath(""); err != nil {
+		t.Fatalf("ValidateFontPath() fallback error = %v", err)
+	}
+}

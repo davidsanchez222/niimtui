@@ -51,6 +51,7 @@ type Model struct {
 	SelectedID string
 	Drag       DragState
 	NextID     int
+	FontPath   string
 
 	EditingText bool
 	TextBuffer  string
@@ -60,7 +61,7 @@ type Model struct {
 	Ready  bool
 }
 
-func NewModel(widthMM, heightMM float64) Model {
+func NewModel(widthMM, heightMM float64, fontPath string) Model {
 	doc := label.NewDocument(widthMM, heightMM)
 	sample := label.NewTextElement(
 		"text-1",
@@ -71,6 +72,7 @@ func NewModel(widthMM, heightMM float64) Model {
 		math.Max(math.Min(heightMM*0.22, heightMM-4), 6),
 		18,
 	)
+	sample.Text.FontPath = fontPath
 	clampElementToDocument(&sample, doc)
 	_ = doc.AddElement(sample)
 	status := "Click to select. Drag to move. Drag handles to resize."
@@ -79,6 +81,7 @@ func NewModel(widthMM, heightMM float64) Model {
 		Document:   doc,
 		SelectedID: sample.ID,
 		NextID:     2,
+		FontPath:   fontPath,
 		StatusBase: status,
 		Status:     status,
 	}

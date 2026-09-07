@@ -207,7 +207,7 @@ func truncateText(s string, width int) string {
 }
 
 func drawDocumentPreview(grid [][]rune, canvas Canvas, doc label.Document) {
-	result, err := render.RenderDocument(doc)
+	result, err := render.RenderDocumentForTUI(doc)
 	if err != nil {
 		return
 	}
@@ -324,7 +324,7 @@ func wrapCanvasText(element label.Element, text string, contentWidth int) []stri
 	if contentWidth <= 0 || element.Text == nil {
 		return nil
 	}
-	layout, err := render.LayoutText(text, element.Text.FontSize, max(int(element.WidthMM*8), 1))
+	layout, err := render.LayoutTextWithFontPath(text, element.Text.FontSize, element.Text.FontPath, max(int(element.WidthMM*8), 1))
 	if err != nil || len(layout.Lines) == 0 {
 		if text == "" {
 			return nil

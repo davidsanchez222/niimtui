@@ -4,15 +4,20 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"niimcli/internal/render"
 )
 
-func Run(widthMM, heightMM float64) error {
+func Run(widthMM, heightMM float64, fontPath string) error {
 	if widthMM <= 0 || heightMM <= 0 {
 		return fmt.Errorf("label width and height must be greater than zero")
 	}
+	if err := render.ValidateFontPath(fontPath); err != nil {
+		return err
+	}
 
 	p := tea.NewProgram(
-		NewModel(widthMM, heightMM),
+		NewModel(widthMM, heightMM, fontPath),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

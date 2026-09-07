@@ -232,6 +232,7 @@ func runTUI(args []string) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	widthMM := fs.Float64("width-mm", 0, "label width in millimeters")
 	heightMM := fs.Float64("height-mm", 0, "label height in millimeters")
+	fontPath := fs.String("font-path", "", "optional TTF/OTF font path for label text rendering")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -242,7 +243,7 @@ func runTUI(args []string) error {
 		return errors.New("-height-mm is required and must be greater than zero")
 	}
 
-	return tui.Run(*widthMM, *heightMM)
+	return tui.Run(*widthMM, *heightMM, *fontPath)
 }
 
 func printJSON(v any) error {
@@ -261,6 +262,6 @@ Usage:
   niimcli scan --config ./config.example.json --transport ble
   niimcli printers --config ./config.example.json
   niimcli presets --config ./config.example.json
-  niimcli tui --width-mm 50 --height-mm 30
+  niimcli tui --width-mm 50 --height-mm 30 --font-path /path/to/font.ttf
 `)
 }

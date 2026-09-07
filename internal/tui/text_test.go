@@ -25,3 +25,23 @@ func TestResizeElementKeepsWrappedTextInsideHeight(t *testing.T) {
 		t.Fatalf("height = %.2f, min height = %.2f", updated.HeightMM, minHeight)
 	}
 }
+
+func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
+	m := NewModel(50, 30, "/tmp/example.ttf")
+	initial, ok := m.selectedElement()
+	if !ok || initial.Text == nil {
+		t.Fatal("expected initial selected text element")
+	}
+	if initial.Text.FontPath != "/tmp/example.ttf" {
+		t.Fatalf("initial font path = %q, want custom path", initial.Text.FontPath)
+	}
+
+	m.addTextElement()
+	added, ok := m.selectedElement()
+	if !ok || added.Text == nil {
+		t.Fatal("expected added selected text element")
+	}
+	if added.Text.FontPath != "/tmp/example.ttf" {
+		t.Fatalf("added font path = %q, want custom path", added.Text.FontPath)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"golang.org/x/image/font"
+	"golang.org/x/image/font/gofont/gomedium"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
@@ -17,7 +18,14 @@ import (
 	"niimcli/internal/label"
 )
 
-var regularFont *opentype.Font
+var (
+	regularFont *opentype.Font
+	textFont    *opentype.Font
+)
+
+type documentRenderOptions struct {
+	threshold uint8
+}
 
 func init() {
 	parsed, err := opentype.Parse(goregular.TTF)
@@ -25,9 +33,23 @@ func init() {
 		panic(fmt.Sprintf("parse embedded font: %v", err))
 	}
 	regularFont = parsed
+
+	parsed, err = opentype.Parse(gomedium.TTF)
+	if err != nil {
+		panic(fmt.Sprintf("parse embedded text font: %v", err))
+	}
+	textFont = parsed
 }
 
 func RenderDocument(doc label.Document) (Result, error) {
+	return renderDocumentWithOptions(doc, documentRenderOptions{threshold: textThreshold})
+}
+
+func RenderDocumentForTUI(doc label.Document) (Result, error) {
+	return renderDocumentWithOptions(doc, documentRenderOptions{threshold: 128})
+}
+
+func renderDocumentWithOptions(doc label.Document, opts documentRenderOptions) (Result, error) {
 	if doc.WidthMM <= 0 || doc.HeightMM <= 0 {
 		return Result{}, fmt.Errorf("invalid document dimensions")
 	}
@@ -47,7 +69,7 @@ func RenderDocument(doc label.Document) (Result, error) {
 		}
 	}
 
-	thresholdToMonochrome(canvas)
+	thresholdToMonochromeWithThreshold(canvas, opts.threshold)
 	if strings.EqualFold(doc.Shape, "round") {
 		maskRound(canvas)
 	}
@@ -95,7 +117,7 @@ func drawTextElement(dst draw.Image, element label.Element) error {
 		return nil
 	}
 
-	face, err := newTextFace(element.Text.FontSize)
+	face, err := newTextFace(element.Text.FontSize, element.Text.FontPath)
 	if err != nil {
 		return err
 	}

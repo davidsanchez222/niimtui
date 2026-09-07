@@ -22,6 +22,7 @@ type Element struct {
 type TextElement struct {
 	Value    string
 	FontSize float64
+	FontPath string
 	Bold     bool
 	Align    string
 }

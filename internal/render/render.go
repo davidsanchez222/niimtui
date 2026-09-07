@@ -349,9 +349,13 @@ func scaleNearest(dst draw.Image, dstRect image.Rectangle, src image.Image, srcR
 }
 
 func thresholdToMonochrome(img *image.Gray) {
+	thresholdToMonochromeWithThreshold(img, 128)
+}
+
+func thresholdToMonochromeWithThreshold(img *image.Gray, threshold uint8) {
 	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
 		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
-			if img.GrayAt(x, y).Y < 128 {
+			if img.GrayAt(x, y).Y < threshold {
 				img.SetGray(x, y, color.Gray{Y: 0})
 			} else {
 				img.SetGray(x, y, color.Gray{Y: 255})

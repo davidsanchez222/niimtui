@@ -3,6 +3,7 @@ module niimcli
 go 1.25.0
 
 require (
+	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	golang.org/x/image v0.45.0
 	tinygo.org/x/bluetooth v0.15.0
@@ -10,7 +11,6 @@ require (
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/bubbletea v1.3.10 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.10.1 // indirect

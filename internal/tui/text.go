@@ -29,6 +29,7 @@ func (m *Model) addTextElement() {
 		math.Max(math.Min(m.Document.HeightMM*0.2, m.Document.HeightMM-2), 6),
 		defaultTextFontSize,
 	)
+	element.Text.FontPath = m.FontPath
 	clampElementToDocument(&element, m.Document)
 	if err := m.Document.AddElement(element); err != nil {
 		m.setStatus("Add text failed: %v", err)
