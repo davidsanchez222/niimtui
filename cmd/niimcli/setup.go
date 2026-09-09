@@ -19,9 +19,10 @@ import (
 )
 
 var (
-	setupTitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
-	setupHintStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	setupCursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+	setupTitleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
+	setupHintStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	setupCursorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+	setupSelectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
 )
 
 const setupInitialScanWindow = 2 * time.Second
@@ -212,14 +213,31 @@ type scanErrMsg struct{ err error }
 type initialScanDoneMsg struct{}
 
 type scanPicker struct {
-	results  <-chan transport.ScanResult
-	errs     <-chan error
-	devices  map[string]transport.ScanResult
-	ordered  []transport.ScanResult
-	cursor   int
-	ready    bool
+	results     <-chan transport.ScanResult
+	errs        <-chan error
+	devices     map[string]transport.ScanResult
+	named       []transport.ScanResult
+	unknown     []transport.ScanResult
+	cursor      int
+	ready       bool
+	showUnknown bool
+
 	selected transport.ScanResult
 	err      error
+}
+
+type scanOptionKind int
+
+const (
+	scanOptionDevice scanOptionKind = iota
+	scanOptionUnknownSummary
+	scanOptionManual
+)
+
+type scanOption struct {
+	kind   scanOptionKind
+	line   string
+	device transport.ScanResult
 }
 
 func newScanPicker(results <-chan transport.ScanResult, errs <-chan error) scanPicker {
@@ -239,9 +257,7 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if result.Address != "" {
 			m.devices[result.Address] = result
 			m.sortDevices()
-			if m.cursor >= m.optionCount() {
-				m.cursor = max(m.optionCount()-1, 0)
-			}
+			m.clampCursor()
 		}
 		return m, waitScanResult(m.results)
 	case scanErrMsg:
@@ -258,6 +274,9 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
 			return m, tea.Quit
+		case "u":
+			m.showUnknown = !m.showUnknown
+			m.clampCursor()
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
@@ -267,10 +286,19 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
-			if m.cursor < len(m.ordered) {
-				m.selected = m.ordered[m.cursor]
+			options := m.options()
+			if m.cursor < len(options) {
+				switch option := options[m.cursor]; option.kind {
+				case scanOptionDevice:
+					m.selected = option.device
+					return m, tea.Quit
+				case scanOptionUnknownSummary:
+					m.showUnknown = true
+					return m, nil
+				case scanOptionManual:
+					return m, tea.Quit
+				}
 			}
-			return m, tea.Quit
 		}
 	}
 	return m, nil
@@ -284,15 +312,21 @@ func (m scanPicker) View() string {
 		b.WriteString(setupHintStyle.Render("Building the initial list for 2 seconds. New devices will keep appearing after that."))
 		b.WriteString("\n\n")
 	} else {
-		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. Press q to skip."))
+		unknownHint := "u show unknown"
+		if m.showUnknown {
+			unknownHint = "u hide unknown"
+		}
+		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. " + unknownHint + " • q skip"))
 		b.WriteString("\n\n")
 	}
 
-	options := m.optionLines()
-	for i, line := range options {
+	options := m.options()
+	for i, option := range options {
 		cursor := "  "
+		line := option.line
 		if i == m.cursor {
 			cursor = setupCursorStyle.Render("> ")
+			line = setupSelectedStyle.Render(line)
 		}
 		b.WriteString(cursor)
 		b.WriteString(line)
@@ -302,43 +336,71 @@ func (m scanPicker) View() string {
 }
 
 func (m *scanPicker) sortDevices() {
-	m.ordered = m.ordered[:0]
+	m.named = m.named[:0]
+	m.unknown = m.unknown[:0]
 	for _, result := range m.devices {
-		m.ordered = append(m.ordered, result)
+		if strings.TrimSpace(result.Name) == "" {
+			m.unknown = append(m.unknown, result)
+			continue
+		}
+		m.named = append(m.named, result)
 	}
-	sort.SliceStable(m.ordered, func(i, j int) bool {
-		leftUnknown := strings.TrimSpace(m.ordered[i].Name) == ""
-		rightUnknown := strings.TrimSpace(m.ordered[j].Name) == ""
-		if leftUnknown != rightUnknown {
-			return !leftUnknown
-		}
-		if leftUnknown {
-			return m.ordered[i].Address < m.ordered[j].Address
-		}
-		left := strings.ToLower(m.ordered[i].Name)
-		right := strings.ToLower(m.ordered[j].Name)
+	sort.SliceStable(m.named, func(i, j int) bool {
+		left := strings.ToLower(m.named[i].Name)
+		right := strings.ToLower(m.named[j].Name)
 		if left == right {
-			return m.ordered[i].Address < m.ordered[j].Address
+			return m.named[i].Address < m.named[j].Address
 		}
 		return left < right
+	})
+	sort.SliceStable(m.unknown, func(i, j int) bool {
+		return m.unknown[i].Address < m.unknown[j].Address
 	})
 }
 
 func (m scanPicker) optionCount() int {
-	return len(m.ordered) + 1
+	return len(m.options())
+}
+
+func (m scanPicker) options() []scanOption {
+	options := make([]scanOption, 0, len(m.named)+len(m.unknown)+2)
+	for _, result := range m.named {
+		options = append(options, scanOption{kind: scanOptionDevice, line: scanDeviceLine(result), device: result})
+	}
+	if len(m.unknown) > 0 {
+		if m.showUnknown {
+			for _, result := range m.unknown {
+				options = append(options, scanOption{kind: scanOptionDevice, line: scanDeviceLine(result), device: result})
+			}
+		} else {
+			options = append(options, scanOption{kind: scanOptionUnknownSummary, line: fmt.Sprintf("Unknown devices hidden (%d) - press u to show", len(m.unknown))})
+		}
+	}
+	options = append(options, scanOption{kind: scanOptionManual, line: "Enter manually"})
+	return options
 }
 
 func (m scanPicker) optionLines() []string {
-	lines := make([]string, 0, m.optionCount())
-	for _, result := range m.ordered {
-		name := strings.TrimSpace(result.Name)
-		if name == "" {
-			name = "Unknown device"
-		}
-		lines = append(lines, fmt.Sprintf("%-24s %s  RSSI %d", name, result.Address, result.RSSI))
+	options := m.options()
+	lines := make([]string, 0, len(options))
+	for _, option := range options {
+		lines = append(lines, option.line)
 	}
-	lines = append(lines, "Enter manually")
 	return lines
+}
+
+func (m *scanPicker) clampCursor() {
+	if m.cursor >= m.optionCount() {
+		m.cursor = max(m.optionCount()-1, 0)
+	}
+}
+
+func scanDeviceLine(result transport.ScanResult) string {
+	name := strings.TrimSpace(result.Name)
+	if name == "" {
+		name = "Unknown device"
+	}
+	return fmt.Sprintf("%-24s %s  RSSI %d", name, result.Address, result.RSSI)
 }
 
 func waitScanResult(results <-chan transport.ScanResult) tea.Cmd {
