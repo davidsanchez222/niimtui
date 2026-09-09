@@ -60,6 +60,10 @@ func (s *Service) Scan(ctx context.Context, transportName string) ([]transport.S
 	return s.transport.Scan(ctx, transportName)
 }
 
+func (s *Service) ScanStream(ctx context.Context, transportName string) (<-chan transport.ScanResult, <-chan error, error) {
+	return s.transport.ScanStream(ctx, transportName)
+}
+
 func (s *Service) Probe(ctx context.Context, selector string) (map[string]any, *api.PrintResponse) {
 	printer, errResp := s.resolvePrinter(selector)
 	if errResp != nil {
@@ -272,6 +276,9 @@ func (s *Service) validateRequest(req api.PrintRequest) (config.PrinterProfile, 
 func (s *Service) resolvePrinter(selector string) (config.PrinterProfile, *api.PrintResponse) {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
+		if len(s.cfg.Printers) == 1 {
+			return s.cfg.Printers[0], nil
+		}
 		return config.PrinterProfile{}, errorResponse(ErrInvalidRequest, "printer.selector is required")
 	}
 

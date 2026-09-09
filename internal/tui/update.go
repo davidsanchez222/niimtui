@@ -30,6 +30,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
+		if msg.String() == "P" {
+			return m, m.printCurrentDocument()
+		}
 		if m.handleCommandKey(msg) {
 			return m, nil
 		}
@@ -42,6 +45,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("Selection cleared.")
 			return m, nil
 		}
+	case printResultMsg:
+		m.handlePrintResult(msg)
+		return m, nil
 	}
 
 	return m, nil

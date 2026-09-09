@@ -119,6 +119,43 @@ func (b *Backend) Scan(ctx context.Context) ([]transport.ScanResult, error) {
 	return out, nil
 }
 
+func (b *Backend) ScanStream(ctx context.Context) (<-chan transport.ScanResult, <-chan error, error) {
+	if err := b.enable(); err != nil {
+		return nil, nil, fmt.Errorf("enable ble adapter: %w", err)
+	}
+
+	results := make(chan transport.ScanResult, 32)
+	errs := make(chan error, 1)
+
+	go func() {
+		defer close(results)
+		defer close(errs)
+		done := make(chan error, 1)
+		go func() {
+			done <- b.adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+				select {
+				case results <- transport.ScanResult{Address: result.Address.String(), Name: result.LocalName(), RSSI: result.RSSI}:
+				case <-ctx.Done():
+				}
+			})
+		}()
+
+		select {
+		case <-ctx.Done():
+			_ = b.adapter.StopScan()
+			if err := <-done; err != nil {
+				errs <- fmt.Errorf("scan ble: %w", err)
+			}
+		case err := <-done:
+			if err != nil {
+				errs <- fmt.Errorf("scan ble: %w", err)
+			}
+		}
+	}()
+
+	return results, errs, nil
+}
+
 func (b *Backend) enable() error {
 	b.enableOnce.Do(func() {
 		b.enableErr = b.adapter.Enable()

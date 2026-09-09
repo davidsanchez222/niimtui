@@ -27,7 +27,7 @@ func TestResizeElementKeepsWrappedTextInsideHeight(t *testing.T) {
 }
 
 func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
-	m := NewModel(50, 30, "/tmp/example.ttf")
+	m := NewModel(50, 30, "/tmp/example.ttf", PrintConfig{})
 	initial, ok := m.selectedElement()
 	if !ok || initial.Text == nil {
 		t.Fatal("expected initial selected text element")

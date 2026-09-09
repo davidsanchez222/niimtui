@@ -40,7 +40,12 @@ func (m Model) View() string {
 		lines = append(lines, toolLines[i]+strings.Repeat(" ", gap)+canvasLines[i]+strings.Repeat(" ", gap)+propertyLines[i])
 	}
 	lines = append(lines, strings.Repeat("─", max(m.Width, 24)))
-	lines = append(lines, fitLine(m.Status+" • t add • enter edit • +/- font • p preview • q quit • esc clear", max(m.Width, 24)))
+	footer := m.Status + " • t add • enter edit • +/- font • p preview"
+	if m.Print.Service != nil {
+		footer += " • P print"
+	}
+	footer += " • q quit • esc clear"
+	lines = append(lines, fitLine(footer, max(m.Width, 24)))
 
 	return strings.Join(lines, "\n")
 }
@@ -129,6 +134,7 @@ func toolPanelLines(width int) []string {
 		"[hjkl] Move",
 		"[+/-] Font",
 		"[p] Preview",
+		"[P] Print",
 	}, width)
 }
 

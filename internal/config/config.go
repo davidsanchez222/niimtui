@@ -1,10 +1,13 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Config struct {
@@ -12,6 +15,8 @@ type Config struct {
 	Printers []PrinterProfile `json:"printers"`
 	Presets  []LabelPreset    `json:"presets"`
 }
+
+const appName = "niimcli"
 
 type ServerConfig struct {
 	Listen         string     `json:"listen"`
@@ -67,6 +72,80 @@ func Load(path string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func LoadDefault() (Config, error) {
+	path, err := DefaultPath()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Config{}, fmt.Errorf("default config not found at %s; run `niimcli setup` or pass --config", path)
+		}
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+func LoadOptional(path string) (Config, error) {
+	if path == "" {
+		return LoadDefault()
+	}
+	return Load(path)
+}
+
+func Save(path string, cfg Config) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
+func DefaultPath() (string, error) {
+	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		return filepath.Join(dir, appName, "config.json"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", appName, "config.json"), nil
+}
+
+func DefaultConfig(printer PrinterProfile, presets []LabelPreset) (Config, error) {
+	token, err := randomToken()
+	if err != nil {
+		return Config{}, err
+	}
+	return Config{
+		Server: ServerConfig{
+			Listen:    "127.0.0.1:8443",
+			AuthToken: token,
+		},
+		Printers: []PrinterProfile{printer},
+		Presets:  presets,
+	}, nil
+}
+
+func randomToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate auth token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func (c Config) Validate() error {

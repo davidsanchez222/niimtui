@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"niimcli/internal/api"
@@ -40,6 +41,8 @@ func run(args []string) error {
 		return runProbe(args[1:])
 	case "scan":
 		return runScan(args[1:])
+	case "setup":
+		return runSetup(args[1:])
 	case "printers":
 		return runPrinters(args[1:])
 	case "presets":
@@ -81,7 +84,7 @@ func runServe(args []string) error {
 
 func runPrint(args []string) error {
 	fs := flag.NewFlagSet("print", flag.ContinueOnError)
-	configPath := fs.String("config", "config.example.json", "path to config JSON")
+	configPath := fs.String("config", "", "path to config JSON")
 	printer := fs.String("printer", "", "printer profile selector")
 	preset := fs.String("preset", "", "label preset")
 	layout := fs.String("layout", string(api.LayoutQROnly), "label layout: qr-only, qr-title, qr-title-subtitle")
@@ -103,7 +106,7 @@ func runPrint(args []string) error {
 		return errors.New("-no-print requires -preview-out")
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadOptional(*configPath)
 	if err != nil {
 		return err
 	}
@@ -164,12 +167,12 @@ func runPrint(args []string) error {
 
 func runPrinters(args []string) error {
 	fs := flag.NewFlagSet("printers", flag.ContinueOnError)
-	configPath := fs.String("config", "config.example.json", "path to config JSON")
+	configPath := fs.String("config", "", "path to config JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadOptional(*configPath)
 	if err != nil {
 		return err
 	}
@@ -179,13 +182,13 @@ func runPrinters(args []string) error {
 
 func runProbe(args []string) error {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
-	configPath := fs.String("config", "config.example.json", "path to config JSON")
+	configPath := fs.String("config", "", "path to config JSON")
 	printer := fs.String("printer", "", "printer profile selector")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadOptional(*configPath)
 	if err != nil {
 		return err
 	}
@@ -234,12 +237,12 @@ func runScan(args []string) error {
 
 func runPresets(args []string) error {
 	fs := flag.NewFlagSet("presets", flag.ContinueOnError)
-	configPath := fs.String("config", "config.example.json", "path to config JSON")
+	configPath := fs.String("config", "", "path to config JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadOptional(*configPath)
 	if err != nil {
 		return err
 	}
@@ -249,20 +252,84 @@ func runPresets(args []string) error {
 
 func runTUI(args []string) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
+	configPath := fs.String("config", "", "path to config JSON")
+	printer := fs.String("printer", "", "printer profile selector")
 	widthMM := fs.Float64("width-mm", 0, "label width in millimeters")
 	heightMM := fs.Float64("height-mm", 0, "label height in millimeters")
 	fontPath := fs.String("font-path", "", "optional TTF/OTF font path for label text rendering")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	var svc *service.Service
+	printerSelector := *printer
+	shouldLoadConfig := *widthMM <= 0 || *heightMM <= 0 || *configPath != "" || *printer != ""
+	if !shouldLoadConfig {
+		if path, err := config.DefaultPath(); err == nil {
+			if _, err := os.Stat(path); err == nil {
+				shouldLoadConfig = true
+			}
+		}
+	}
+	if shouldLoadConfig {
+		cfg, err := config.LoadOptional(*configPath)
+		if err != nil {
+			if *widthMM > 0 && *heightMM > 0 && *configPath == "" && *printer == "" {
+				return tui.Run(*widthMM, *heightMM, *fontPath, tui.PrintConfig{})
+			}
+			return err
+		}
+		if *widthMM <= 0 || *heightMM <= 0 {
+			preset, err := defaultPreset(cfg, printerSelector)
+			if err != nil {
+				return err
+			}
+			if *widthMM <= 0 {
+				*widthMM = preset.WidthMM
+			}
+			if *heightMM <= 0 {
+				*heightMM = preset.HeightMM
+			}
+		}
+		svc, err = service.New(cfg)
+		if err != nil {
+			return err
+		}
+	}
 	if *widthMM <= 0 {
-		return errors.New("-width-mm is required and must be greater than zero")
+		return errors.New("-width-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 	if *heightMM <= 0 {
-		return errors.New("-height-mm is required and must be greater than zero")
+		return errors.New("-height-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 
-	return tui.Run(*widthMM, *heightMM, *fontPath)
+	return tui.Run(*widthMM, *heightMM, *fontPath, tui.PrintConfig{Service: svc, Printer: printerSelector, Copies: 1})
+}
+
+func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {
+	printerSelector = strings.TrimSpace(printerSelector)
+	var printer config.PrinterProfile
+	if printerSelector == "" {
+		if len(cfg.Printers) != 1 {
+			return config.LabelPreset{}, errors.New("-printer is required when config has multiple printers")
+		}
+		printer = cfg.Printers[0]
+	} else {
+		for _, candidate := range cfg.Printers {
+			if candidate.Name == printerSelector {
+				printer = candidate
+				break
+			}
+		}
+		if printer.Name == "" {
+			return config.LabelPreset{}, fmt.Errorf("unknown printer profile %q", printerSelector)
+		}
+	}
+	for _, preset := range cfg.Presets {
+		if preset.Name == printer.DefaultPreset {
+			return preset, nil
+		}
+	}
+	return config.LabelPreset{}, fmt.Errorf("printer %q references unknown default preset %q", printer.Name, printer.DefaultPreset)
 }
 
 func printJSON(v any) error {
@@ -276,7 +343,8 @@ func printUsage() {
 
 Usage:
   niimcli serve --config ./config.example.json
-  niimcli print --config ./config.example.json --printer d110-desk --image ./preview.png
+  niimcli setup
+  niimcli print --config ./config.example.json --printer d110-desk --image ./testlabels/preview.png
   niimcli probe --config ./config.example.json --printer d110-desk
   niimcli scan --config ./config.example.json --transport ble
   niimcli printers --config ./config.example.json

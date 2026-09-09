@@ -1,13 +1,26 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"math"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"niimcli/internal/api"
 	"niimcli/internal/label"
+	"niimcli/internal/render"
 )
+
+type PrintService interface {
+	PrintImage(ctx context.Context, selector string, rendered render.Result, copies int) api.PrintResponse
+}
+
+type PrintConfig struct {
+	Service PrintService
+	Printer string
+	Copies  int
+}
 
 type DragMode int
 
@@ -52,6 +65,7 @@ type Model struct {
 	Drag       DragState
 	NextID     int
 	FontPath   string
+	Print      PrintConfig
 
 	EditingText bool
 	TextBuffer  string
@@ -61,7 +75,7 @@ type Model struct {
 	Ready  bool
 }
 
-func NewModel(widthMM, heightMM float64, fontPath string) Model {
+func NewModel(widthMM, heightMM float64, fontPath string, printConfig PrintConfig) Model {
 	doc := label.NewDocument(widthMM, heightMM)
 	sample := label.NewTextElement(
 		"text-1",
@@ -82,6 +96,7 @@ func NewModel(widthMM, heightMM float64, fontPath string) Model {
 		SelectedID: sample.ID,
 		NextID:     2,
 		FontPath:   fontPath,
+		Print:      printConfig,
 		StatusBase: status,
 		Status:     status,
 	}

@@ -149,6 +149,22 @@ func TestResolvePrinterIncludesIdentifierProfiles(t *testing.T) {
 	}
 }
 
+func TestResolvePrinterUsesOnlyConfiguredPrinterByDefault(t *testing.T) {
+	svc, err := New(config.Config{
+		Printers: []config.PrinterProfile{{Name: "b1-default", Model: "B1", Transport: "ble", DeviceName: "B1-Test", DefaultPreset: "b1-50x50-round"}},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	printer, errResp := svc.resolvePrinter("")
+	if errResp != nil {
+		t.Fatalf("resolvePrinter() unexpected error = %#v", errResp)
+	}
+	if printer.Name != "b1-default" {
+		t.Fatalf("printer = %q, want b1-default", printer.Name)
+	}
+}
+
 func mustService(t *testing.T) *Service {
 	t.Helper()
 	cfg := config.Config{

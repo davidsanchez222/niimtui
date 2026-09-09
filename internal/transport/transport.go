@@ -64,3 +64,18 @@ func (m *Manager) Scan(ctx context.Context, transportName string) ([]ScanResult,
 		return nil, fmt.Errorf("unsupported transport %q", transportName)
 	}
 }
+
+func (m *Manager) ScanStream(ctx context.Context, transportName string) (<-chan ScanResult, <-chan error, error) {
+	switch transportName {
+	case "", "ble":
+		scanner, ok := m.ble.(interface {
+			ScanStream(context.Context) (<-chan ScanResult, <-chan error, error)
+		})
+		if !ok || m.ble == nil {
+			return nil, nil, fmt.Errorf("ble backend does not support streaming scans")
+		}
+		return scanner.ScanStream(ctx)
+	default:
+		return nil, nil, fmt.Errorf("unsupported transport %q", transportName)
+	}
+}
