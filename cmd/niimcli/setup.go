@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
+	"niimcli/internal/catalog"
 	"niimcli/internal/config"
 	"niimcli/internal/service"
 	"niimcli/internal/transport"
@@ -26,24 +27,6 @@ var (
 )
 
 const setupInitialScanWindow = 2 * time.Second
-
-var knownNiimbotModels = []string{
-	"M2",
-	"M3",
-	"N1",
-	"B21 Pro",
-	"B1",
-	"B4",
-	"B2 Pro",
-	"B1 Pro",
-	"B2",
-	"B21",
-	"B3S",
-	"K3",
-	"D11",
-	"D110",
-	"D101",
-}
 
 func runSetup(args []string) error {
 	if len(args) > 0 {
@@ -77,26 +60,30 @@ func runSetup(args []string) error {
 	}
 
 	model := "B1"
+	modelOptions := make([]huh.Option[string], 0, len(catalog.KnownModels()))
+	for _, knownModel := range catalog.KnownModels() {
+		modelOptions = append(modelOptions, huh.NewOption(knownModel, knownModel))
+	}
 	if err := huh.NewSelect[string]().
 		Title("Which Niimbot printer do you have?").
-		Options(
-			huh.NewOption("B1", "B1"),
-			huh.NewOption("D110", "D110"),
-		).
+		Options(modelOptions...).
 		Value(&model).
 		Run(); err != nil {
 		return err
 	}
 
-	presets := setupPresetsForModel(model)
+	presets, err := catalog.LabelPresetsForModel(model)
+	if err != nil {
+		return err
+	}
 	if len(presets) == 0 {
-		return fmt.Errorf("no built-in presets for model %s", model)
+		return fmt.Errorf("no label presets found for model %s", model)
 	}
 
 	presetName := presets[0].Name
 	presetOptions := make([]huh.Option[string], 0, len(presets))
 	for _, preset := range presets {
-		label := fmt.Sprintf("%s (%.0fx%.0fmm %s)", preset.Name, preset.WidthMM, preset.HeightMM, preset.Shape)
+		label := fmt.Sprintf("%s (%.3gx%.3gmm %s)", preset.Name, preset.WidthMM, preset.HeightMM, preset.Shape)
 		presetOptions = append(presetOptions, huh.NewOption(label, preset.Name))
 	}
 	if err := huh.NewSelect[string]().
@@ -294,22 +281,28 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 		return m, nil
 	case tea.KeyMsg:
-		maxCursor := m.optionCount() - 1
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			m.aborted = true
+			return m, tea.Quit
+		case tea.KeyShiftTab:
+			m.moveCursor(-1)
+			return m, nil
+		case tea.KeyTab:
+			m.moveCursor(1)
+			return m, nil
+		}
 		switch msg.String() {
-		case "ctrl+c", "q", "esc":
+		case "q":
 			m.aborted = true
 			return m, tea.Quit
 		case "u":
 			m.showUnknown = !m.showUnknown
 			m.clampCursor()
-		case "up", "k", "shift+tab":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j", "tab":
-			if m.cursor < maxCursor {
-				m.cursor++
-			}
+		case "up", "k":
+			m.moveCursor(-1)
+		case "down", "j":
+			m.moveCursor(1)
 		case "enter":
 			options := m.options()
 			if m.cursor < len(options) {
@@ -341,7 +334,7 @@ func (m scanPicker) View() string {
 		if m.showUnknown {
 			unknownHint = "u hide unknown"
 		}
-		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. " + unknownHint + " • q manual"))
+		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. tab/j down • shift+tab/k up • " + unknownHint + " • q manual"))
 		b.WriteString("\n\n")
 	}
 
@@ -428,6 +421,18 @@ func (m *scanPicker) clampCursor() {
 	}
 }
 
+func (m *scanPicker) moveCursor(delta int) {
+	count := m.optionCount()
+	if count <= 0 {
+		m.cursor = 0
+		return
+	}
+	m.cursor = (m.cursor + delta) % count
+	if m.cursor < 0 {
+		m.cursor += count
+	}
+}
+
 func scanDeviceLine(result transport.ScanResult) string {
 	name := strings.TrimSpace(result.Name)
 	if name == "" {
@@ -438,7 +443,7 @@ func scanDeviceLine(result transport.ScanResult) string {
 
 func knownNiimbotRank(name string) (int, bool) {
 	name = strings.TrimSpace(name)
-	for i, model := range knownNiimbotModels {
+	for i, model := range catalog.KnownModels() {
 		if hasModelPrefix(name, model) {
 			return i, true
 		}
@@ -495,22 +500,5 @@ func defaultPrinterName(model string) string {
 		return "d110-default"
 	default:
 		return strings.ToLower(strings.TrimSpace(model)) + "-default"
-	}
-}
-
-func setupPresetsForModel(model string) []config.LabelPreset {
-	switch strings.ToUpper(strings.TrimSpace(model)) {
-	case "B1":
-		return []config.LabelPreset{
-			{Name: "b1-50x50-round", WidthMM: 50, HeightMM: 50, Shape: "round", Layout: "qr-title-subtitle", MarginsMM: 2},
-			{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2},
-			{Name: "b1-50x80", WidthMM: 50, HeightMM: 80, Shape: "rect", Layout: "qr-title-subtitle", MarginsMM: 2},
-		}
-	case "D110":
-		return []config.LabelPreset{
-			{Name: "d110-12x40", WidthMM: 40, HeightMM: 12, Shape: "rect", Layout: "qr-only", MarginsMM: 1},
-		}
-	default:
-		return nil
 	}
 }

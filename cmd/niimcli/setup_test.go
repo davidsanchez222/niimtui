@@ -145,9 +145,21 @@ func TestScanPickerTabNavigation(t *testing.T) {
 		t.Fatalf("cursor after tab = %d, want 1", picker.cursor)
 	}
 
-	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyTab})
+	picker = model.(scanPicker)
+	if picker.cursor != 2 {
+		t.Fatalf("cursor after second tab = %d, want 2", picker.cursor)
+	}
+
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyTab})
 	picker = model.(scanPicker)
 	if picker.cursor != 0 {
-		t.Fatalf("cursor after shift+tab = %d, want 0", picker.cursor)
+		t.Fatalf("cursor after tab wrap = %d, want 0", picker.cursor)
+	}
+
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	picker = model.(scanPicker)
+	if picker.cursor != 2 {
+		t.Fatalf("cursor after shift+tab wrap = %d, want 2", picker.cursor)
 	}
 }
