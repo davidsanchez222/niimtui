@@ -133,33 +133,33 @@ func TestScanPickerAbortKeysSwitchToManualMode(t *testing.T) {
 	}
 }
 
-func TestScanPickerTabNavigation(t *testing.T) {
+func TestScanPickerKeyNavigationStaysWithinOptions(t *testing.T) {
 	picker := newScanPicker(nil, nil)
 	picker.devices["a"] = transport.ScanResult{Address: "a", Name: "Alpha", RSSI: -50}
 	picker.devices["b"] = transport.ScanResult{Address: "b", Name: "Bravo", RSSI: -60}
 	picker.sortDevices()
 
-	model, _ := picker.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ := picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	picker = model.(scanPicker)
 	if picker.cursor != 1 {
-		t.Fatalf("cursor after tab = %d, want 1", picker.cursor)
+		t.Fatalf("cursor after j = %d, want 1", picker.cursor)
 	}
 
-	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyDown})
 	picker = model.(scanPicker)
 	if picker.cursor != 2 {
-		t.Fatalf("cursor after second tab = %d, want 2", picker.cursor)
+		t.Fatalf("cursor after down = %d, want 2", picker.cursor)
 	}
 
-	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyTab})
-	picker = model.(scanPicker)
-	if picker.cursor != 0 {
-		t.Fatalf("cursor after tab wrap = %d, want 0", picker.cursor)
-	}
-
-	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyDown})
 	picker = model.(scanPicker)
 	if picker.cursor != 2 {
-		t.Fatalf("cursor after shift+tab wrap = %d, want 2", picker.cursor)
+		t.Fatalf("cursor after down at end = %d, want 2", picker.cursor)
+	}
+
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	picker = model.(scanPicker)
+	if picker.cursor != 1 {
+		t.Fatalf("cursor after k = %d, want 1", picker.cursor)
 	}
 }

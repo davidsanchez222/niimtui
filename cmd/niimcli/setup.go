@@ -281,16 +281,11 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 		return m, nil
 	case tea.KeyMsg:
+		maxCursor := m.optionCount() - 1
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			m.aborted = true
 			return m, tea.Quit
-		case tea.KeyShiftTab:
-			m.moveCursor(-1)
-			return m, nil
-		case tea.KeyTab:
-			m.moveCursor(1)
-			return m, nil
 		}
 		switch msg.String() {
 		case "q":
@@ -300,9 +295,13 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showUnknown = !m.showUnknown
 			m.clampCursor()
 		case "up", "k":
-			m.moveCursor(-1)
+			if m.cursor > 0 {
+				m.cursor--
+			}
 		case "down", "j":
-			m.moveCursor(1)
+			if m.cursor < maxCursor {
+				m.cursor++
+			}
 		case "enter":
 			options := m.options()
 			if m.cursor < len(options) {
@@ -334,7 +333,7 @@ func (m scanPicker) View() string {
 		if m.showUnknown {
 			unknownHint = "u hide unknown"
 		}
-		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. tab/j down • shift+tab/k up • " + unknownHint + " • q manual"))
+		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. j/down move • k/up move • " + unknownHint + " • q manual"))
 		b.WriteString("\n\n")
 	}
 
@@ -418,18 +417,6 @@ func (m scanPicker) optionLines() []string {
 func (m *scanPicker) clampCursor() {
 	if m.cursor >= m.optionCount() {
 		m.cursor = max(m.optionCount()-1, 0)
-	}
-}
-
-func (m *scanPicker) moveCursor(delta int) {
-	count := m.optionCount()
-	if count <= 0 {
-		m.cursor = 0
-		return
-	}
-	m.cursor = (m.cursor + delta) % count
-	if m.cursor < 0 {
-		m.cursor += count
 	}
 }
 
