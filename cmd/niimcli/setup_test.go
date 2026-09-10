@@ -75,3 +75,40 @@ func TestScanPickerShowsUnknownDevicesWhenToggled(t *testing.T) {
 		t.Fatalf("unknown devices not sorted/rendered by address: %v", lines)
 	}
 }
+
+func TestScanPickerPrioritizesKnownNiimbotModels(t *testing.T) {
+	picker := newScanPicker(nil, nil)
+	picker.devices["zebra"] = transport.ScanResult{Address: "zebra", Name: "AAA Speaker", RSSI: -50}
+	picker.devices["d110"] = transport.ScanResult{Address: "d110", Name: "D110_M-H913040249", RSSI: -60}
+	picker.devices["b1"] = transport.ScanResult{Address: "b1", Name: "B1-I427031488", RSSI: -55}
+	picker.sortDevices()
+
+	options := picker.options()
+	got := []string{options[0].device.Address, options[1].device.Address, options[2].device.Address}
+	want := []string{"b1", "d110", "zebra"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ordered addresses = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestKnownNiimbotRankMatchesOnlyPrefixWithSeparator(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{name: "B1-I427031488", want: true},
+		{name: "D110_M-H913040249", want: true},
+		{name: "B21 Pro-123", want: true},
+		{name: "B3S ABC", want: true},
+		{name: "Speaker B1", want: false},
+		{name: "B100", want: false},
+	}
+	for _, tc := range cases {
+		_, got := knownNiimbotRank(tc.name)
+		if got != tc.want {
+			t.Fatalf("knownNiimbotRank(%q) known = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

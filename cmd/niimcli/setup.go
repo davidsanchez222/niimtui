@@ -27,6 +27,24 @@ var (
 
 const setupInitialScanWindow = 2 * time.Second
 
+var knownNiimbotModels = []string{
+	"M2",
+	"M3",
+	"N1",
+	"B21 Pro",
+	"B1",
+	"B4",
+	"B2 Pro",
+	"B1 Pro",
+	"B2",
+	"B21",
+	"B3S",
+	"K3",
+	"D11",
+	"D110",
+	"D101",
+}
+
 func runSetup(args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("setup does not accept arguments")
@@ -346,6 +364,14 @@ func (m *scanPicker) sortDevices() {
 		m.named = append(m.named, result)
 	}
 	sort.SliceStable(m.named, func(i, j int) bool {
+		leftRank, leftKnown := knownNiimbotRank(m.named[i].Name)
+		rightRank, rightKnown := knownNiimbotRank(m.named[j].Name)
+		if leftKnown != rightKnown {
+			return leftKnown
+		}
+		if leftKnown && leftRank != rightRank {
+			return leftRank < rightRank
+		}
 		left := strings.ToLower(m.named[i].Name)
 		right := strings.ToLower(m.named[j].Name)
 		if left == right {
@@ -401,6 +427,37 @@ func scanDeviceLine(result transport.ScanResult) string {
 		name = "Unknown device"
 	}
 	return fmt.Sprintf("%-24s %s  RSSI %d", name, result.Address, result.RSSI)
+}
+
+func knownNiimbotRank(name string) (int, bool) {
+	name = strings.TrimSpace(name)
+	for i, model := range knownNiimbotModels {
+		if hasModelPrefix(name, model) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func hasModelPrefix(name, model string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	model = strings.ToLower(strings.TrimSpace(model))
+	if name == model {
+		return true
+	}
+	if !strings.HasPrefix(name, model) {
+		return false
+	}
+	next := name[len(model):]
+	if next == "" {
+		return true
+	}
+	switch next[0] {
+	case ' ', '-', '_':
+		return true
+	default:
+		return false
+	}
 }
 
 func waitScanResult(results <-chan transport.ScanResult) tea.Cmd {
