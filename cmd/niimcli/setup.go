@@ -209,7 +209,7 @@ func chooseScannedDevice() (transport.ScanResult, bool, error) {
 		return transport.ScanResult{}, false, err
 	}
 
-	p := tea.NewProgram(newScanPicker(results, errs))
+	p := tea.NewProgram(newScanPicker(results, errs), tea.WithAltScreen())
 	model, err := p.Run()
 	if err != nil {
 		return transport.ScanResult{}, false, err
@@ -220,6 +220,11 @@ func chooseScannedDevice() (transport.ScanResult, bool, error) {
 	}
 	if picker.err != nil {
 		return transport.ScanResult{}, false, picker.err
+	}
+	if picker.aborted {
+		fmt.Fprintln(os.Stdout, setupHintStyle.Render("Scan aborted. Switching to manual entry."))
+		fmt.Fprintln(os.Stdout)
+		return transport.ScanResult{}, false, nil
 	}
 	return picker.selected, picker.selected.Address != "", nil
 }
@@ -239,6 +244,7 @@ type scanPicker struct {
 	cursor      int
 	ready       bool
 	showUnknown bool
+	aborted     bool
 
 	selected transport.ScanResult
 	err      error
@@ -291,15 +297,16 @@ func (m scanPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		maxCursor := m.optionCount() - 1
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
+			m.aborted = true
 			return m, tea.Quit
 		case "u":
 			m.showUnknown = !m.showUnknown
 			m.clampCursor()
-		case "up", "k":
+		case "up", "k", "shift+tab":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down", "j", "tab":
 			if m.cursor < maxCursor {
 				m.cursor++
 			}
@@ -334,7 +341,7 @@ func (m scanPicker) View() string {
 		if m.showUnknown {
 			unknownHint = "u hide unknown"
 		}
-		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. " + unknownHint + " • q skip"))
+		b.WriteString(setupHintStyle.Render("Select your printer. New devices appear live. " + unknownHint + " • q manual"))
 		b.WriteString("\n\n")
 	}
 

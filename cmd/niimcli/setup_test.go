@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"niimcli/internal/transport"
 )
 
@@ -110,5 +112,42 @@ func TestKnownNiimbotRankMatchesOnlyPrefixWithSeparator(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("knownNiimbotRank(%q) known = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestScanPickerAbortKeysSwitchToManualMode(t *testing.T) {
+	keys := []tea.KeyMsg{
+		{Type: tea.KeyCtrlC},
+		{Type: tea.KeyEsc},
+		{Type: tea.KeyRunes, Runes: []rune{'q'}},
+	}
+	for _, key := range keys {
+		model, _ := newScanPicker(nil, nil).Update(key)
+		picker, ok := model.(scanPicker)
+		if !ok {
+			t.Fatalf("updated model type = %T, want scanPicker", model)
+		}
+		if !picker.aborted {
+			t.Fatalf("key %q did not set aborted", key.String())
+		}
+	}
+}
+
+func TestScanPickerTabNavigation(t *testing.T) {
+	picker := newScanPicker(nil, nil)
+	picker.devices["a"] = transport.ScanResult{Address: "a", Name: "Alpha", RSSI: -50}
+	picker.devices["b"] = transport.ScanResult{Address: "b", Name: "Bravo", RSSI: -60}
+	picker.sortDevices()
+
+	model, _ := picker.Update(tea.KeyMsg{Type: tea.KeyTab})
+	picker = model.(scanPicker)
+	if picker.cursor != 1 {
+		t.Fatalf("cursor after tab = %d, want 1", picker.cursor)
+	}
+
+	model, _ = picker.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	picker = model.(scanPicker)
+	if picker.cursor != 0 {
+		t.Fatalf("cursor after shift+tab = %d, want 0", picker.cursor)
 	}
 }
