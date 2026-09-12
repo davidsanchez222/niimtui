@@ -33,11 +33,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "P" {
 			return m, m.printCurrentDocument()
 		}
+		if msg.String() == "c" {
+			return m, m.reconnectPrinter()
+		}
+		if msg.String() == "m" {
+			return m, m.enableMouseEditing()
+		}
 		if m.handleCommandKey(msg) {
 			return m, nil
 		}
 		switch msg.String() {
 		case "q", "ctrl+c":
+			m.closePrinterSession()
 			return m, tea.Quit
 		case "esc":
 			m.Drag = DragState{}
@@ -48,13 +55,60 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case printResultMsg:
 		m.handlePrintResult(msg)
 		return m, nil
+	case printerConnectedMsg:
+		m.Connection = ConnectionConnected
+		m.ConnectErr = ""
+		m.ConnectMeta = msg.Info.Meta
+		m.setStatus("Printer connected.")
+		return m, nil
+	case printerConnectionFailedMsg:
+		m.Connection = ConnectionDisconnected
+		m.ConnectErr = msg.Err.Error()
+		m.setStatus("Printer connection failed: %v", msg.Err)
+		return m, nil
 	}
 
 	return m, nil
 }
 
+func (m *Model) enableMouseEditing() tea.Cmd {
+	if m.MouseEnabled {
+		m.setStatus("Mouse editing already enabled.")
+		return nil
+	}
+	m.MouseEnabled = true
+	m.setStatus("Mouse editing enabled.")
+	return tea.EnableMouseCellMotion
+}
+
+func (m *Model) reconnectPrinter() tea.Cmd {
+	if m.Print.Session == nil {
+		m.setStatus("Printer connection unavailable. Run setup or pass --config/--printer.")
+		return nil
+	}
+	if m.Connection == ConnectionConnected {
+		m.setStatus("Printer already connected.")
+		return nil
+	}
+	if m.Connection == ConnectionConnecting {
+		m.setStatus("Printer already connecting.")
+		return nil
+	}
+	m.Connection = ConnectionConnecting
+	m.ConnectErr = ""
+	m.setStatus("Connecting to printer...")
+	return connectPrinterCmd(m.Print.Session)
+}
+
+func (m *Model) closePrinterSession() {
+	if m.Print.Session == nil {
+		return
+	}
+	_ = m.Print.Session.Close()
+}
+
 func (m *Model) reflow() {
-	toolWidth := 18
+	toolWidth := 30
 	propertiesWidth := 28
 	framePadding := 8
 

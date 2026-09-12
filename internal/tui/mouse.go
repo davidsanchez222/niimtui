@@ -28,6 +28,12 @@ type handlePoint struct {
 }
 
 func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action == tea.MouseActionPress && !m.mouseInCanvas(msg.X, msg.Y) {
+		m.MouseEnabled = false
+		m.setStatus("Mouse editing paused. Select terminal text normally, or press m to edit the canvas.")
+		return m, tea.DisableMouse
+	}
+
 	switch msg.Action {
 	case tea.MouseActionPress:
 		if msg.Button != tea.MouseButtonLeft {
@@ -47,6 +53,10 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) mouseInCanvas(x, y int) bool {
+	return x >= m.Canvas.X && x < m.Canvas.X+m.Canvas.Width && y >= m.Canvas.Y && y < m.Canvas.Y+m.Canvas.Height
 }
 
 func (m *Model) handleMousePress(msg tea.MouseMsg) {
@@ -138,8 +148,10 @@ func (m Model) handleAt(element label.Element, x, y int) (ResizeHandle, bool) {
 }
 
 func (m Model) elementScreenRect(element label.Element) screenRect {
-	left, top := m.Canvas.LabelToScreen(element.XMM, element.YMM)
-	right, bottom := m.Canvas.LabelToScreen(element.XMM+element.WidthMM, element.YMM+element.HeightMM)
+	left := m.Canvas.X + 1 + int(math.Floor(element.XMM*m.Canvas.CellsPerMMX))
+	top := m.Canvas.Y + 1 + int(math.Floor(element.YMM*m.Canvas.CellsPerMMY))
+	right := m.Canvas.X + 1 + int(math.Ceil((element.XMM+element.WidthMM)*m.Canvas.CellsPerMMX))
+	bottom := m.Canvas.Y + 1 + int(math.Ceil((element.YMM+element.HeightMM)*m.Canvas.CellsPerMMY))
 
 	maxX := m.Canvas.X + m.Canvas.Width - 2
 	maxY := m.Canvas.Y + m.Canvas.Height - 2

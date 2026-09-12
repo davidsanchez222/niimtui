@@ -13,15 +13,40 @@ import (
 	"niimtui/internal/render"
 )
 
-type PrintService interface {
-	PrintImage(ctx context.Context, selector string, rendered render.Result, copies int) api.PrintResponse
+type PrinterSession interface {
+	Connect(ctx context.Context) (map[string]any, error)
+	PrintImage(ctx context.Context, rendered render.Result, copies int) api.PrintResponse
+	Close() error
 }
 
 type PrintConfig struct {
-	Service PrintService
-	Printer string
-	Model   string
-	Copies  int
+	Session    PrinterSession
+	Printer    string
+	Model      string
+	DeviceName string
+	Identifier string
+	Copies     int
+}
+
+type ConnectionInfo struct {
+	Meta map[string]any
+}
+
+type ConnectionStatus string
+
+const (
+	ConnectionUnavailable  ConnectionStatus = "unavailable"
+	ConnectionConnecting   ConnectionStatus = "connecting"
+	ConnectionConnected    ConnectionStatus = "connected"
+	ConnectionDisconnected ConnectionStatus = "disconnected"
+)
+
+type printerConnectedMsg struct {
+	Info ConnectionInfo
+}
+
+type printerConnectionFailedMsg struct {
+	Err error
 }
 
 type DragMode int
@@ -63,11 +88,15 @@ type Model struct {
 	Document label.Document
 	Canvas   Canvas
 
-	SelectedID string
-	Drag       DragState
-	NextID     int
-	FontPath   string
-	Print      PrintConfig
+	SelectedID   string
+	Drag         DragState
+	NextID       int
+	FontPath     string
+	Print        PrintConfig
+	Connection   ConnectionStatus
+	ConnectErr   string
+	ConnectMeta  map[string]any
+	MouseEnabled bool
 
 	EditingText bool
 	TextBuffer  string
@@ -95,20 +124,29 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 	clampElementToDocument(&sample, doc)
 	_ = doc.AddElement(sample)
 	status := "Click to select. Drag to move. Drag handles to resize."
+	connection := ConnectionUnavailable
+	if printConfig.Session != nil {
+		connection = ConnectionConnecting
+	}
 
 	return Model{
-		Document:   doc,
-		SelectedID: sample.ID,
-		NextID:     2,
-		FontPath:   fontPath,
-		Print:      printConfig,
-		StatusBase: status,
-		Status:     status,
+		Document:     doc,
+		SelectedID:   sample.ID,
+		NextID:       2,
+		FontPath:     fontPath,
+		Print:        printConfig,
+		Connection:   connection,
+		MouseEnabled: true,
+		StatusBase:   status,
+		Status:       status,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	if m.Print.Session == nil {
+		return nil
+	}
+	return connectPrinterCmd(m.Print.Session)
 }
 
 func (m *Model) setStatus(format string, args ...any) {
@@ -126,4 +164,14 @@ func (m *Model) refreshStatus() {
 		return
 	}
 	m.Status = m.StatusBase
+}
+
+func connectPrinterCmd(session PrinterSession) tea.Cmd {
+	return func() tea.Msg {
+		meta, err := session.Connect(context.Background())
+		if err != nil {
+			return printerConnectionFailedMsg{Err: err}
+		}
+		return printerConnectedMsg{Info: ConnectionInfo{Meta: meta}}
+	}
 }

@@ -55,11 +55,11 @@ func (m Model) View() string {
 		return "Loading label designer..."
 	}
 
-	leftWidth := 18
+	leftWidth := 30
 	gap := 2
 	propertiesWidth := 28
 	canvasLines := strings.Split(renderCanvas(m), "\n")
-	leftLines := emptyPanelLines(leftWidth)
+	leftLines := devicePanelLines(m, leftWidth)
 	propertyLines := propertyPanelLines(m, propertiesWidth)
 	bodyHeight := max(max(len(leftLines), len(canvasLines)), len(propertyLines))
 
@@ -164,8 +164,33 @@ func renderCanvas(m Model) string {
 	return strings.Join(lines, "\n")
 }
 
-func emptyPanelLines(width int) []string {
-	return padLines([]string{""}, width)
+func devicePanelLines(m Model, width int) []string {
+	lines := []string{
+		propertyTitleStyle.Render("Printer"),
+		"",
+		"┌──────────────────────┐",
+		"│                      │",
+		"│       printer        │",
+		"│     placeholder      │",
+		"│                      │",
+		"└──────────────────────┘",
+		"",
+		propertyItem("Model", sidebarValue("Model", m.Print.Model, "none", width)),
+		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
+		propertyItem("Device", sidebarValue("Device", m.Print.DeviceName, emptyFallback(m.Print.Identifier, "unknown"), width)),
+		"",
+		connectionStatusLine(m),
+	}
+	if matched := connectionMetaString(m.ConnectMeta, "matched_name"); matched != "" && matched != m.Print.DeviceName {
+		lines = append(lines, propertyItem("BLE", truncateText(matched, sidebarValueWidth("BLE", width))))
+	}
+	if address := connectionMetaString(m.ConnectMeta, "address"); address != "" {
+		lines = append(lines, propertyItem("Addr", truncateText(address, sidebarValueWidth("Addr", width))))
+	}
+	if m.ConnectErr != "" {
+		lines = append(lines, "", propertyLabel("Error"), truncateText(m.ConnectErr, width))
+	}
+	return padLines(lines, width)
 }
 
 func propertyPanelLines(m Model, width int) []string {
@@ -222,13 +247,14 @@ func propertyPanelLines(m Model, width int) []string {
 
 func footerLines(m Model, width int) []string {
 	printHelp := ""
-	if m.Print.Service != nil {
+	if m.Print.Session != nil {
 		printHelp = helpItem("P", "print") + "  "
 	}
 	controls := strings.Join([]string{
 		helpItem("t", "text"),
 		helpItem("r", "QR"),
-		helpItem("enter", "edit"),
+		helpItem("i", "edit"),
+		helpItem("m", "mouse"),
 		helpItem("del", "remove"),
 		helpItem("hjkl", "move"),
 		helpItem("shift+arrows", "fast move"),
@@ -236,7 +262,7 @@ func footerLines(m Model, width int) []string {
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "preview"),
-		printHelp + helpItem("esc", "clear"),
+		printHelp + reconnectHelp(m) + helpItem("esc", "clear"),
 		helpItem("q", "quit"),
 		helpItem("ctrl+c", "quit"),
 	}, "  ")
@@ -255,6 +281,57 @@ func propertyItem(label, value string) string {
 
 func propertyLabel(label string) string {
 	return keyStyle.Render(label + ":")
+}
+
+func reconnectHelp(m Model) string {
+	if m.Print.Session == nil {
+		return ""
+	}
+	return helpItem("c", "reconnect") + "  "
+}
+
+func emptyFallback(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func sidebarValue(label, value, fallback string, width int) string {
+	return truncateText(emptyFallback(value, fallback), sidebarValueWidth(label, width))
+}
+
+func sidebarValueWidth(label string, width int) int {
+	return max(width-len(label)-3, 1)
+}
+
+func connectionStatusLine(m Model) string {
+	switch m.Connection {
+	case ConnectionConnected:
+		return connectionDotStyle("42").Render("●") + helpLabelStyle.Render(" connected")
+	case ConnectionConnecting:
+		return connectionDotStyle("229").Render("●") + helpLabelStyle.Render(" connecting")
+	case ConnectionDisconnected:
+		return connectionDotStyle("203").Render("●") + helpLabelStyle.Render(" disconnected")
+	default:
+		return mutedStyle.Render("● unavailable")
+	}
+}
+
+func connectionDotStyle(color string) lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+}
+
+func connectionMetaString(meta map[string]any, key string) string {
+	if meta == nil {
+		return ""
+	}
+	value, ok := meta[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return fmt.Sprint(value)
 }
 
 func logoHeader() string {

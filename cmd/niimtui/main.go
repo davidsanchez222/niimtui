@@ -261,9 +261,13 @@ func runTUI(args []string) error {
 		return err
 	}
 	var svc *service.Service
+	var session *service.Session
 	printerSelector := *printer
+	printerProfileName := printerSelector
 	shape := "rect"
 	printerModel := ""
+	deviceName := ""
+	identifier := ""
 	shouldLoadConfig := *widthMM <= 0 || *heightMM <= 0 || *configPath != "" || *printer != ""
 	if !shouldLoadConfig {
 		if path, err := config.DefaultPath(); err == nil {
@@ -285,7 +289,10 @@ func runTUI(args []string) error {
 			return err
 		}
 		if ok {
+			printerProfileName = printerProfile.Name
 			printerModel = printerProfile.Model
+			deviceName = printerProfile.DeviceName
+			identifier = printerProfile.Identifier
 		}
 		if *widthMM <= 0 || *heightMM <= 0 {
 			preset, err := defaultPresetForPrinter(cfg, printerProfile)
@@ -304,6 +311,12 @@ func runTUI(args []string) error {
 		if err != nil {
 			return err
 		}
+		if ok {
+			session, err = svc.NewSession(printerSelector)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	if *widthMM <= 0 {
 		return errors.New("-width-mm is required and must be greater than zero unless setup/default config provides a preset")
@@ -312,7 +325,7 @@ func runTUI(args []string) error {
 		return errors.New("-height-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 
-	return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Service: svc, Printer: printerSelector, Model: printerModel, Copies: 1})
+	return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, Copies: 1})
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {

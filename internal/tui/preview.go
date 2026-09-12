@@ -60,21 +60,28 @@ func openPreviewFile(path string) (bool, error) {
 }
 
 func (m *Model) printCurrentDocument() tea.Cmd {
-	if m.Print.Service == nil {
+	if m.Print.Session == nil {
 		m.setStatus("Printing unavailable. Run setup or pass --config/--printer.")
+		return nil
+	}
+	if m.Connection == ConnectionConnecting {
+		m.setStatus("Printer still connecting.")
+		return nil
+	}
+	if m.Connection != ConnectionConnected {
+		m.setStatus("Printer disconnected. Press c to reconnect.")
 		return nil
 	}
 	m.setStatus("Printing current label...")
 	doc := m.Document
-	printer := m.Print.Printer
 	copies := m.Print.Copies
-	printService := m.Print.Service
+	session := m.Print.Session
 	return func() tea.Msg {
 		result, err := render.RenderDocument(doc)
 		if err != nil {
 			return printResultMsg{Err: fmt.Errorf("render label: %w", err)}
 		}
-		resp := printService.PrintImage(context.Background(), printer, result, copies)
+		resp := session.PrintImage(context.Background(), result, copies)
 		if !resp.OK {
 			if resp.Error != nil {
 				return printResultMsg{Err: fmt.Errorf("%s: %s", resp.Error.Code, resp.Error.Message), WidthPx: result.WidthPx, HeightPx: result.HeightPx}
