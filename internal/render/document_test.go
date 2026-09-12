@@ -62,6 +62,34 @@ func TestRenderDocumentDrawsText(t *testing.T) {
 	}
 }
 
+func TestRenderDocumentDrawsQR(t *testing.T) {
+	doc := label.NewDocument(40, 40)
+	if err := doc.AddElement(label.NewQRElement("qr", "https://example.com", 8, 8, 24)); err != nil {
+		t.Fatalf("AddElement() error = %v", err)
+	}
+
+	result, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatalf("RenderDocument() error = %v", err)
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		t.Fatalf("render image type = %T, want *image.Gray", result.Image)
+	}
+
+	blackPixels := 0
+	for y := gray.Bounds().Min.Y; y < gray.Bounds().Max.Y; y++ {
+		for x := gray.Bounds().Min.X; x < gray.Bounds().Max.X; x++ {
+			if gray.GrayAt(x, y).Y == 0 {
+				blackPixels++
+			}
+		}
+	}
+	if blackPixels == 0 {
+		t.Fatal("expected rendered QR to produce black pixels")
+	}
+}
+
 func TestLayoutTextWrapsWordsIntoMultipleLines(t *testing.T) {
 	layout, err := LayoutText("Storage Box", 18, mmToPx(12))
 	if err != nil {

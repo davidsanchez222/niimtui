@@ -70,6 +70,9 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "t":
 		m.addTextElement()
 		return true
+	case "r":
+		m.addQRElement()
+		return true
 	case "i":
 		return m.beginEditingSelected()
 	case "delete", "backspace":

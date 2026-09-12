@@ -42,13 +42,37 @@ func (m *Model) addTextElement() {
 	m.refreshStatus()
 }
 
+func (m *Model) addQRElement() {
+	id := fmt.Sprintf("qr-%d", m.NextID)
+	m.NextID++
+
+	sizeMM := math.Max(math.Min(m.Document.WidthMM, m.Document.HeightMM)*0.35, 8)
+	element := label.NewQRElement(
+		id,
+		"https://example.com",
+		math.Max((m.Document.WidthMM-sizeMM)/2, 0),
+		math.Max((m.Document.HeightMM-sizeMM)/2, 0),
+		sizeMM,
+	)
+	clampElementToDocument(&element, m.Document)
+	if err := m.Document.AddElement(element); err != nil {
+		m.setStatus("Add QR failed: %v", err)
+		return
+	}
+
+	m.SelectedID = id
+	m.TextBuffer = element.QR.Value
+	m.EditingText = true
+	m.refreshStatus()
+}
+
 func (m *Model) beginEditingSelected() bool {
 	element, ok := m.selectedElement()
-	if !ok || element.Text == nil {
+	if !ok || (element.Text == nil && element.QR == nil) {
 		return false
 	}
 	m.EditingText = true
-	m.TextBuffer = element.Text.Value
+	m.TextBuffer = editableElementValue(element)
 	m.refreshStatus()
 	return true
 }
@@ -142,19 +166,34 @@ func (m *Model) finishTextEdit() {
 
 func (m *Model) applyTextBuffer(value string) bool {
 	element, ok := m.selectedElement()
-	if !ok || element.Text == nil {
+	if !ok || (element.Text == nil && element.QR == nil) {
 		m.EditingText = false
 		m.TextBuffer = ""
-		m.setStatus("No selected text element.")
+		m.setStatus("No editable element selected.")
 		return false
 	}
-	element.Text.Value = value
-	autoFitTextElement(&element)
+	if element.Text != nil {
+		element.Text.Value = value
+		autoFitTextElement(&element)
+	}
+	if element.QR != nil {
+		element.QR.Value = value
+	}
 	if !m.Document.UpdateElement(element) {
-		m.setStatus("Save text failed.")
+		m.setStatus("Save edit failed.")
 		return false
 	}
 	return true
+}
+
+func editableElementValue(element label.Element) string {
+	if element.Text != nil {
+		return element.Text.Value
+	}
+	if element.QR != nil {
+		return element.QR.Value
+	}
+	return ""
 }
 
 func autoFitTextElement(element *label.Element) {

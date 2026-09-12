@@ -14,3 +14,17 @@ func NewTextElement(id, value string, xMM, yMM, widthMM, heightMM, fontSize floa
 		},
 	}
 }
+
+func NewQRElement(id, value string, xMM, yMM, sizeMM float64) Element {
+	return Element{
+		ID:       id,
+		Type:     ElementQR,
+		XMM:      xMM,
+		YMM:      yMM,
+		WidthMM:  sizeMM,
+		HeightMM: sizeMM,
+		QR: &QRElement{
+			Value: value,
+		},
+	}
+}

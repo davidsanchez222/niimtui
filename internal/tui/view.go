@@ -3,10 +3,43 @@ package tui
 import (
 	"fmt"
 	"image"
+	"math"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"niimtui/internal/label"
 	"niimtui/internal/render"
+)
+
+var (
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("63")).
+			Padding(0, 1)
+
+	canvasStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
+
+	propertyTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("111"))
+
+	mutedStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
+
+	helpLabelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("255"))
+
+	statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
+
+	keyStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("229"))
+
+	footerRuleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("238"))
 )
 
 func (m Model) View() string {
@@ -14,16 +47,16 @@ func (m Model) View() string {
 		return "Loading label designer..."
 	}
 
-	toolWidth := 18
+	leftWidth := 18
 	gap := 2
 	propertiesWidth := 28
 	canvasLines := strings.Split(renderCanvas(m), "\n")
-	toolLines := toolPanelLines(toolWidth)
+	leftLines := emptyPanelLines(leftWidth)
 	propertyLines := propertyPanelLines(m, propertiesWidth)
-	bodyHeight := max(max(len(toolLines), len(canvasLines)), len(propertyLines))
+	bodyHeight := max(max(len(leftLines), len(canvasLines)), len(propertyLines))
 
-	for len(toolLines) < bodyHeight {
-		toolLines = append(toolLines, strings.Repeat(" ", toolWidth))
+	for len(leftLines) < bodyHeight {
+		leftLines = append(leftLines, strings.Repeat(" ", leftWidth))
 	}
 	for len(canvasLines) < bodyHeight {
 		canvasLines = append(canvasLines, strings.Repeat(" ", m.Canvas.Width))
@@ -32,20 +65,16 @@ func (m Model) View() string {
 		propertyLines = append(propertyLines, strings.Repeat(" ", propertiesWidth))
 	}
 
+	viewWidth := max(m.Width, leftWidth+gap+m.Canvas.Width+gap+propertiesWidth)
+	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, titleStyle.Render("NIIMTUI LABEL DESIGNER"))
 	lines := []string{
-		"Niimcli Label Designer",
+		title,
 		"",
 	}
 	for i := 0; i < bodyHeight; i++ {
-		lines = append(lines, toolLines[i]+strings.Repeat(" ", gap)+canvasLines[i]+strings.Repeat(" ", gap)+propertyLines[i])
+		lines = append(lines, leftLines[i]+strings.Repeat(" ", gap)+canvasStyle.Render(canvasLines[i])+strings.Repeat(" ", gap)+propertyLines[i])
 	}
-	lines = append(lines, strings.Repeat("─", max(m.Width, 24)))
-	footer := m.Status + " • t add • enter edit • +/- font • p preview"
-	if m.Print.Service != nil {
-		footer += " • P print"
-	}
-	footer += " • q quit • esc clear"
-	lines = append(lines, fitLine(footer, max(m.Width, 24)))
+	lines = append(lines, footerLines(m, viewWidth)...)
 
 	return strings.Join(lines, "\n")
 }
@@ -78,6 +107,9 @@ func renderCanvas(m Model) string {
 	}
 
 	drawDocumentPreview(grid, canvas, m.Document)
+	if strings.EqualFold(m.Document.Shape, "round") {
+		drawRoundGuide(grid, canvas)
+	}
 
 	for _, element := range m.Document.Elements {
 		r := m.elementScreenRect(element)
@@ -124,57 +156,56 @@ func renderCanvas(m Model) string {
 	return strings.Join(lines, "\n")
 }
 
-func toolPanelLines(width int) []string {
-	return padLines([]string{
-		"Tools",
-		"",
-		"[t] Text",
-		"[i] Edit",
-		"[del] Delete",
-		"[hjkl] Move",
-		"[+/-] Font",
-		"[p] Preview",
-		"[P] Print",
-	}, width)
+func emptyPanelLines(width int) []string {
+	return padLines([]string{""}, width)
 }
 
 func propertyPanelLines(m Model, width int) []string {
 	lines := []string{
-		"Properties",
+		propertyTitleStyle.Render("Properties"),
 		"",
-		fmt.Sprintf("Label W: %.1f mm", m.Document.WidthMM),
-		fmt.Sprintf("Label H: %.1f mm", m.Document.HeightMM),
+		propertyItem("Label W", fmt.Sprintf("%.1f mm", m.Document.WidthMM)),
+		propertyItem("Label H", fmt.Sprintf("%.1f mm", m.Document.HeightMM)),
+		propertyItem("Shape", m.Document.Shape),
+		propertyItem("Print", printDirectionLabel(m.Print.Model)),
 		"",
 	}
 
 	element, ok := m.selectedElement()
 	if !ok {
-		lines = append(lines, "No selection")
+		lines = append(lines, mutedStyle.Render("No selection"))
 		if m.EditingText {
-			lines = append(lines, "", "Editing:", m.TextBuffer)
+			lines = append(lines, "", propertyLabel("Editing"), m.TextBuffer)
 		}
 		return padLines(lines, width)
 	}
 
 	lines = append(lines,
-		"Type: Text",
-		fmt.Sprintf("X: %.1f mm", element.XMM),
-		fmt.Sprintf("Y: %.1f mm", element.YMM),
-		fmt.Sprintf("W: %.1f mm", element.WidthMM),
-		fmt.Sprintf("H: %.1f mm", element.HeightMM),
+		propertyItem("Type", elementTypeLabel(element)),
+		propertyItem("X", fmt.Sprintf("%.1f mm", element.XMM)),
+		propertyItem("Y", fmt.Sprintf("%.1f mm", element.YMM)),
+		propertyItem("W", fmt.Sprintf("%.1f mm", element.WidthMM)),
+		propertyItem("H", fmt.Sprintf("%.1f mm", element.HeightMM)),
 	)
 	if element.Text != nil {
 		lines = append(lines,
 			"",
-			"Text:",
+			propertyLabel("Text"),
 			element.Text.Value,
-			fmt.Sprintf("Font: %.0f", element.Text.FontSize),
+			propertyItem("Font", fmt.Sprintf("%.0f", element.Text.FontSize)),
+		)
+	}
+	if element.QR != nil {
+		lines = append(lines,
+			"",
+			propertyLabel("QR"),
+			element.QR.Value,
 		)
 	}
 	if m.EditingText {
 		lines = append(lines,
 			"",
-			"Editing:",
+			propertyLabel("Editing"),
 			m.TextBuffer,
 		)
 	}
@@ -182,10 +213,74 @@ func propertyPanelLines(m Model, width int) []string {
 	return padLines(lines, width)
 }
 
+func footerLines(m Model, width int) []string {
+	printHelp := ""
+	if m.Print.Service != nil {
+		printHelp = helpItem("P", "print") + "  "
+	}
+	controls := strings.Join([]string{
+		helpItem("t", "text"),
+		helpItem("r", "QR"),
+		helpItem("enter", "edit"),
+		helpItem("del", "remove"),
+		helpItem("hjkl", "move"),
+		helpItem("shift+arrows", "fast move"),
+		helpItem("+/-", "font"),
+	}, "  ")
+	preview := strings.Join([]string{
+		helpItem("p", "preview"),
+		printHelp + helpItem("esc", "clear"),
+		helpItem("q", "quit"),
+		helpItem("ctrl+c", "quit"),
+	}, "  ")
+
+	return []string{
+		footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
+		centerStyledLine(statusStyle.Render(m.Status), width),
+		centerStyledLine(controls, width),
+		centerStyledLine(preview, width),
+	}
+}
+
+func propertyItem(label, value string) string {
+	return propertyLabel(label) + " " + value
+}
+
+func propertyLabel(label string) string {
+	return keyStyle.Render(label + ":")
+}
+
+func elementTypeLabel(element label.Element) string {
+	if element.QR != nil {
+		return "QR"
+	}
+	if element.Text != nil {
+		return "Text"
+	}
+	return string(element.Type)
+}
+
+func printDirectionLabel(model string) string {
+	switch strings.ToUpper(strings.TrimSpace(model)) {
+	case "B1", "B18", "B21":
+		return "bottom to top"
+	case "D110", "D110_M", "D11":
+		return "left to right"
+	case "":
+		return "unknown"
+	default:
+		return "model default"
+	}
+}
+
+func helpItem(key, label string) string {
+	return keyStyle.Render(key) + helpLabelStyle.Render(" "+label)
+}
+
 func padLines(lines []string, width int) []string {
 	padded := make([]string, 0, len(lines))
 	for _, line := range lines {
-		padded = append(padded, fitLine(line, width))
+		padded = append(padded, fitStyledLine(line, width))
 	}
 	return padded
 }
@@ -196,6 +291,24 @@ func fitLine(s string, width int) string {
 		return string(runes[:width])
 	}
 	return s + strings.Repeat(" ", width-len(runes))
+}
+
+func fitStyledLine(s string, width int) string {
+	lineWidth := lipgloss.Width(s)
+	if lineWidth >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-lineWidth)
+}
+
+func centerStyledLine(s string, width int) string {
+	lineWidth := lipgloss.Width(s)
+	if lineWidth >= width {
+		return s
+	}
+	leftPadding := (width - lineWidth) / 2
+	rightPadding := width - lineWidth - leftPadding
+	return strings.Repeat(" ", leftPadding) + s + strings.Repeat(" ", rightPadding)
 }
 
 func truncateText(s string, width int) string {
@@ -303,11 +416,51 @@ func brailleBit(x, y int) int {
 	}
 }
 
+func drawRoundGuide(grid [][]rune, canvas Canvas) {
+	innerWidth := canvas.Width - 2
+	innerHeight := canvas.Height - 2
+	if innerWidth <= 2 || innerHeight <= 2 {
+		return
+	}
+
+	visualWidth := float64(innerWidth) * terminalCellWidthToHeightRatio
+	visualHeight := float64(innerHeight)
+	radius := math.Min(visualWidth, visualHeight) / 2
+	if radius <= 0 {
+		return
+	}
+	cx := visualWidth / 2
+	cy := visualHeight / 2
+	tolerance := math.Max(0.35, radius*0.08)
+
+	for y := 0; y < innerHeight; y++ {
+		for x := 0; x < innerWidth; x++ {
+			vx := (float64(x) + 0.5) * terminalCellWidthToHeightRatio
+			vy := float64(y) + 0.5
+			distance := math.Hypot(vx-cx, vy-cy)
+			if math.Abs(distance-radius) <= tolerance {
+				grid[y+1][x+1] = '·'
+			}
+		}
+	}
+}
+
 func drawEditingCursor(grid [][]rune, left, top, right, bottom int, element label.Element, text string) {
 	if bottom <= top || right <= left {
 		return
 	}
 	contentWidth := max(right-left-1, 1)
+	if element.QR != nil {
+		grid[top+1][left+1] = '>'
+		for i, r := range []rune(truncateText(text+"|", max(contentWidth-1, 1))) {
+			cellX := left + 2 + i
+			if cellX >= right {
+				break
+			}
+			grid[top+1][cellX] = r
+		}
+		return
+	}
 	previewLines := wrapCanvasText(element, text+"|", contentWidth)
 	if len(previewLines) == 0 {
 		previewLines = []string{"|"}

@@ -314,8 +314,11 @@ func absInt(v int) int {
 }
 
 func selectedLabel(element label.Element) string {
-	if element.Text == nil || element.Text.Value == "" {
-		return element.ID
+	if element.Text != nil && element.Text.Value != "" {
+		return element.Text.Value
 	}
-	return element.Text.Value
+	if element.QR != nil && element.QR.Value != "" {
+		return element.QR.Value
+	}
+	return element.ID
 }

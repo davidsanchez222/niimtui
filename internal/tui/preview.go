@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -35,8 +37,26 @@ func (m *Model) exportPreview() bool {
 		m.setStatus("Preview write failed: %v", err)
 		return true
 	}
+	opened, err := openPreviewFile(previewOutputPath)
+	if err != nil {
+		m.setStatus("Preview written to %s (%dx%d). Open failed: %v", previewOutputPath, result.WidthPx, result.HeightPx, err)
+		return true
+	}
+	if opened {
+		m.setStatus("Preview opened from %s (%dx%d).", previewOutputPath, result.WidthPx, result.HeightPx)
+		return true
+	}
 	m.setStatus("Preview written to %s (%dx%d).", previewOutputPath, result.WidthPx, result.HeightPx)
 	return true
+}
+
+func openPreviewFile(path string) (bool, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return true, exec.Command("open", path).Start()
+	default:
+		return false, nil
+	}
 }
 
 func (m *Model) printCurrentDocument() tea.Cmd {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -19,6 +20,7 @@ type PrintService interface {
 type PrintConfig struct {
 	Service PrintService
 	Printer string
+	Model   string
 	Copies  int
 }
 
@@ -75,8 +77,11 @@ type Model struct {
 	Ready  bool
 }
 
-func NewModel(widthMM, heightMM float64, fontPath string, printConfig PrintConfig) Model {
+func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig) Model {
 	doc := label.NewDocument(widthMM, heightMM)
+	if strings.TrimSpace(shape) != "" {
+		doc.Shape = strings.ToLower(strings.TrimSpace(shape))
+	}
 	sample := label.NewTextElement(
 		"text-1",
 		"Storage Box 12",
@@ -117,7 +122,7 @@ func (m *Model) setStatus(format string, args ...any) {
 
 func (m *Model) refreshStatus() {
 	if m.EditingText {
-		m.Status = fmt.Sprintf("Editing text: %s", m.TextBuffer)
+		m.Status = fmt.Sprintf("Editing: %s", m.TextBuffer)
 		return
 	}
 	m.Status = m.StatusBase

@@ -4,6 +4,7 @@ type ElementType string
 
 const (
 	ElementText ElementType = "text"
+	ElementQR   ElementType = "qr"
 )
 
 type Element struct {
@@ -17,6 +18,7 @@ type Element struct {
 	HeightMM float64
 
 	Text *TextElement
+	QR   *QRElement
 }
 
 type TextElement struct {
@@ -25,4 +27,8 @@ type TextElement struct {
 	FontPath string
 	Bold     bool
 	Align    string
+}
+
+type QRElement struct {
+	Value string
 }

@@ -262,6 +262,8 @@ func runTUI(args []string) error {
 	}
 	var svc *service.Service
 	printerSelector := *printer
+	shape := "rect"
+	printerModel := ""
 	shouldLoadConfig := *widthMM <= 0 || *heightMM <= 0 || *configPath != "" || *printer != ""
 	if !shouldLoadConfig {
 		if path, err := config.DefaultPath(); err == nil {
@@ -274,12 +276,19 @@ func runTUI(args []string) error {
 		cfg, err := config.LoadOptional(*configPath)
 		if err != nil {
 			if *widthMM > 0 && *heightMM > 0 && *configPath == "" && *printer == "" {
-				return tui.Run(*widthMM, *heightMM, *fontPath, tui.PrintConfig{})
+				return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{})
 			}
 			return err
 		}
+		printerProfile, ok, err := printerForSelector(cfg, printerSelector)
+		if err != nil && (*printer != "" || *widthMM <= 0 || *heightMM <= 0) {
+			return err
+		}
+		if ok {
+			printerModel = printerProfile.Model
+		}
 		if *widthMM <= 0 || *heightMM <= 0 {
-			preset, err := defaultPreset(cfg, printerSelector)
+			preset, err := defaultPresetForPrinter(cfg, printerProfile)
 			if err != nil {
 				return err
 			}
@@ -289,6 +298,7 @@ func runTUI(args []string) error {
 			if *heightMM <= 0 {
 				*heightMM = preset.HeightMM
 			}
+			shape = preset.Shape
 		}
 		svc, err = service.New(cfg)
 		if err != nil {
@@ -302,28 +312,34 @@ func runTUI(args []string) error {
 		return errors.New("-height-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 
-	return tui.Run(*widthMM, *heightMM, *fontPath, tui.PrintConfig{Service: svc, Printer: printerSelector, Copies: 1})
+	return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Service: svc, Printer: printerSelector, Model: printerModel, Copies: 1})
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {
+	printer, _, err := printerForSelector(cfg, printerSelector)
+	if err != nil {
+		return config.LabelPreset{}, err
+	}
+	return defaultPresetForPrinter(cfg, printer)
+}
+
+func printerForSelector(cfg config.Config, printerSelector string) (config.PrinterProfile, bool, error) {
 	printerSelector = strings.TrimSpace(printerSelector)
-	var printer config.PrinterProfile
 	if printerSelector == "" {
 		if len(cfg.Printers) != 1 {
-			return config.LabelPreset{}, errors.New("-printer is required when config has multiple printers")
+			return config.PrinterProfile{}, false, errors.New("-printer is required when config has multiple printers")
 		}
-		printer = cfg.Printers[0]
-	} else {
-		for _, candidate := range cfg.Printers {
-			if candidate.Name == printerSelector {
-				printer = candidate
-				break
-			}
-		}
-		if printer.Name == "" {
-			return config.LabelPreset{}, fmt.Errorf("unknown printer profile %q", printerSelector)
+		return cfg.Printers[0], true, nil
+	}
+	for _, candidate := range cfg.Printers {
+		if candidate.Name == printerSelector {
+			return candidate, true, nil
 		}
 	}
+	return config.PrinterProfile{}, false, fmt.Errorf("unknown printer profile %q", printerSelector)
+}
+
+func defaultPresetForPrinter(cfg config.Config, printer config.PrinterProfile) (config.LabelPreset, error) {
 	for _, preset := range cfg.Presets {
 		if preset.Name == printer.DefaultPreset {
 			return preset, nil

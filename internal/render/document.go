@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"strings"
 
+	"github.com/skip2/go-qrcode"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gomedium"
 	"golang.org/x/image/font/gofont/goregular"
@@ -94,9 +95,32 @@ func drawDocumentElement(dst draw.Image, element label.Element) error {
 	switch element.Type {
 	case label.ElementText:
 		return drawTextElement(dst, element)
+	case label.ElementQR:
+		return drawQRElement(dst, element)
 	default:
 		return fmt.Errorf("unsupported element type %q", element.Type)
 	}
+}
+
+func drawQRElement(dst draw.Image, element label.Element) error {
+	if element.QR == nil || strings.TrimSpace(element.QR.Value) == "" {
+		return nil
+	}
+	rect := image.Rect(
+		mmToPx(element.XMM),
+		mmToPx(element.YMM),
+		mmToPx(element.XMM+element.WidthMM),
+		mmToPx(element.YMM+element.HeightMM),
+	)
+	if rect.Dx() <= 0 || rect.Dy() <= 0 {
+		return nil
+	}
+	code, err := qrcode.New(strings.TrimSpace(element.QR.Value), qrcode.Medium)
+	if err != nil {
+		return fmt.Errorf("generate qr: %w", err)
+	}
+	code.DisableBorder = true
+	return drawQR(dst, code, rect)
 }
 
 func drawTextElement(dst draw.Image, element label.Element) error {
