@@ -38,6 +38,14 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("229"))
 
+	headerWordStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("255"))
+
+	headerSubStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("111"))
+
 	footerRuleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("238"))
 )
@@ -66,7 +74,7 @@ func (m Model) View() string {
 	}
 
 	viewWidth := max(m.Width, leftWidth+gap+m.Canvas.Width+gap+propertiesWidth)
-	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, titleStyle.Render("NIIMTUI LABEL DESIGNER"))
+	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, logoHeader())
 	lines := []string{
 		title,
 		"",
@@ -190,8 +198,7 @@ func propertyPanelLines(m Model, width int) []string {
 	if element.Text != nil {
 		lines = append(lines,
 			"",
-			propertyLabel("Text"),
-			element.Text.Value,
+			propertyItem("Text", element.Text.Value),
 			propertyItem("Font", fmt.Sprintf("%.0f", element.Text.FontSize)),
 		)
 	}
@@ -248,6 +255,10 @@ func propertyItem(label, value string) string {
 
 func propertyLabel(label string) string {
 	return keyStyle.Render(label + ":")
+}
+
+func logoHeader() string {
+	return titleStyle.Render("›_") + " " + headerWordStyle.Render("niimtui") + headerSubStyle.Render("  terminal label designer")
 }
 
 func elementTypeLabel(element label.Element) string {
