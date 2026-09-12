@@ -7,9 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimcli/internal/api"
-	"niimcli/internal/label"
-	"niimcli/internal/render"
+	"niimtui/internal/api"
+	"niimtui/internal/label"
+	"niimtui/internal/render"
 )
 
 type PrintService interface {

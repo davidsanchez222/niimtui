@@ -11,12 +11,12 @@ import (
 	"strings"
 	"syscall"
 
-	"niimcli/internal/api"
-	"niimcli/internal/config"
-	"niimcli/internal/render"
-	"niimcli/internal/server"
-	"niimcli/internal/service"
-	"niimcli/internal/tui"
+	"niimtui/internal/api"
+	"niimtui/internal/config"
+	"niimtui/internal/render"
+	"niimtui/internal/server"
+	"niimtui/internal/service"
+	"niimtui/internal/tui"
 )
 
 func main() {
@@ -339,16 +339,16 @@ func printJSON(v any) error {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, `niimcli
+	fmt.Fprintf(os.Stderr, `niimtui
 
 Usage:
-  niimcli serve --config ./config.example.json
-  niimcli setup
-  niimcli print --config ./config.example.json --printer d110-desk --image ./testlabels/preview.png
-  niimcli probe --config ./config.example.json --printer d110-desk
-  niimcli scan --config ./config.example.json --transport ble
-  niimcli printers --config ./config.example.json
-  niimcli presets --config ./config.example.json
-  niimcli tui --width-mm 50 --height-mm 30 --font-path /path/to/font.ttf
+  niimtui serve --config ./config.example.json
+  niimtui setup
+  niimtui print --config ./config.example.json --printer d110-desk --image ./testlabels/preview.png
+  niimtui probe --config ./config.example.json --printer d110-desk
+  niimtui scan --config ./config.example.json --transport ble
+  niimtui printers --config ./config.example.json
+  niimtui presets --config ./config.example.json
+  niimtui tui --width-mm 50 --height-mm 30 --font-path /path/to/font.ttf
 `)
 }

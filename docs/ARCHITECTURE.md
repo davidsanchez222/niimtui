@@ -1,6 +1,6 @@
-# niimcli (beta)
+# niimtui (beta)
 
-`niimcli` is a local CLI and HTTP or HTTPS service for printing to Niimbot label printers over Bluetooth Low Energy.
+`niimtui` is a local CLI and HTTP or HTTPS service for printing to Niimbot label printers over Bluetooth Low Energy.
 
 It is designed for workflows where another tool, script, or automation needs to send a label image or print request to a nearby machine that has access to a Niimbot printer.
 
@@ -11,16 +11,16 @@ Typical usage:
 ```text
 Browser UI or automation
 -> POST /print
--> niimcli resolves printer + preset
--> niimcli generates QR and composes the final label
--> niimcli prints over BLE
+-> niimtui resolves printer + preset
+-> niimtui generates QR and composes the final label
+-> niimtui prints over BLE
 ```
 
-The current working path sends QR text plus optional label text. `niimcli` handles local QR generation, preset-aware composition, and printer-specific transport/protocol details.
+The current working path sends QR text plus optional label text. `niimtui` handles local QR generation, preset-aware composition, and printer-specific transport/protocol details.
 
 ## Status
 
-`niimcli` has working end-to-end macOS BLE print paths for D110_M v4-class devices and B1 using direct PNG image input.
+`niimtui` has working end-to-end macOS BLE print paths for D110_M v4-class devices and B1 using direct PNG image input.
 
 The next implementation target is to expand the service contract cleanly for future composition modes and continue broadening model support.
 
@@ -57,7 +57,7 @@ The next implementation target is to expand the service contract cleanly for fut
 
 ## Use Cases
 
-`niimcli` is intended for setups where label printing should be handled by a dedicated local service instead of embedding printer logic into another application.
+`niimtui` is intended for setups where label printing should be handled by a dedicated local service instead of embedding printer logic into another application.
 
 Examples:
 
@@ -66,7 +66,7 @@ Examples:
 - running a small print service on a laptop or desktop near the printer
 - standardizing label rendering across multiple Niimbot models and label shapes
 
-Internally, `niimcli` resolves the target printer and label preset, renders or accepts the final label image, converts it to printer-ready raster data, selects the correct model-specific print task, and sends it to the printer over BLE.
+Internally, `niimtui` resolves the target printer and label preset, renders or accepts the final label image, converts it to printer-ready raster data, selects the correct model-specific print task, and sends it to the printer over BLE.
 
 ## Initial Scope
 
@@ -75,7 +75,7 @@ Version 1 focuses on one narrow, reliable path:
 - macOS
 - BLE only
 - D110_M v4-class devices and B1
-- HTTPS service mode via `niimcli serve`
+- HTTPS service mode via `niimtui serve`
 - synchronous `POST /print`
 - QR text input
 - service-rendered composition
@@ -98,12 +98,12 @@ The first version does not target:
 Planned commands:
 
 ```text
-niimcli serve --config /path/to/config.json
-niimcli print --printer d110-desk --preset d110-12x40 --image ./label.png
-niimcli probe --printer d110-desk
-niimcli scan --transport ble
-niimcli printers
-niimcli presets
+niimtui serve --config /path/to/config.json
+niimtui print --printer d110-desk --preset d110-12x40 --image ./label.png
+niimtui probe --printer d110-desk
+niimtui scan --transport ble
+niimtui printers
+niimtui presets
 ```
 
 ## Installation
@@ -266,7 +266,7 @@ Example shape:
 
 The current direct-print path accepts a full PNG label image.
 
-Future composition modes can allow `niimcli` to build the final output based on:
+Future composition modes can allow `niimtui` to build the final output based on:
 
 - printer model
 - preset dimensions
@@ -281,15 +281,15 @@ Initial layout plan:
 - `qr-title`
 - `qr-title-subtitle`
 
-The current implementation is text-driven and generates the QR inside `niimcli`. The first layout heuristics are tuned for known B1 stock sizes, with `50x30` using QR-left/text-right, `50x50` round using centered QR with text below, and `50x80` using a large QR above a text block.
+The current implementation is text-driven and generates the QR inside `niimtui`. The first layout heuristics are tuned for known B1 stock sizes, with `50x30` using QR-left/text-right, `50x50` round using centered QR with text below, and `50x80` using a large QR above a text block.
 
 ## Browser Integration
 
-When Homebox is remote but viewed in a browser on the same Mac as the printer, the browser calls the local `niimcli` service directly.
+When Homebox is remote but viewed in a browser on the same Mac as the printer, the browser calls the local `niimtui` service directly.
 
-- Homebox backend stores `niimcli_base_url` as a browser-side setting
+- Homebox backend stores `niimtui_base_url` as a browser-side setting
 - the browser resolves `http://127.0.0.1:8443` or `https://127.0.0.1:8443`
-- `niimcli` enforces an origin allowlist for browser requests
+- `niimtui` enforces an origin allowlist for browser requests
 - requests without an `Origin` header remain valid for local tools such as `curl`
 
 Later work should define how Homebox page data maps into `content.title` and `content.subtitle` for different page types.
@@ -298,7 +298,7 @@ Later work should define how Homebox page data maps into `content.title` and `co
 
 Some printers that appear as `D110` at the UX level actually require a different print task at runtime.
 
-For example, `D110_M` devices with device type `2320` use a different `v4` print sequence than classic `D110` devices. `niimcli` detects that device type and selects the matching task automatically.
+For example, `D110_M` devices with device type `2320` use a different `v4` print sequence than classic `D110` devices. `niimtui` detects that device type and selects the matching task automatically.
 
 ## Security
 

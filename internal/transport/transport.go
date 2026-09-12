@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"niimcli/internal/config"
-	"niimcli/internal/render"
+	"niimtui/internal/config"
+	"niimtui/internal/render"
 )
 
 type Backend interface {

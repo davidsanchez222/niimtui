@@ -15,8 +15,8 @@ import (
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
 
-	"niimcli/internal/api"
-	"niimcli/internal/config"
+	"niimtui/internal/api"
+	"niimtui/internal/config"
 )
 
 const dotsPerMM = 8.0

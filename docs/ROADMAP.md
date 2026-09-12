@@ -2,7 +2,7 @@
 
 ## Direction
 
-The first version of `niimcli` is a local CLI and HTTPS service for Niimbot BLE printing.
+The first version of `niimtui` is a local CLI and HTTPS service for Niimbot BLE printing.
 
 Primary workflow:
 
@@ -10,7 +10,7 @@ Primary workflow:
 Homebox page in browser
 -> Tampermonkey userscript
 -> HTTPS request over Tailscale
--> niimcli serve on MacBook
+-> niimtui serve on MacBook
 -> BLE
 -> Niimbot printer
 ```
@@ -254,7 +254,7 @@ Exit criteria:
 
 Build this exact slice before broadening scope:
 
-- `niimcli serve`
+- `niimtui serve`
 - JSON config file
 - one printer profile: `d110-desk`
 - one preset: `d110-12x40`
@@ -334,7 +334,7 @@ After the first BLE service path is stable, possible next steps include:
 
 - `qr-only`, `qr-title`, and `qr-title-subtitle` composition layouts
 - richer preset libraries for B1 label shapes and sizes
-- `niimcli print` parity with service mode
+- `niimtui print` parity with service mode
 - printer discovery command
 - async job tracking if synchronous mode becomes limiting
 - RFCOMM or USB support if there is a concrete need

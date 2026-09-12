@@ -13,7 +13,7 @@ func TestDefaultPathUsesXDGConfigHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultPath() error = %v", err)
 	}
-	want := filepath.Join(dir, "niimcli", "config.json")
+	want := filepath.Join(dir, "niimtui", "config.json")
 	if path != want {
 		t.Fatalf("DefaultPath() = %q, want %q", path, want)
 	}

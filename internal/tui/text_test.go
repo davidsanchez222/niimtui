@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"niimcli/internal/label"
+	"niimtui/internal/label"
 )
 
 func TestAutoFitTextElementGrowsHeightForWrappedText(t *testing.T) {

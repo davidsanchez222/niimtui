@@ -7,8 +7,8 @@ import (
 	"image/png"
 	"testing"
 
-	"niimcli/internal/api"
-	"niimcli/internal/config"
+	"niimtui/internal/api"
+	"niimtui/internal/config"
 )
 
 func TestValidateRequestUsesDefaultPresetAndQROnlyDefaultLayout(t *testing.T) {

@@ -13,10 +13,10 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"niimcli/internal/catalog"
-	"niimcli/internal/config"
-	"niimcli/internal/service"
-	"niimcli/internal/transport"
+	"niimtui/internal/catalog"
+	"niimtui/internal/config"
+	"niimtui/internal/service"
+	"niimtui/internal/transport"
 )
 
 var (
@@ -38,7 +38,7 @@ func runSetup(args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout, setupTitleStyle.Render("niimcli setup"))
+	fmt.Fprintln(os.Stdout, setupTitleStyle.Render("niimtui setup"))
 	fmt.Fprintln(os.Stdout, setupHintStyle.Render("Configure your default printer and label roll."))
 	fmt.Fprintln(os.Stdout)
 
@@ -120,7 +120,7 @@ func runSetup(args []string) error {
 
 	fmt.Fprintln(os.Stdout)
 	fmt.Fprintf(os.Stdout, "%s %s\n", setupTitleStyle.Render("Saved config:"), path)
-	fmt.Fprintln(os.Stdout, setupHintStyle.Render("You can now try `niimcli tui` or `niimcli print --image ./testlabels/preview.png`."))
+	fmt.Fprintln(os.Stdout, setupHintStyle.Render("You can now try `niimtui tui` or `niimtui print --image ./testlabels/preview.png`."))
 	return nil
 }
 

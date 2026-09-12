@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"testing"
 
-	"niimcli/internal/render"
+	"niimtui/internal/render"
 )
 
 func TestPrepareD110JobRotatesLandscapeToNinetySixWide(t *testing.T) {

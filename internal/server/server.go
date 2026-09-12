@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"niimcli/internal/api"
-	"niimcli/internal/config"
-	"niimcli/internal/service"
+	"niimtui/internal/api"
+	"niimtui/internal/config"
+	"niimtui/internal/service"
 )
 
 type Server struct {
@@ -49,7 +49,7 @@ func New(cfg config.Config, svc *service.Service) *Server {
 func (s *Server) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("niimcli listening on %s", s.cfg.Server.Listen)
+		log.Printf("niimtui listening on %s", s.cfg.Server.Listen)
 		var err error
 		if s.cfg.Server.TLS != nil && s.cfg.Server.TLS.Enabled {
 			err = s.httpServer.ListenAndServeTLS(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile)
@@ -82,7 +82,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
-		"service": "niimcli",
+		"service": "niimtui",
 		"status":  "ready",
 	})
 }

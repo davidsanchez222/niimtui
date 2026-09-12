@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimcli/internal/transport"
+	"niimtui/internal/transport"
 )
 
 func TestScanPickerSortsNamedDevicesBeforeUnknownDevices(t *testing.T) {

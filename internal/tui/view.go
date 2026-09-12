@@ -5,8 +5,8 @@ import (
 	"image"
 	"strings"
 
-	"niimcli/internal/label"
-	"niimcli/internal/render"
+	"niimtui/internal/label"
+	"niimtui/internal/render"
 )
 
 func (m Model) View() string {

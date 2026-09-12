@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimcli/internal/label"
-	"niimcli/internal/render"
+	"niimtui/internal/label"
+	"niimtui/internal/render"
 )
 
 const (

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"niimcli/internal/api"
-	"niimcli/internal/config"
-	"niimcli/internal/render"
-	"niimcli/internal/transport"
-	bletransport "niimcli/internal/transport/ble"
+	"niimtui/internal/api"
+	"niimtui/internal/config"
+	"niimtui/internal/render"
+	"niimtui/internal/transport"
+	bletransport "niimtui/internal/transport/ble"
 )
 
 const (

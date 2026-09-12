@@ -6,7 +6,7 @@ import (
 	"image/png"
 	"testing"
 
-	"niimcli/internal/label"
+	"niimtui/internal/label"
 )
 
 func TestRenderDocumentProducesPNG(t *testing.T) {

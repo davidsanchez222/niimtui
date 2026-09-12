@@ -50,25 +50,25 @@ Before using a config on another machine or with another printer, update:
 ### Scan For BLE Devices
 
 ```bash
-go run ./cmd/niimcli scan --config ./config.example.json --transport ble
+go run ./cmd/niimtui scan --config ./config.example.json --transport ble
 ```
 
 ### Probe D110_M
 
 ```bash
-go run ./cmd/niimcli probe --config ./config.example.json --printer d110-desk
+go run ./cmd/niimtui probe --config ./config.example.json --printer d110-desk
 ```
 
 ### Probe B1
 
 ```bash
-go run ./cmd/niimcli probe --config ./config.example.json --printer b1-round
+go run ./cmd/niimtui probe --config ./config.example.json --printer b1-round
 ```
 
 ### Print On D110_M
 
 ```bash
-go run ./cmd/niimcli print \
+go run ./cmd/niimtui print \
   --config ./config.example.json \
   --printer d110-desk \
   --preset d110-12x40 \
@@ -80,7 +80,7 @@ go run ./cmd/niimcli print \
 ### Preview Without Printing
 
 ```bash
-go run ./cmd/niimcli print \
+go run ./cmd/niimtui print \
   --config ./config.example.json \
   --printer b1-round \
   --preset b1-50x50-round \
@@ -95,7 +95,7 @@ go run ./cmd/niimcli print \
 ### Print On B1
 
 ```bash
-go run ./cmd/niimcli print \
+go run ./cmd/niimtui print \
   --config ./config.example.json \
   --printer b1-round \
   --preset b1-50x50-round \
@@ -111,10 +111,10 @@ go run ./cmd/niimcli print \
 The currently validated path is:
 
 - `qr.text` plus optional title/subtitle in
-- printer-specific raster/protocol handling in `niimcli`
+- printer-specific raster/protocol handling in `niimtui`
 - BLE print out
 
-This means the tested CLI and service path expects `niimcli` to generate the QR and compose the final label layout locally.
+This means the tested CLI and service path expects `niimtui` to generate the QR and compose the final label layout locally.
 
 `--preview-out` writes that exact rendered print job to disk as a PNG. Add `--no-print` to stop before the BLE print step.
 

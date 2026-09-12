@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimcli/internal/render"
+	"niimtui/internal/render"
 )
 
 func Run(widthMM, heightMM float64, fontPath string, printConfig PrintConfig) error {

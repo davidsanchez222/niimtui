@@ -5,7 +5,7 @@ import (
 	"image"
 	"math"
 
-	"niimcli/internal/render"
+	"niimtui/internal/render"
 )
 
 type D110Job struct {

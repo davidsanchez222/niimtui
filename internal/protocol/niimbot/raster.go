@@ -6,7 +6,7 @@ import (
 	"image/color"
 	"math"
 
-	"niimcli/internal/render"
+	"niimtui/internal/render"
 )
 
 type RasterJob struct {

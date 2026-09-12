@@ -9,7 +9,7 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 
-	"niimcli/internal/label"
+	"niimtui/internal/label"
 )
 
 const textPaddingMM = 1.0

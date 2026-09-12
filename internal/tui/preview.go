@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimcli/internal/render"
+	"niimtui/internal/render"
 )
 
 const previewOutputPath = "testlabels/preview.png"

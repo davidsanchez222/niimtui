@@ -15,7 +15,7 @@ import (
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
-	"niimcli/internal/label"
+	"niimtui/internal/label"
 )
 
 var (

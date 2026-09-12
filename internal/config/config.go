@@ -16,7 +16,7 @@ type Config struct {
 	Presets  []LabelPreset    `json:"presets"`
 }
 
-const appName = "niimcli"
+const appName = "niimtui"
 
 type ServerConfig struct {
 	Listen         string     `json:"listen"`
@@ -82,7 +82,7 @@ func LoadDefault() (Config, error) {
 	cfg, err := Load(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Config{}, fmt.Errorf("default config not found at %s; run `niimcli setup` or pass --config", path)
+			return Config{}, fmt.Errorf("default config not found at %s; run `niimtui setup` or pass --config", path)
 		}
 		return Config{}, err
 	}

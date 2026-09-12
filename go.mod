@@ -1,4 +1,4 @@
-module niimcli
+module niimtui
 
 go 1.25.0
 

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"niimcli/internal/config"
-	"niimcli/internal/protocol/niimbot"
-	"niimcli/internal/transport"
+	"niimtui/internal/config"
+	"niimtui/internal/protocol/niimbot"
+	"niimtui/internal/transport"
 
 	"tinygo.org/x/bluetooth"
 )
