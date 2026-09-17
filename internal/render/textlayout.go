@@ -12,7 +12,9 @@ import (
 	"niimtui/internal/label"
 )
 
-const textPaddingMM = 1.0
+const textPaddingMM = 0.5
+
+const textInkTopSafetyPx = 10
 
 const textThreshold = 192
 
@@ -161,15 +163,33 @@ func layoutTextWithFace(text string, face font.Face, maxWidthPx int) TextLayout 
 	}
 
 	maxLineWidth := 0
+	inkTop := 0
+	inkBottom := 0
 	for _, line := range lines {
 		maxLineWidth = max(maxLineWidth, font.MeasureString(face, line).Ceil())
+	}
+	for i, line := range lines {
+		bounds, _ := font.BoundString(face, line)
+		top := i*lineHeight + bounds.Min.Y.Floor()
+		bottom := i*lineHeight + bounds.Max.Y.Ceil()
+		if i == 0 || top < inkTop {
+			inkTop = top
+		}
+		if i == 0 || bottom > inkBottom {
+			inkBottom = bottom
+		}
+	}
+	blockHeight := inkBottom - inkTop
+	if blockHeight <= 0 {
+		blockHeight = len(lines) * lineHeight
+		inkTop = -metrics.Ascent.Ceil()
 	}
 
 	return TextLayout{
 		Lines:          lines,
 		LineHeightPx:   lineHeight,
-		AscentPx:       metrics.Ascent.Ceil(),
-		BlockHeightPx:  len(lines) * lineHeight,
+		AscentPx:       -inkTop + textInkTopSafetyPx,
+		BlockHeightPx:  blockHeight + textInkTopSafetyPx,
 		MaxLineWidthPx: maxLineWidth,
 	}
 }
