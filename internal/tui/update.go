@@ -30,6 +30,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
+		if m.FontPickerOpen && m.handleFontPickerKey(msg) {
+			return m, nil
+		}
 		if msg.String() == "P" {
 			return m, m.printCurrentDocument()
 		}
@@ -116,6 +119,8 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return true
 	case "i":
 		return m.beginEditingSelected()
+	case "f":
+		return m.toggleFontPicker()
 	case "delete", "backspace":
 		return m.deleteSelected()
 	case "k":
