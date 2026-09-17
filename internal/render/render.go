@@ -224,20 +224,36 @@ func drawQR(dst draw.Image, code *qrcode.QRCode, rect image.Rectangle) error {
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return nil
 	}
-	size := min(rect.Dx(), rect.Dy())
-	if size <= 0 {
+	bitmap := code.Bitmap()
+	if len(bitmap) == 0 || len(bitmap[0]) == 0 {
 		return nil
 	}
-	pngData, err := code.PNG(size)
-	if err != nil {
-		return fmt.Errorf("encode qr: %w", err)
+	moduleCount := len(bitmap)
+	moduleSize := min(rect.Dx(), rect.Dy()) / moduleCount
+	if moduleSize < 1 {
+		moduleSize = 1
 	}
-	img, err := png.Decode(bytes.NewReader(pngData))
-	if err != nil {
-		return fmt.Errorf("decode qr: %w", err)
+	qrSize := moduleCount * moduleSize
+	if qrSize > rect.Dx() || qrSize > rect.Dy() {
+		qrSize = min(rect.Dx(), rect.Dy())
+		moduleSize = max(qrSize/moduleCount, 1)
+		qrSize = moduleCount * moduleSize
 	}
-	centered := fitCentered(img.Bounds(), rect)
-	scaleNearest(dst, centered, img, img.Bounds())
+	left := rect.Min.X + (rect.Dx()-qrSize)/2
+	top := rect.Min.Y + (rect.Dy()-qrSize)/2
+	for moduleY, row := range bitmap {
+		for moduleX, on := range row {
+			if !on {
+				continue
+			}
+			fillRect(dst, image.Rect(
+				left+moduleX*moduleSize,
+				top+moduleY*moduleSize,
+				left+(moduleX+1)*moduleSize,
+				top+(moduleY+1)*moduleSize,
+			), image.Black)
+		}
+	}
 	return nil
 }
 

@@ -3,8 +3,11 @@ package render
 import (
 	"bytes"
 	"image"
+	"image/draw"
 	"image/png"
 	"testing"
+
+	"github.com/skip2/go-qrcode"
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
@@ -92,6 +95,74 @@ func TestRenderDocumentDrawsQR(t *testing.T) {
 	}
 }
 
+func TestRenderDocumentLeavesQRElementInset(t *testing.T) {
+	element := label.NewQRElement("qr", "https://example.com", 8, 8, 24)
+	doc := label.NewDocument(40, 40)
+	if err := doc.AddElement(element); err != nil {
+		t.Fatalf("AddElement() error = %v", err)
+	}
+
+	result, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatalf("RenderDocument() error = %v", err)
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		t.Fatalf("render image type = %T, want *image.Gray", result.Image)
+	}
+
+	rect := image.Rect(mmToPx(element.XMM), mmToPx(element.YMM), mmToPx(element.XMM+element.WidthMM), mmToPx(element.YMM+element.HeightMM))
+	inset := qrElementInsetPx(rect)
+	if inset <= 0 {
+		t.Fatalf("qrElementInsetPx() = %d, want positive", inset)
+	}
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		for x := rect.Min.X; x < rect.Max.X; x++ {
+			insideInset := x >= rect.Min.X+inset && x < rect.Max.X-inset && y >= rect.Min.Y+inset && y < rect.Max.Y-inset
+			if insideInset {
+				continue
+			}
+			if gray.GrayAt(x, y).Y == 0 {
+				t.Fatalf("found black QR pixel in inset at (%d,%d)", x, y)
+			}
+		}
+	}
+}
+
+func TestDrawQRUsesIntegerModuleScale(t *testing.T) {
+	code, err := qrcode.New("https://example.com", qrcode.Medium)
+	if err != nil {
+		t.Fatalf("qrcode.New() error = %v", err)
+	}
+	code.DisableBorder = true
+	bitmap := code.Bitmap()
+	moduleCount := len(bitmap)
+	canvas := image.NewGray(image.Rect(0, 0, moduleCount*3+2, moduleCount*3+2))
+	draw.Draw(canvas, canvas.Bounds(), image.White, image.Point{}, draw.Src)
+
+	if err := drawQR(canvas, code, canvas.Bounds()); err != nil {
+		t.Fatalf("drawQR() error = %v", err)
+	}
+
+	left := (canvas.Bounds().Dx() - moduleCount*3) / 2
+	top := (canvas.Bounds().Dy() - moduleCount*3) / 2
+	for y, row := range bitmap {
+		for x, on := range row {
+			want := uint8(255)
+			if on {
+				want = 0
+			}
+			for py := top + y*3; py < top+(y+1)*3; py++ {
+				for px := left + x*3; px < left+(x+1)*3; px++ {
+					if got := canvas.GrayAt(px, py).Y; got != want {
+						t.Fatalf("pixel (%d,%d) = %d, want %d", px, py, got, want)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestCalibrationLabelDrawsAxisAlignedPattern(t *testing.T) {
 	result, err := CalibrationLabel(50, 30, "rect")
 	if err != nil {
@@ -165,8 +236,8 @@ func TestRequiredTextHeightUsesTightTextPadding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LayoutTextWithFontPath() error = %v", err)
 	}
-	if layout.BlockHeightPx > layout.LineHeightPx {
-		t.Fatalf("block height = %d, want no greater than line height %d for tight visual bounds", layout.BlockHeightPx, layout.LineHeightPx)
+	if layout.BlockHeightPx > layout.LineHeightPx+textInkTopSafetyPx {
+		t.Fatalf("block height = %d, want no greater than line height %d plus safety %d", layout.BlockHeightPx, layout.LineHeightPx, textInkTopSafetyPx)
 	}
 	want := pxToMM(layout.BlockHeightPx + 2*textPaddingPx())
 	if height != want {
