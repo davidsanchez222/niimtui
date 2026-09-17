@@ -133,8 +133,8 @@ func TestRoundPreviewUsesExpectedCanvasSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("png.Decode() error = %v", err)
 	}
-	if img.Bounds() != image.Rect(0, 0, 384, 384) {
-		t.Fatalf("preview bounds = %v, want %v", img.Bounds(), image.Rect(0, 0, 384, 384))
+	if img.Bounds() != image.Rect(0, 0, 384, 400) {
+		t.Fatalf("preview bounds = %v, want %v", img.Bounds(), image.Rect(0, 0, 384, 400))
 	}
 }
 

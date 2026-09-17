@@ -43,7 +43,20 @@ func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (t
 		err         error
 	)
 
-	if printer.Identifier != "" {
+	// CoreBluetooth reconnects by identifier can produce a zero-value device after
+	// a previous print session. Prefer rediscovering by advertisement when we have
+	// a configured device name, then connect to the discovered peripheral.
+	if printer.DeviceName != "" {
+		address, name, err = b.scanForDevice(ctx, printer)
+		if err != nil && printer.Identifier == "" && printer.Address == "" {
+			return nil, err
+		}
+		if err == nil {
+			connectMode = "scan"
+		}
+	}
+
+	if err != nil && printer.Identifier != "" {
 		address.Set(printer.Identifier)
 		device, directErr := b.adapter.Connect(address, bluetooth.ConnectionParams{})
 		if directErr == nil {
@@ -59,11 +72,13 @@ func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (t
 		// fall through to scan-based discovery when direct identifier connect fails
 	}
 
-	address, name, err = b.scanForDevice(ctx, printer)
-	if err != nil {
-		return nil, err
+	if connectMode == "" {
+		address, name, err = b.scanForDevice(ctx, printer)
+		if err != nil {
+			return nil, err
+		}
+		connectMode = "scan"
 	}
-	connectMode = "scan"
 
 	device, err := b.adapter.Connect(address, bluetooth.ConnectionParams{})
 	if err != nil {
@@ -211,6 +226,7 @@ func (b *Backend) scanForDevice(ctx context.Context, printer config.PrinterProfi
 type connection struct {
 	device         bluetooth.Device
 	meta           map[string]any
+	metaMu         sync.Mutex
 	niimbotService bluetooth.DeviceService
 	niimbotChar    bluetooth.DeviceCharacteristic
 	notifyMu       sync.Mutex
@@ -233,7 +249,7 @@ func (c *connection) Print(ctx context.Context, printer config.PrinterProfile, j
 	}
 	deviceType, err := c.deviceTypeID()
 	if err == nil {
-		c.meta["device_type"] = deviceType
+		c.setMeta("device_type", deviceType)
 	}
 	switch strings.ToUpper(printer.Model) {
 	case "D110":
@@ -282,15 +298,15 @@ func (c *connection) Probe(_ context.Context) error {
 		})
 	}
 
-	c.meta["gatt"] = map[string]any{
+	c.setMeta("gatt", map[string]any{
 		"service_count": len(discoveredServices),
 		"services":      discoveredServices,
-	}
+	})
 	if err := c.selectKnownNiimbotCharacteristic(services); err == nil {
-		c.meta["niimbot"] = map[string]any{
+		c.setMeta("niimbot", map[string]any{
 			"service_uuid":        c.niimbotService.UUID().String(),
 			"characteristic_uuid": c.niimbotChar.UUID().String(),
-		}
+		})
 	}
 	return nil
 }
@@ -300,7 +316,19 @@ func (c *connection) Close() error {
 }
 
 func (c *connection) Metadata() map[string]any {
-	return c.meta
+	c.metaMu.Lock()
+	defer c.metaMu.Unlock()
+	copyMeta := make(map[string]any, len(c.meta))
+	for key, value := range c.meta {
+		copyMeta[key] = value
+	}
+	return copyMeta
+}
+
+func (c *connection) setMeta(key string, value any) {
+	c.metaMu.Lock()
+	defer c.metaMu.Unlock()
+	c.meta[key] = value
 }
 
 func matchesPrinter(printer config.PrinterProfile, result bluetooth.ScanResult) bool {
@@ -331,10 +359,10 @@ func (c *connection) ensureNiimbotCharacteristic(_ context.Context) error {
 	if err := c.selectKnownNiimbotCharacteristic(services); err != nil {
 		return err
 	}
-	c.meta["niimbot"] = map[string]any{
+	c.setMeta("niimbot", map[string]any{
 		"service_uuid":        c.niimbotService.UUID().String(),
 		"characteristic_uuid": c.niimbotChar.UUID().String(),
-	}
+	})
 	return nil
 }
 
@@ -369,16 +397,16 @@ func (c *connection) ensureNotifications() error {
 		c.notifyMu.Unlock()
 
 		notificationCount++
-		c.meta["niimbot_notifications"] = map[string]any{
+		c.setMeta("niimbot_notifications", map[string]any{
 			"count":       notificationCount,
 			"last_packet": append([]byte(nil), buf...),
 			"recent":      recent,
-		}
+		})
 	}); err != nil {
 		return err
 	}
 	c.notifyEnabled = true
-	c.meta["niimbot_notify_enabled"] = true
+	c.setMeta("niimbot_notify_enabled", true)
 	return nil
 }
 
@@ -423,7 +451,7 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 		{name: "print_quantity", data: niimbot.PrintQuantityPacket(job.Copies), resp: niimbot.CmdPrintQuantity + 1},
 	}
 	for _, packet := range setupPackets {
-		if _, err := c.transceive(packet.name, packet.data, packet.resp, 2*time.Second); err != nil {
+		if _, err := c.transceive(packet.name, packet.data, packet.resp, 10*time.Second); err != nil {
 			return err
 		}
 	}
@@ -447,7 +475,7 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 		}
 	}
 
-	if _, err := c.transceive("page_end", niimbot.PageEndPacket(), niimbot.CmdPageEnd+1, 2*time.Second); err != nil {
+	if _, err := c.transceive("page_end", niimbot.PageEndPacket(), niimbot.CmdPageEnd+1, 10*time.Second); err != nil {
 		return err
 	}
 	if err := c.waitForPrintStatus(); err != nil {
@@ -464,7 +492,7 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	c.meta["d110_job"] = map[string]any{
+	c.setMeta("d110_job", map[string]any{
 		"rows":            len(d110job.Rows),
 		"row_bytes":       d110job.WidthPx / 8,
 		"density":         d110job.Density,
@@ -472,7 +500,7 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 		"empty_row_runs":  false,
 		"oriented_width":  d110job.WidthPx,
 		"oriented_height": d110job.HeightPx,
-	}
+	})
 
 	return nil
 }
@@ -541,7 +569,7 @@ func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.J
 	}
 	_ = c.writePacket("heartbeat_one_way", niimbot.HeartbeatPacket())
 
-	c.meta["d110_job"] = map[string]any{
+	c.setMeta("d110_job", map[string]any{
 		"rows":            len(d110job.Rows),
 		"row_bytes":       d110job.WidthPx / 8,
 		"density":         d110job.Density,
@@ -550,7 +578,7 @@ func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.J
 		"oriented_width":  d110job.WidthPx,
 		"oriented_height": d110job.HeightPx,
 		"variant":         "d110_m_v4",
-	}
+	})
 	return nil
 }
 
@@ -613,13 +641,13 @@ func (c *connection) printB1(printer config.PrinterProfile, job transport.Job) e
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	c.meta["b1_job"] = map[string]any{
+	c.setMeta("b1_job", map[string]any{
 		"rows":      len(rasterJob.Rows),
 		"row_bytes": len(rasterJob.Rows[0]),
 		"density":   density,
 		"width_px":  rasterJob.WidthPx,
 		"height_px": rasterJob.HeightPx,
-	}
+	})
 	return nil
 }
 
@@ -636,7 +664,7 @@ func (c *connection) waitForPrintStatus() error {
 				"print_progress": int(payload[2]),
 				"feed_progress":  int(payload[3]),
 			}
-			c.meta["last_print_status"] = status
+			c.setMeta("last_print_status", status)
 			page, _ := status["page"].(int)
 			printProgress, _ := status["print_progress"].(int)
 			feedProgress, _ := status["feed_progress"].(int)
@@ -725,10 +753,10 @@ func (c *connection) writePacket(name string, packet []byte) error {
 	if _, err := c.niimbotChar.WriteWithoutResponse(packet); err != nil {
 		return fmt.Errorf("write %s packet: %w", name, err)
 	}
-	c.meta["last_packet"] = map[string]any{
+	c.setMeta("last_packet", map[string]any{
 		"name":  name,
 		"bytes": append([]byte(nil), packet...),
-	}
+	})
 	time.Sleep(writeInterval)
 	return nil
 }

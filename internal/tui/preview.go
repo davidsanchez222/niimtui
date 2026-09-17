@@ -21,12 +21,18 @@ type printResultMsg struct {
 	Err      error
 	WidthPx  int
 	HeightPx int
+	Closed   bool
 }
 
 func (m *Model) exportPreview() bool {
 	result, err := render.RenderDocument(m.Document)
 	if err != nil {
 		m.setStatus("Preview render failed: %v", err)
+		return true
+	}
+	result, err = m.preparePrintPreview(result)
+	if err != nil {
+		m.setStatus("Preview print fitting failed: %v", err)
 		return true
 	}
 	if err := os.MkdirAll("testlabels", 0o755); err != nil {
@@ -48,6 +54,18 @@ func (m *Model) exportPreview() bool {
 	}
 	m.setStatus("Preview written to %s (%dx%d).", previewOutputPath, result.WidthPx, result.HeightPx)
 	return true
+}
+
+func (m Model) preparePrintPreview(result render.Result) (render.Result, error) {
+	if m.Print.Model == "" {
+		return result, nil
+	}
+	fitted, err := render.FitToPrinterWidth(result, m.Print.Model)
+	if err != nil {
+		return render.Result{}, err
+	}
+	offsetX, offsetY := render.ModelPrintOffsetMM(m.Print.Model, m.Print.OffsetXMM, m.Print.OffsetYMM)
+	return render.ApplyPrintOffset(fitted, offsetX, offsetY)
 }
 
 func openPreviewFile(path string) (bool, error) {
@@ -88,13 +106,19 @@ func (m *Model) printCurrentDocument() tea.Cmd {
 			}
 			return printResultMsg{Err: fmt.Errorf("print failed"), WidthPx: result.WidthPx, HeightPx: result.HeightPx}
 		}
-		return printResultMsg{OK: true, Printer: resp.Printer, Copies: resp.Copies, WidthPx: result.WidthPx, HeightPx: result.HeightPx}
+		return printResultMsg{OK: true, Printer: resp.Printer, Copies: resp.Copies, WidthPx: result.WidthPx, HeightPx: result.HeightPx, Closed: true}
 	}
 }
 
 func (m *Model) handlePrintResult(msg printResultMsg) {
 	if msg.Err != nil {
 		m.setStatus("Print failed: %v", msg.Err)
+		return
+	}
+	if msg.Closed {
+		m.Connection = ConnectionDisconnected
+		m.ConnectMeta = nil
+		m.setStatus("Printed %d copy to %s (%dx%d). Press c to reconnect.", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)
 		return
 	}
 	m.setStatus("Printed %d copy to %s (%dx%d).", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)

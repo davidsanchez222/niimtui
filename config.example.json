@@ -26,7 +26,9 @@
       "default_preset": "b1-50x50-round",
       "defaults": {
         "density": 3,
-        "rotate": 0
+        "rotate": 0,
+        "offset_x_mm": 0,
+        "offset_y_mm": 0
       }
     }
   ],
@@ -55,12 +57,12 @@
       "layout": "qr-title-subtitle",
       "margins_mm": 2
     },
-	{
-	  "name": "b1-50x80",
-	  "width_mm": 50,
-	  "height_mm": 80,
-	  "shape": "rect",
-	  "layout": "qr-title-subtitle",
+    {
+      "name": "b1-50x80",
+      "width_mm": 50,
+      "height_mm": 80,
+      "shape": "rect",
+      "layout": "qr-title-subtitle",
       "margins_mm": 2
     }
   ]

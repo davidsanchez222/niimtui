@@ -161,6 +161,16 @@ func (s *Service) PrintImage(ctx context.Context, selector string, rendered rend
 	if normalizedCopies(copies) <= 0 {
 		return *errorResponse(ErrInvalidRequest, "options.copies must be greater than zero")
 	}
+	var err error
+	rendered, err = render.FitToPrinterWidth(rendered, printer.Model)
+	if err != nil {
+		return *errorResponse(ErrInvalidImage, fmt.Sprintf("fit image to printer: %v", err))
+	}
+	offsetX, offsetY := render.ModelPrintOffsetMM(printer.Model, printer.Defaults.OffsetXMM, printer.Defaults.OffsetYMM)
+	rendered, err = render.ApplyPrintOffset(rendered, offsetX, offsetY)
+	if err != nil {
+		return *errorResponse(ErrInvalidImage, fmt.Sprintf("offset image for printer: %v", err))
+	}
 
 	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()

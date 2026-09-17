@@ -49,7 +49,7 @@ func (m *Model) addQRElement() {
 	sizeMM := math.Max(math.Min(m.Document.WidthMM, m.Document.HeightMM)*0.35, 8)
 	element := label.NewQRElement(
 		id,
-		"https://example.com",
+		"https://google.com",
 		math.Max((m.Document.WidthMM-sizeMM)/2, 0),
 		math.Max((m.Document.HeightMM-sizeMM)/2, 0),
 		sizeMM,

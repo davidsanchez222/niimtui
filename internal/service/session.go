@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -42,7 +43,10 @@ func (s *Session) Connect(ctx context.Context) (map[string]any, error) {
 	if s.conn != nil {
 		return s.conn.Metadata(), nil
 	}
+	return s.connectLocked(ctx)
+}
 
+func (s *Session) connectLocked(ctx context.Context) (map[string]any, error) {
 	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
@@ -52,6 +56,15 @@ func (s *Session) Connect(ctx context.Context) (map[string]any, error) {
 	}
 	s.conn = conn
 	return conn.Metadata(), nil
+}
+
+func (s *Session) closeLocked() error {
+	if s.conn == nil {
+		return nil
+	}
+	err := s.conn.Close()
+	s.conn = nil
+	return err
 }
 
 func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies int) api.PrintResponse {
@@ -64,8 +77,39 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 	if s.conn == nil {
 		return *errorResponse(ErrBLEConnectFailed, "printer is not connected")
 	}
+	var err error
+	rendered, err = render.FitToPrinterWidth(rendered, s.printer.Model)
+	if err != nil {
+		return *errorResponse(ErrInvalidImage, fmt.Sprintf("fit image to printer: %v", err))
+	}
+	offsetX, offsetY := render.ModelPrintOffsetMM(s.printer.Model, s.printer.Defaults.OffsetXMM, s.printer.Defaults.OffsetYMM)
+	rendered, err = render.ApplyPrintOffset(rendered, offsetX, offsetY)
+	if err != nil {
+		return *errorResponse(ErrInvalidImage, fmt.Sprintf("offset image for printer: %v", err))
+	}
 
-	err := s.conn.Print(ctx, s.printer, transport.Job{Rendered: rendered, Copies: normalizedCopies(copies)})
+	job := transport.Job{Rendered: rendered, Copies: normalizedCopies(copies)}
+	err = s.printLocked(ctx, job)
+	if err != nil {
+		firstErr := err
+		_ = s.closeLocked()
+		if _, reconnectErr := s.connectLocked(ctx); reconnectErr != nil {
+			return api.PrintResponse{
+				OK:      false,
+				Printer: s.printer.Name,
+				Copies:  normalizedCopies(copies),
+				Error: &api.ErrorBody{
+					Code:    ErrBLEConnectFailed,
+					Message: fmt.Sprintf("print failed (%v), then reconnect failed: %v", firstErr, reconnectErr),
+				},
+			}
+		}
+		err = s.printLocked(ctx, job)
+	}
+	connectionMeta := map[string]any(nil)
+	if s.conn != nil {
+		connectionMeta = s.conn.Metadata()
+	}
 	meta := map[string]any{
 		"model":       s.printer.Model,
 		"transport":   s.printer.Transport,
@@ -77,7 +121,7 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 			"height_px":     rendered.HeightPx,
 			"preview_bytes": rendered.PreviewBytes,
 		},
-		"connection": s.conn.Metadata(),
+		"connection": connectionMeta,
 	}
 	if err != nil {
 		return api.PrintResponse{
@@ -91,6 +135,7 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 			Meta: meta,
 		}
 	}
+	_ = s.closeLocked()
 
 	return api.PrintResponse{
 		OK:      true,
@@ -100,16 +145,20 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 	}
 }
 
+func (s *Session) printLocked(ctx context.Context, job transport.Job) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("printer connection panic: %v\n%s", r, debug.Stack())
+		}
+	}()
+	return s.conn.Print(ctx, s.printer, job)
+}
+
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.conn == nil {
-		return nil
-	}
-	err := s.conn.Close()
-	s.conn = nil
-	return err
+	return s.closeLocked()
 }
 
 func (s *Session) Metadata() map[string]any {

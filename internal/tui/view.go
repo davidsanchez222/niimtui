@@ -21,6 +21,9 @@ var (
 	canvasStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("252"))
 
+	printableGuideStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("196"))
+
 	propertyTitleStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("111"))
@@ -80,7 +83,7 @@ func (m Model) View() string {
 		"",
 	}
 	for i := 0; i < bodyHeight; i++ {
-		lines = append(lines, leftLines[i]+strings.Repeat(" ", gap)+canvasStyle.Render(canvasLines[i])+strings.Repeat(" ", gap)+propertyLines[i])
+		lines = append(lines, leftLines[i]+strings.Repeat(" ", gap)+canvasLines[i]+strings.Repeat(" ", gap)+propertyLines[i])
 	}
 	lines = append(lines, footerLines(m, viewWidth)...)
 
@@ -115,6 +118,7 @@ func renderCanvas(m Model) string {
 	}
 
 	drawDocumentPreview(grid, canvas, m.Document)
+	drawPrintableAreaGuide(grid, canvas, m)
 	if strings.EqualFold(m.Document.Shape, "round") {
 		drawRoundGuide(grid, canvas)
 	}
@@ -159,9 +163,21 @@ func renderCanvas(m Model) string {
 
 	lines := make([]string, 0, canvas.Height)
 	for y := 0; y < canvas.Height; y++ {
-		lines = append(lines, string(grid[y]))
+		lines = append(lines, renderCanvasLine(grid[y]))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func renderCanvasLine(row []rune) string {
+	var b strings.Builder
+	for _, r := range row {
+		if r == '┊' || r == '┬' || r == '┴' {
+			b.WriteString(printableGuideStyle.Render(string(r)))
+			continue
+		}
+		b.WriteString(canvasStyle.Render(string(r)))
+	}
+	return b.String()
 }
 
 func devicePanelLines(m Model, width int) []string {
@@ -254,7 +270,6 @@ func footerLines(m Model, width int) []string {
 		helpItem("t", "text"),
 		helpItem("r", "QR"),
 		helpItem("i", "edit"),
-		helpItem("m", "mouse"),
 		helpItem("del", "remove"),
 		helpItem("hjkl", "move"),
 		helpItem("shift+arrows", "fast move"),
@@ -530,6 +545,30 @@ func drawRoundGuide(grid [][]rune, canvas Canvas) {
 				grid[y+1][x+1] = '·'
 			}
 		}
+	}
+}
+
+func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
+	printableWidthMM := render.ModelPrintableWidthMM(m.Print.Model)
+	if printableWidthMM <= 0 || printableWidthMM >= m.Document.WidthMM {
+		return
+	}
+	leftMM := (m.Document.WidthMM - printableWidthMM) / 2
+	rightMM := leftMM + printableWidthMM
+	leftX, _ := canvas.LabelToScreen(leftMM, 0)
+	rightX, _ := canvas.LabelToScreen(rightMM, 0)
+	left := leftX - canvas.X
+	right := rightX - canvas.X
+	if left <= 0 || right >= canvas.Width-1 || right <= left {
+		return
+	}
+	grid[0][left] = '┬'
+	grid[0][right] = '┬'
+	grid[canvas.Height-1][left] = '┴'
+	grid[canvas.Height-1][right] = '┴'
+	for y := 1; y < canvas.Height-1; y++ {
+		grid[y][left] = '┊'
+		grid[y][right] = '┊'
 	}
 }
 

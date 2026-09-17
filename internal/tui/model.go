@@ -25,6 +25,8 @@ type PrintConfig struct {
 	Model      string
 	DeviceName string
 	Identifier string
+	OffsetXMM  float64
+	OffsetYMM  float64
 	Copies     int
 }
 
@@ -88,15 +90,14 @@ type Model struct {
 	Document label.Document
 	Canvas   Canvas
 
-	SelectedID   string
-	Drag         DragState
-	NextID       int
-	FontPath     string
-	Print        PrintConfig
-	Connection   ConnectionStatus
-	ConnectErr   string
-	ConnectMeta  map[string]any
-	MouseEnabled bool
+	SelectedID  string
+	Drag        DragState
+	NextID      int
+	FontPath    string
+	Print       PrintConfig
+	Connection  ConnectionStatus
+	ConnectErr  string
+	ConnectMeta map[string]any
 
 	EditingText bool
 	TextBuffer  string
@@ -118,7 +119,7 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 		math.Max(heightMM*0.20, 2),
 		math.Max(math.Min(widthMM*0.45, widthMM-4), 10),
 		math.Max(math.Min(heightMM*0.22, heightMM-4), 6),
-		18,
+		40,
 	)
 	sample.Text.FontPath = fontPath
 	clampElementToDocument(&sample, doc)
@@ -130,15 +131,14 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 	}
 
 	return Model{
-		Document:     doc,
-		SelectedID:   sample.ID,
-		NextID:       2,
-		FontPath:     fontPath,
-		Print:        printConfig,
-		Connection:   connection,
-		MouseEnabled: true,
-		StatusBase:   status,
-		Status:       status,
+		Document:   doc,
+		SelectedID: sample.ID,
+		NextID:     2,
+		FontPath:   fontPath,
+		Print:      printConfig,
+		Connection: connection,
+		StatusBase: status,
+		Status:     status,
 	}
 }
 

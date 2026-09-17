@@ -26,6 +26,17 @@ func TestResizeElementKeepsWrappedTextInsideHeight(t *testing.T) {
 	}
 }
 
+func TestResizeQRElementKeepsSquareAspectFromVerticalHandle(t *testing.T) {
+	original := label.NewQRElement("qr", "https://example.com", 10, 5, 12)
+	updated := resizeElement(original, HandleBottom, 0, 8)
+	if updated.WidthMM != updated.HeightMM {
+		t.Fatalf("QR size = %.2fx%.2f, want square", updated.WidthMM, updated.HeightMM)
+	}
+	if updated.HeightMM <= original.HeightMM {
+		t.Fatalf("QR height = %.2f, want greater than %.2f", updated.HeightMM, original.HeightMM)
+	}
+}
+
 func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
 	m := NewModel(50, 30, "rect", "/tmp/example.ttf", PrintConfig{})
 	initial, ok := m.selectedElement()

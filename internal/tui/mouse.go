@@ -28,12 +28,6 @@ type handlePoint struct {
 }
 
 func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if msg.Action == tea.MouseActionPress && !m.mouseInCanvas(msg.X, msg.Y) {
-		m.MouseEnabled = false
-		m.setStatus("Mouse editing paused. Select terminal text normally, or press m to edit the canvas.")
-		return m, tea.DisableMouse
-	}
-
 	switch msg.Action {
 	case tea.MouseActionPress:
 		if msg.Button != tea.MouseButtonLeft {
@@ -53,10 +47,6 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
-}
-
-func (m Model) mouseInCanvas(x, y int) bool {
-	return x >= m.Canvas.X && x < m.Canvas.X+m.Canvas.Width && y >= m.Canvas.Y && y < m.Canvas.Y+m.Canvas.Height
 }
 
 func (m *Model) handleMousePress(msg tea.MouseMsg) {
@@ -210,6 +200,12 @@ func clampElementToDocument(element *label.Element, doc label.Document) bool {
 		element.HeightMM = doc.HeightMM
 		changed = true
 	}
+	if element.QR != nil && element.WidthMM != element.HeightMM {
+		size := math.Min(element.WidthMM, element.HeightMM)
+		element.WidthMM = size
+		element.HeightMM = size
+		changed = true
+	}
 	if element.XMM < 0 {
 		element.XMM = 0
 		changed = true
@@ -269,6 +265,9 @@ func resizeElement(original label.Element, handle ResizeHandle, dxMM, dyMM float
 		right += dxMM
 		bottom += dyMM
 	}
+	if original.QR != nil {
+		return resizeQRElement(original, handle, left, top, right, bottom)
+	}
 
 	proposedWidth := right - left
 	minWidthMM, _ := minimumElementSize(updated)
@@ -304,6 +303,9 @@ func resizeElement(original label.Element, handle ResizeHandle, dxMM, dyMM float
 func minimumElementSize(element label.Element) (float64, float64) {
 	minWidthMM := minElementWidthMM
 	minHeightMM := minElementHeightMM
+	if element.QR != nil {
+		return 8, 8
+	}
 	if element.Text == nil {
 		return minWidthMM, minHeightMM
 	}
@@ -316,6 +318,51 @@ func minimumElementSize(element label.Element) (float64, float64) {
 		minHeightMM = requiredHeightMM
 	}
 	return minWidthMM, minHeightMM
+}
+
+func resizeQRElement(original label.Element, handle ResizeHandle, left, top, right, bottom float64) label.Element {
+	updated := original
+	minSizeMM, _ := minimumElementSize(original)
+	width := math.Max(minSizeMM, math.Abs(right-left))
+	height := math.Max(minSizeMM, math.Abs(bottom-top))
+	size := math.Max(width, height)
+	centerX := original.XMM + original.WidthMM/2
+	centerY := original.YMM + original.HeightMM/2
+
+	switch handle {
+	case HandleTopLeft:
+		left = original.XMM + original.WidthMM - size
+		top = original.YMM + original.HeightMM - size
+	case HandleTop:
+		bottom = original.YMM + original.HeightMM
+		top = bottom - size
+		left = centerX - size/2
+	case HandleTopRight:
+		left = original.XMM
+		top = original.YMM + original.HeightMM - size
+	case HandleLeft:
+		right = original.XMM + original.WidthMM
+		left = right - size
+		top = centerY - size/2
+	case HandleRight:
+		left = original.XMM
+		top = centerY - size/2
+	case HandleBottomLeft:
+		left = original.XMM + original.WidthMM - size
+		top = original.YMM
+	case HandleBottom:
+		top = original.YMM
+		left = centerX - size/2
+	case HandleBottomRight:
+		left = original.XMM
+		top = original.YMM
+	}
+
+	updated.XMM = left
+	updated.YMM = top
+	updated.WidthMM = size
+	updated.HeightMM = size
+	return updated
 }
 
 func absInt(v int) int {

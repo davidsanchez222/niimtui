@@ -43,8 +43,10 @@ type PrinterProfile struct {
 }
 
 type PrinterDefaults struct {
-	Density int `json:"density,omitempty"`
-	Rotate  int `json:"rotate,omitempty"`
+	Density   int     `json:"density,omitempty"`
+	Rotate    int     `json:"rotate,omitempty"`
+	OffsetXMM float64 `json:"offset_x_mm,omitempty"`
+	OffsetYMM float64 `json:"offset_y_mm,omitempty"`
 }
 
 type LabelPreset struct {

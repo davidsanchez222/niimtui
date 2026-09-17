@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,11 +17,12 @@ func Run(widthMM, heightMM float64, shape, fontPath string, printConfig PrintCon
 		return err
 	}
 
-	p := tea.NewProgram(
-		NewModel(widthMM, heightMM, shape, fontPath, printConfig),
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
+	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	if os.Getenv("NIIMTUI_DEBUG_PANIC") == "1" {
+		options = append(options, tea.WithoutCatchPanics())
+	}
+
+	p := tea.NewProgram(NewModel(widthMM, heightMM, shape, fontPath, printConfig), options...)
 
 	_, err := p.Run()
 	return err
