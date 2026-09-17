@@ -111,6 +111,31 @@ func TestArrowKeysMoveSelectedElement(t *testing.T) {
 	}
 }
 
+func TestMovingQRElementKeepsScreenRectSize(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Canvas = newCanvas(80, 24, m.Document.WidthMM, m.Document.HeightMM)
+	m.addQRElement()
+	m.EditingText = false
+	element, ok := m.selectedElement()
+	if !ok || element.QR == nil {
+		t.Fatal("expected selected QR element")
+	}
+	before := m.elementScreenRect(element)
+
+	if !m.nudgeSelected(0, 1) {
+		t.Fatal("nudgeSelected() = false, want true")
+	}
+	element, ok = m.selectedElement()
+	if !ok || element.QR == nil {
+		t.Fatal("expected selected QR element after move")
+	}
+	after := m.elementScreenRect(element)
+
+	if before.right-before.left != after.right-after.left || before.bottom-before.top != after.bottom-after.top {
+		t.Fatalf("screen size changed from %dx%d to %dx%d", before.right-before.left, before.bottom-before.top, after.right-after.left, after.bottom-after.top)
+	}
+}
+
 func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	initial, ok := m.selectedElement()
