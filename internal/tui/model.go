@@ -90,10 +90,17 @@ type Model struct {
 	Document label.Document
 	Canvas   Canvas
 
-	SelectedID  string
-	Drag        DragState
-	NextID      int
-	FontPath    string
+	SelectedID string
+	Drag       DragState
+	NextID     int
+	FontPath   string
+	Fonts      []FontOption
+
+	FontPickerOpen   bool
+	FontPickerSearch bool
+	FontPickerIndex  int
+	FontPickerQuery  string
+
 	Print       PrintConfig
 	Connection  ConnectionStatus
 	ConnectErr  string
@@ -130,15 +137,18 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 		connection = ConnectionConnecting
 	}
 
+	fonts := discoverFonts(fontPath)
 	return Model{
-		Document:   doc,
-		SelectedID: sample.ID,
-		NextID:     2,
-		FontPath:   fontPath,
-		Print:      printConfig,
-		Connection: connection,
-		StatusBase: status,
-		Status:     status,
+		Document:        doc,
+		SelectedID:      sample.ID,
+		NextID:          2,
+		FontPath:        fontPath,
+		Fonts:           fonts,
+		FontPickerIndex: fontOptionIndex(fonts, fontPath),
+		Print:           printConfig,
+		Connection:      connection,
+		StatusBase:      status,
+		Status:          status,
 	}
 }
 

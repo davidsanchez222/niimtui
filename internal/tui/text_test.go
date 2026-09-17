@@ -1,7 +1,13 @@
 package tui
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/image/font/gofont/goregular"
 
 	"niimtui/internal/label"
 )
@@ -55,4 +61,209 @@ func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
 	if added.Text.FontPath != "/tmp/example.ttf" {
 		t.Fatalf("added font path = %q, want custom path", added.Text.FontPath)
 	}
+}
+
+func TestApplySelectedFontUpdatesSelectedTextAndDefault(t *testing.T) {
+	fontPath := writeTestFont(t, "Go-Regular.ttf")
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Fonts = []FontOption{
+		{Name: "Default", Path: ""},
+		{Name: "Go-Regular", Path: fontPath},
+	}
+	m.FontPickerOpen = true
+	m.FontPickerIndex = 1
+
+	if !m.applySelectedFont() {
+		t.Fatal("applySelectedFont() = false, want true")
+	}
+	selected, ok := m.selectedElement()
+	if !ok || selected.Text == nil {
+		t.Fatal("expected selected text element")
+	}
+	if selected.Text.FontPath != fontPath {
+		t.Fatalf("selected font path = %q, want %q", selected.Text.FontPath, fontPath)
+	}
+	if m.FontPath != fontPath {
+		t.Fatalf("model font path = %q, want %q", m.FontPath, fontPath)
+	}
+	if m.FontPickerOpen {
+		t.Fatal("font picker still open after apply")
+	}
+
+	m.addTextElement()
+	added, ok := m.selectedElement()
+	if !ok || added.Text == nil {
+		t.Fatal("expected added text element")
+	}
+	if added.Text.FontPath != fontPath {
+		t.Fatalf("added font path = %q, want %q", added.Text.FontPath, fontPath)
+	}
+}
+
+func TestNewModelAddsCurrentFontPathAsFilenameOption(t *testing.T) {
+	fontPath := filepath.Join(t.TempDir(), "ExampleNerdFont-Regular.ttf")
+	m := NewModel(50, 30, "rect", fontPath, PrintConfig{})
+
+	for _, font := range m.Fonts {
+		if font.Path == fontPath {
+			if font.Name != "ExampleNerdFont-Regular" {
+				t.Fatalf("font name = %q, want filename without extension", font.Name)
+			}
+			return
+		}
+	}
+	t.Fatalf("font path %q not found in options", fontPath)
+}
+
+func TestFontPickerSearchFiltersAndAppliesMatch(t *testing.T) {
+	jetBrainsPath := writeTestFont(t, "JetBrainsMonoNerdFont-Regular.ttf")
+	goRegularPath := writeTestFont(t, "Go-Regular.ttf")
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Fonts = []FontOption{
+		{Name: "Default", Path: ""},
+		{Name: "Go-Regular", Path: goRegularPath},
+		{Name: "JetBrainsMonoNerdFont-Regular", Path: jetBrainsPath},
+	}
+	m.FontPickerOpen = true
+	m.FontPickerSearch = true
+
+	if !m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("jet")}) {
+		t.Fatal("handleFontPickerKey() = false, want true")
+	}
+	if m.FontPickerQuery != "jet" {
+		t.Fatalf("font picker query = %q, want jet", m.FontPickerQuery)
+	}
+	if m.FontPickerIndex != 2 {
+		t.Fatalf("font picker index = %d, want JetBrains index", m.FontPickerIndex)
+	}
+
+	indices := m.filteredFontIndices()
+	if len(indices) != 1 || indices[0] != 2 {
+		t.Fatalf("filtered indices = %v, want [2]", indices)
+	}
+	if !m.applySelectedFont() {
+		t.Fatal("applySelectedFont() = false, want true")
+	}
+	selected, ok := m.selectedElement()
+	if !ok || selected.Text == nil {
+		t.Fatal("expected selected text element")
+	}
+	if selected.Text.FontPath != jetBrainsPath {
+		t.Fatalf("selected font path = %q, want %q", selected.Text.FontPath, jetBrainsPath)
+	}
+}
+
+func TestFontPickerBackspaceUpdatesSearch(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Fonts = []FontOption{
+		{Name: "Default", Path: ""},
+		{Name: "Alpha", Path: "/tmp/alpha.ttf"},
+		{Name: "Alpine", Path: "/tmp/alpine.ttf"},
+	}
+	m.FontPickerOpen = true
+	m.FontPickerQuery = "alph"
+	m.FontPickerIndex = 1
+
+	if !m.removeFontSearchRune() {
+		t.Fatal("removeFontSearchRune() = false, want true")
+	}
+	if m.FontPickerQuery != "alp" {
+		t.Fatalf("font picker query = %q, want alp", m.FontPickerQuery)
+	}
+	indices := m.filteredFontIndices()
+	if len(indices) != 2 || indices[0] != 1 || indices[1] != 2 {
+		t.Fatalf("filtered indices = %v, want [1 2]", indices)
+	}
+}
+
+func TestFontPickerSearchModeUsesCtrlNAndCtrlP(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Fonts = []FontOption{
+		{Name: "Default", Path: ""},
+		{Name: "Alpha", Path: "/tmp/alpha.ttf"},
+		{Name: "Alpine", Path: "/tmp/alpine.ttf"},
+	}
+	m.FontPickerOpen = true
+	m.FontPickerSearch = true
+	m.FontPickerQuery = "alp"
+	m.FontPickerIndex = 1
+
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyCtrlN})
+	if m.FontPickerIndex != 2 {
+		t.Fatalf("font picker index after ctrl+n = %d, want 2", m.FontPickerIndex)
+	}
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyCtrlP})
+	if m.FontPickerIndex != 1 {
+		t.Fatalf("font picker index after ctrl+p = %d, want 1", m.FontPickerIndex)
+	}
+}
+
+func TestFontPickerEscapeSwitchesToBrowseMode(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Fonts = []FontOption{
+		{Name: "Default", Path: ""},
+		{Name: "Alpha", Path: "/tmp/alpha.ttf"},
+		{Name: "Alpine", Path: "/tmp/alpine.ttf"},
+	}
+	m.FontPickerOpen = true
+	m.FontPickerSearch = true
+	m.FontPickerQuery = "alp"
+	m.FontPickerIndex = 1
+
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if !m.FontPickerOpen {
+		t.Fatal("font picker closed on first esc, want browse mode")
+	}
+	if m.FontPickerSearch {
+		t.Fatal("font picker still in search mode after esc")
+	}
+	if m.FontPickerQuery != "alp" {
+		t.Fatalf("font picker query = %q, want alp", m.FontPickerQuery)
+	}
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	if !m.FontPickerSearch {
+		t.Fatal("font picker did not return to search mode after /")
+	}
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.FontPickerSearch {
+		t.Fatal("font picker still in search mode after second search esc")
+	}
+
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if m.FontPickerIndex != 2 {
+		t.Fatalf("font picker index after browse j = %d, want 2", m.FontPickerIndex)
+	}
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.FontPickerOpen {
+		t.Fatal("font picker still open after second esc")
+	}
+}
+
+func TestFontPickerBrowseModePagesWithCtrlDAndCtrlU(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Fonts = []FontOption{{Name: "Default", Path: ""}}
+	for i := 1; i <= 12; i++ {
+		m.Fonts = append(m.Fonts, FontOption{Name: fmt.Sprintf("Font-%02d", i), Path: fmt.Sprintf("/tmp/font-%02d.ttf", i)})
+	}
+	m.FontPickerOpen = true
+	m.FontPickerSearch = false
+	m.FontPickerIndex = 1
+
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	if m.FontPickerIndex != 8 {
+		t.Fatalf("font picker index after ctrl+d = %d, want 8", m.FontPickerIndex)
+	}
+	m.handleFontPickerKey(tea.KeyMsg{Type: tea.KeyCtrlU})
+	if m.FontPickerIndex != 1 {
+		t.Fatalf("font picker index after ctrl+u = %d, want 1", m.FontPickerIndex)
+	}
+}
+
+func writeTestFont(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, goregular.TTF, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
 }

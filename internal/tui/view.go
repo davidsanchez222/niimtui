@@ -28,6 +28,10 @@ var (
 				Bold(true).
 				Foreground(lipgloss.Color("111"))
 
+	propertySelectedStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("229"))
+
 	mutedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241"))
 
@@ -240,8 +244,13 @@ func propertyPanelLines(m Model, width int) []string {
 		lines = append(lines,
 			"",
 			propertyItem("Text", element.Text.Value),
-			propertyItem("Font", fmt.Sprintf("%.0f", element.Text.FontSize)),
+			propertyItem("Font Size", fmt.Sprintf("%.0f", element.Text.FontSize)),
+			propertyItem("Font", truncateText(m.selectedFontName(element.Text.FontPath), sidebarValueWidth("Font", width))),
+			helpItem("f", "choose font"),
 		)
+		if m.FontPickerOpen {
+			lines = append(lines, fontPickerLines(m, width)...)
+		}
 	}
 	if element.QR != nil {
 		lines = append(lines,
@@ -274,6 +283,7 @@ func footerLines(m Model, width int) []string {
 		helpItem("hjkl", "move"),
 		helpItem("shift+arrows", "fast move"),
 		helpItem("+/-", "font"),
+		helpItem("f", "font face"),
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "preview"),
@@ -296,6 +306,66 @@ func propertyItem(label, value string) string {
 
 func propertyLabel(label string) string {
 	return keyStyle.Render(label + ":")
+}
+
+func fontPickerLines(m Model, width int) []string {
+	if len(m.Fonts) == 0 {
+		return []string{mutedStyle.Render("No fonts found")}
+	}
+	indices := m.filteredFontIndices()
+	query := truncateText(m.FontPickerQuery, max(width-len("Search: ")-1, 1))
+	searchValue := query
+	if m.FontPickerSearch {
+		searchValue += "|"
+	}
+	help := "browse: / search j/k ctrl+d/u"
+	if m.FontPickerSearch {
+		help = "search: type ctrl+n/p esc"
+	}
+	lines := []string{
+		propertyItem("Search", searchValue),
+		mutedStyle.Render(help),
+	}
+	if len(indices) == 0 {
+		return append(lines, mutedStyle.Render("No matches"))
+	}
+	selectedPosition := 0
+	for i, index := range indices {
+		if index == m.FontPickerIndex {
+			selectedPosition = i
+			break
+		}
+	}
+	start := selectedPosition - fontPickerPageSize/2
+	if start < 0 {
+		start = 0
+	}
+	if start+fontPickerPageSize > len(indices) {
+		start = max(len(indices)-fontPickerPageSize, 0)
+	}
+	end := min(start+fontPickerPageSize, len(indices))
+	for i := start; i < end; i++ {
+		fontIndex := indices[i]
+		prefix := "  "
+		style := mutedStyle
+		if fontIndex == m.FontPickerIndex {
+			prefix = "> "
+			style = propertySelectedStyle
+		}
+		name := truncateText(m.Fonts[fontIndex].Name, max(width-2, 1))
+		lines = append(lines, style.Render(prefix+name))
+	}
+	return lines
+}
+
+func (m Model) selectedFontName(fontPath string) string {
+	fontPath = strings.TrimSpace(fontPath)
+	for _, font := range m.Fonts {
+		if strings.TrimSpace(font.Path) == fontPath {
+			return font.Name
+		}
+	}
+	return fontDisplayName(fontPath)
 }
 
 func reconnectHelp(m Model) string {
