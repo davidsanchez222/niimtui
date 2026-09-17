@@ -89,6 +89,58 @@ func TestDoubleClickQRElementBeginsEditing(t *testing.T) {
 	}
 }
 
+func TestArrowKeysMoveSelectedElement(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	initial, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element")
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRight}) {
+		t.Fatal("right arrow was not handled")
+	}
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyDown}) {
+		t.Fatal("down arrow was not handled")
+	}
+	updated, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element after movement")
+	}
+	if updated.XMM != initial.XMM+1 || updated.YMM != initial.YMM+1 {
+		t.Fatalf("position = %.1f, %.1f; want %.1f, %.1f", updated.XMM, updated.YMM, initial.XMM+1, initial.YMM+1)
+	}
+}
+
+func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	initial, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element")
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("]")}) {
+		t.Fatal("] was not handled")
+	}
+	grown, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element after grow")
+	}
+	if grown.WidthMM <= initial.WidthMM || grown.HeightMM <= initial.HeightMM {
+		t.Fatalf("grown size = %.1f x %.1f; want larger than %.1f x %.1f", grown.WidthMM, grown.HeightMM, initial.WidthMM, initial.HeightMM)
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("[")}) {
+		t.Fatal("[ was not handled")
+	}
+	shrunk, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element after shrink")
+	}
+	if shrunk.WidthMM >= grown.WidthMM || shrunk.HeightMM >= grown.HeightMM {
+		t.Fatalf("shrunk size = %.1f x %.1f; want smaller than %.1f x %.1f", shrunk.WidthMM, shrunk.HeightMM, grown.WidthMM, grown.HeightMM)
+	}
+}
+
 func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
 	m := NewModel(50, 30, "rect", "/tmp/example.ttf", PrintConfig{})
 	initial, ok := m.selectedElement()
