@@ -280,8 +280,9 @@ func footerLines(m Model, width int) []string {
 		helpItem("r", "QR"),
 		helpItem("i", "edit"),
 		helpItem("del", "remove"),
-		helpItem("hjkl", "move"),
+		helpItem("arrows/hjkl", "move"),
 		helpItem("shift+arrows", "fast move"),
+		helpItem("[]/{}", "resize"),
 		helpItem("+/-", "inc/dec font size"),
 		helpItem("f", "choose font"),
 	}, "  ")

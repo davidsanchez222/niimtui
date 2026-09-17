@@ -123,13 +123,13 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.toggleFontPicker()
 	case "delete", "backspace":
 		return m.deleteSelected()
-	case "k":
+	case "k", "up":
 		return m.nudgeSelected(0, -1)
-	case "j":
+	case "j", "down":
 		return m.nudgeSelected(0, 1)
-	case "h":
+	case "h", "left":
 		return m.nudgeSelected(-1, 0)
-	case "l":
+	case "l", "right":
 		return m.nudgeSelected(1, 0)
 	case "shift+up":
 		return m.nudgeSelected(0, -5)
@@ -139,6 +139,14 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.nudgeSelected(-5, 0)
 	case "shift+right":
 		return m.nudgeSelected(5, 0)
+	case "]":
+		return m.resizeSelected(HandleBottomRight, 1, 1)
+	case "[":
+		return m.resizeSelected(HandleBottomRight, -1, -1)
+	case "}":
+		return m.resizeSelected(HandleBottomRight, 5, 5)
+	case "{":
+		return m.resizeSelected(HandleBottomRight, -5, -5)
 	case "+", "=":
 		return m.adjustSelectedFont(1)
 	case "-":

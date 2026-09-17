@@ -302,6 +302,20 @@ func (m *Model) nudgeSelected(dxMM, dyMM float64) bool {
 	return true
 }
 
+func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
+	element, ok := m.selectedElement()
+	if !ok {
+		return false
+	}
+	updated := resizeElement(element, handle, dxMM, dyMM)
+	clampElementToDocument(&updated, m.Document)
+	if !m.Document.UpdateElement(updated) {
+		return false
+	}
+	m.setStatus("Resized to %.1fmm x %.1fmm", updated.WidthMM, updated.HeightMM)
+	return true
+}
+
 func (m *Model) adjustSelectedFont(delta float64) bool {
 	element, ok := m.selectedElement()
 	if !ok || element.Text == nil {
