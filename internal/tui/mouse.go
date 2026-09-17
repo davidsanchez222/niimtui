@@ -177,8 +177,8 @@ func (m Model) handleAt(element label.Element, x, y int) (ResizeHandle, bool) {
 func (m Model) elementScreenRect(element label.Element) screenRect {
 	left := m.Canvas.X + 1 + int(math.Floor(element.XMM*m.Canvas.CellsPerMMX))
 	top := m.Canvas.Y + 1 + int(math.Floor(element.YMM*m.Canvas.CellsPerMMY))
-	right := m.Canvas.X + 1 + int(math.Ceil((element.XMM+element.WidthMM)*m.Canvas.CellsPerMMX))
-	bottom := m.Canvas.Y + 1 + int(math.Ceil((element.YMM+element.HeightMM)*m.Canvas.CellsPerMMY))
+	right := m.Canvas.X + int(math.Ceil((element.XMM+element.WidthMM)*m.Canvas.CellsPerMMX))
+	bottom := m.Canvas.Y + int(math.Ceil((element.YMM+element.HeightMM)*m.Canvas.CellsPerMMY))
 
 	maxX := m.Canvas.X + m.Canvas.Width - 2
 	maxY := m.Canvas.Y + m.Canvas.Height - 2
