@@ -36,9 +36,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "c" {
 			return m, m.reconnectPrinter()
 		}
-		if msg.String() == "m" {
-			return m, m.enableMouseEditing()
-		}
 		if m.handleCommandKey(msg) {
 			return m, nil
 		}
@@ -69,16 +66,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
-}
-
-func (m *Model) enableMouseEditing() tea.Cmd {
-	if m.MouseEnabled {
-		m.setStatus("Mouse editing already enabled.")
-		return nil
-	}
-	m.MouseEnabled = true
-	m.setStatus("Mouse editing enabled.")
-	return tea.EnableMouseCellMotion
 }
 
 func (m *Model) reconnectPrinter() tea.Cmd {

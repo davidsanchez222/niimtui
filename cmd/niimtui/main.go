@@ -37,6 +37,8 @@ func run(args []string) error {
 		return runServe(args[1:])
 	case "print":
 		return runPrint(args[1:])
+	case "calibrate":
+		return runCalibrate(args[1:])
 	case "probe":
 		return runProbe(args[1:])
 	case "scan":
@@ -56,6 +58,75 @@ func run(args []string) error {
 		printUsage()
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runCalibrate(args []string) error {
+	fs := flag.NewFlagSet("calibrate", flag.ContinueOnError)
+	configPath := fs.String("config", "", "path to config JSON")
+	printer := fs.String("printer", "", "printer profile selector")
+	presetName := fs.String("preset", "", "label preset")
+	copies := fs.Int("copies", 1, "number of copies")
+	previewOut := fs.String("preview-out", "", "write calibration preview PNG to this path")
+	noPrint := fs.Bool("no-print", false, "render preview only and skip printing; requires --preview-out")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *noPrint && *previewOut == "" {
+		return errors.New("-no-print requires -preview-out")
+	}
+
+	cfg, err := config.LoadOptional(*configPath)
+	if err != nil {
+		return err
+	}
+	printerProfile, _, err := printerForSelector(cfg, *printer)
+	if err != nil {
+		return err
+	}
+	preset, err := calibrationPreset(cfg, printerProfile, *presetName)
+	if err != nil {
+		return err
+	}
+	rendered, err := render.CalibrationLabel(preset.WidthMM, preset.HeightMM, preset.Shape)
+	if err != nil {
+		return err
+	}
+	if *previewOut != "" {
+		previewRendered, err := render.FitToPrinterWidth(rendered, printerProfile.Model)
+		if err != nil {
+			return err
+		}
+		offsetX, offsetY := render.ModelPrintOffsetMM(printerProfile.Model, printerProfile.Defaults.OffsetXMM, printerProfile.Defaults.OffsetYMM)
+		previewRendered, err = render.ApplyPrintOffset(previewRendered, offsetX, offsetY)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(*previewOut, previewRendered.PreviewPNG, 0o644); err != nil {
+			return fmt.Errorf("write preview: %w", err)
+		}
+		if *noPrint {
+			return nil
+		}
+	}
+	svc, err := service.New(cfg)
+	if err != nil {
+		return err
+	}
+	resp := svc.PrintImage(context.Background(), printerProfile.Name, rendered, *copies)
+	return printJSON(resp)
+}
+
+func calibrationPreset(cfg config.Config, printer config.PrinterProfile, presetName string) (config.LabelPreset, error) {
+	presetName = strings.TrimSpace(presetName)
+	if presetName == "" {
+		return defaultPresetForPrinter(cfg, printer)
+	}
+	for _, preset := range cfg.Presets {
+		if preset.Name == presetName {
+			return preset, nil
+		}
+	}
+	return config.LabelPreset{}, fmt.Errorf("unknown preset %q", presetName)
 }
 
 func runServe(args []string) error {
@@ -268,6 +339,8 @@ func runTUI(args []string) error {
 	printerModel := ""
 	deviceName := ""
 	identifier := ""
+	offsetXMM := 0.0
+	offsetYMM := 0.0
 	shouldLoadConfig := *widthMM <= 0 || *heightMM <= 0 || *configPath != "" || *printer != ""
 	if !shouldLoadConfig {
 		if path, err := config.DefaultPath(); err == nil {
@@ -293,6 +366,8 @@ func runTUI(args []string) error {
 			printerModel = printerProfile.Model
 			deviceName = printerProfile.DeviceName
 			identifier = printerProfile.Identifier
+			offsetXMM = printerProfile.Defaults.OffsetXMM
+			offsetYMM = printerProfile.Defaults.OffsetYMM
 		}
 		if *widthMM <= 0 || *heightMM <= 0 {
 			preset, err := defaultPresetForPrinter(cfg, printerProfile)
@@ -325,7 +400,7 @@ func runTUI(args []string) error {
 		return errors.New("-height-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 
-	return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, Copies: 1})
+	return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1})
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {
@@ -373,6 +448,7 @@ func printUsage() {
 Usage:
   niimtui serve --config ./config.example.json
   niimtui setup
+  niimtui calibrate --config ./config.example.json --printer b1-round --preset b1-50x30 --preview-out ./calibration.png
   niimtui print --config ./config.example.json --printer d110-desk --image ./testlabels/preview.png
   niimtui probe --config ./config.example.json --printer d110-desk
   niimtui scan --config ./config.example.json --transport ble

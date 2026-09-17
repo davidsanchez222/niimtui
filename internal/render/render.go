@@ -39,7 +39,6 @@ func QRLabel(req api.PrintRequest, printer config.PrinterProfile, preset config.
 
 	widthPx := mmToPx(preset.WidthMM)
 	heightPx := mmToPx(preset.HeightMM)
-	widthPx, heightPx = constrainToPrinter(printer, widthPx, heightPx)
 	marginPx := mmToPx(preset.MarginsMM)
 	if widthPx <= 0 || heightPx <= 0 {
 		return Result{}, fmt.Errorf("invalid output size")
@@ -76,7 +75,7 @@ func QRLabel(req api.PrintRequest, printer config.PrinterProfile, preset config.
 		return Result{}, fmt.Errorf("encode preview: %w", err)
 	}
 
-	return Result{
+	result := Result{
 		Image:        canvas,
 		WidthPx:      widthPx,
 		HeightPx:     heightPx,
@@ -85,7 +84,13 @@ func QRLabel(req api.PrintRequest, printer config.PrinterProfile, preset config.
 		Rotation:     rotation,
 		PreviewPNG:   preview.Bytes(),
 		PreviewBytes: preview.Len(),
-	}, nil
+	}
+	fitted, err := FitToPrinterWidth(result, printer.Model)
+	if err != nil {
+		return Result{}, err
+	}
+	offsetX, offsetY := ModelPrintOffsetMM(printer.Model, printer.Defaults.OffsetXMM, printer.Defaults.OffsetYMM)
+	return ApplyPrintOffset(fitted, offsetX, offsetY)
 }
 
 func composeLabel(canvas *image.Gray, printable image.Rectangle, preset config.LabelPreset, req api.PrintRequest) error {
@@ -176,19 +181,6 @@ func chooseStackedRectLayout(printable image.Rectangle, layout api.Layout, face 
 		return fitCentered(image.Rect(0, 0, 1, 1), printable), image.Rectangle{}, true
 	}
 	return fitCentered(image.Rect(0, 0, 1, 1), qrRect), textRect, true
-}
-
-func constrainToPrinter(printer config.PrinterProfile, widthPx, heightPx int) (int, int) {
-	maxWidth := maxPrintableWidthPx(printer.Model)
-	if maxWidth == 0 {
-		return widthPx, heightPx
-	}
-	shortSide := min(widthPx, heightPx)
-	if shortSide <= maxWidth {
-		return widthPx, heightPx
-	}
-	scale := float64(maxWidth) / float64(shortSide)
-	return int(math.Round(float64(widthPx) * scale)), int(math.Round(float64(heightPx) * scale))
 }
 
 func maxPrintableWidthPx(model string) int {

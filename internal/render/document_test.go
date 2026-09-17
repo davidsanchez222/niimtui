@@ -6,6 +6,8 @@ import (
 	"image/png"
 	"testing"
 
+	"niimtui/internal/api"
+	"niimtui/internal/config"
 	"niimtui/internal/label"
 )
 
@@ -87,6 +89,41 @@ func TestRenderDocumentDrawsQR(t *testing.T) {
 	}
 	if blackPixels == 0 {
 		t.Fatal("expected rendered QR to produce black pixels")
+	}
+}
+
+func TestCalibrationLabelDrawsAxisAlignedPattern(t *testing.T) {
+	result, err := CalibrationLabel(50, 30, "rect")
+	if err != nil {
+		t.Fatalf("CalibrationLabel() error = %v", err)
+	}
+	if result.WidthPx != 400 || result.HeightPx != 240 {
+		t.Fatalf("calibration size = %dx%d, want 400x240", result.WidthPx, result.HeightPx)
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		t.Fatalf("render image type = %T, want *image.Gray", result.Image)
+	}
+	if gray.GrayAt(24, 24).Y != 0 {
+		t.Fatalf("top-left border pixel = %d, want black", gray.GrayAt(24, 24).Y)
+	}
+	if gray.GrayAt(result.WidthPx/2, result.HeightPx/2).Y != 0 {
+		t.Fatalf("center cross pixel = %d, want black", gray.GrayAt(result.WidthPx/2, result.HeightPx/2).Y)
+	}
+}
+
+func TestQRLabelConstrainsB1Width(t *testing.T) {
+	result, err := QRLabel(api.PrintRequest{
+		QR: api.QRRequest{Text: "https://example.com"},
+	}, config.PrinterProfile{Model: "B1"}, config.LabelPreset{WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: string(api.LayoutQROnly)})
+	if err != nil {
+		t.Fatalf("QRLabel() error = %v", err)
+	}
+	if result.WidthPx != 384 {
+		t.Fatalf("width = %d, want 384", result.WidthPx)
+	}
+	if result.HeightPx != 240 {
+		t.Fatalf("height = %d, want 240", result.HeightPx)
 	}
 }
 
