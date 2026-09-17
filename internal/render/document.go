@@ -115,12 +115,24 @@ func drawQRElement(dst draw.Image, element label.Element) error {
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return nil
 	}
+	if inset := qrElementInsetPx(rect); inset > 0 {
+		rect = rect.Inset(inset)
+	}
 	code, err := qrcode.New(strings.TrimSpace(element.QR.Value), qrcode.Medium)
 	if err != nil {
 		return fmt.Errorf("generate qr: %w", err)
 	}
 	code.DisableBorder = true
 	return drawQR(dst, code, rect)
+}
+
+func qrElementInsetPx(rect image.Rectangle) int {
+	inset := textPaddingPx()
+	maxInset := (min(rect.Dx(), rect.Dy()) - 1) / 2
+	if maxInset <= 0 {
+		return 0
+	}
+	return min(inset, maxInset)
 }
 
 func drawTextElement(dst draw.Image, element label.Element) error {
