@@ -155,6 +155,41 @@ func TestRequiredTextHeightIncreasesWhenWidthShrinks(t *testing.T) {
 	}
 }
 
+func TestRequiredTextHeightUsesTightTextPadding(t *testing.T) {
+	element := label.NewTextElement("title", "Box", 0, 0, 30, 8, 18)
+	height, err := RequiredTextHeightMM(element, 30)
+	if err != nil {
+		t.Fatalf("RequiredTextHeightMM() error = %v", err)
+	}
+	layout, err := LayoutTextWithFontPath(element.Text.Value, element.Text.FontSize, element.Text.FontPath, mmToPx(30)-textPaddingPx()*2)
+	if err != nil {
+		t.Fatalf("LayoutTextWithFontPath() error = %v", err)
+	}
+	if layout.BlockHeightPx > layout.LineHeightPx {
+		t.Fatalf("block height = %d, want no greater than line height %d for tight visual bounds", layout.BlockHeightPx, layout.LineHeightPx)
+	}
+	want := pxToMM(layout.BlockHeightPx + 2*textPaddingPx())
+	if height != want {
+		t.Fatalf("height = %.2f, want %.2f", height, want)
+	}
+	if textPaddingPx() != 4 {
+		t.Fatalf("textPaddingPx() = %d, want 4 for 0.5mm at 8 dots/mm", textPaddingPx())
+	}
+}
+
+func TestLayoutTextKeepsTopInkSafety(t *testing.T) {
+	layout, err := LayoutText("Box", 18, mmToPx(30))
+	if err != nil {
+		t.Fatalf("LayoutText() error = %v", err)
+	}
+	if layout.AscentPx <= 0 {
+		t.Fatalf("ascent = %d, want positive", layout.AscentPx)
+	}
+	if layout.BlockHeightPx <= textInkTopSafetyPx {
+		t.Fatalf("block height = %d, want greater than safety %d", layout.BlockHeightPx, textInkTopSafetyPx)
+	}
+}
+
 func TestRenderDocumentLeavesTextTopPadding(t *testing.T) {
 	element := label.NewTextElement("title", "Storage Box 12", 5, 4, 30, 8, 18)
 	doc := label.NewDocument(50, 30)
