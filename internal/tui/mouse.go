@@ -2,6 +2,7 @@ package tui
 
 import (
 	"math"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -12,6 +13,7 @@ import (
 const (
 	minElementWidthMM  = 6.0
 	minElementHeightMM = 4.0
+	doubleClickWindow  = 500 * time.Millisecond
 )
 
 type screenRect struct {
@@ -33,7 +35,7 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if msg.Button != tea.MouseButtonLeft {
 			return m, nil
 		}
-		m.handleMousePress(msg)
+		m.handleMousePressAt(msg, time.Now())
 	case tea.MouseActionMotion:
 		if m.Drag.Mode == DragNone {
 			return m, nil
@@ -50,6 +52,19 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleMousePress(msg tea.MouseMsg) {
+	m.handleMousePressAt(msg, time.Now())
+}
+
+func (m *Model) handleMousePressAt(msg tea.MouseMsg, now time.Time) {
+	clickedElement, clicked := m.elementAt(msg.X, msg.Y)
+	if clicked && m.isDoubleClick(clickedElement, msg, now) && isEditableElement(clickedElement) {
+		m.SelectedID = clickedElement.ID
+		m.Drag = DragState{}
+		m.LastClick = ClickState{}
+		_ = m.beginEditingSelected()
+		return
+	}
+
 	if element, ok := m.selectedElement(); ok {
 		if handle, ok := m.handleAt(element, msg.X, msg.Y); ok {
 			m.Drag = DragState{
@@ -63,6 +78,7 @@ func (m *Model) handleMousePress(msg tea.MouseMsg) {
 			return
 		}
 		if m.hitElement(element, msg.X, msg.Y) {
+			m.recordClick(element, msg, now)
 			m.Drag = DragState{
 				Mode:            DragMove,
 				StartMouseX:     msg.X,
@@ -74,14 +90,35 @@ func (m *Model) handleMousePress(msg tea.MouseMsg) {
 		}
 	}
 
-	if element, ok := m.elementAt(msg.X, msg.Y); ok {
+	if clicked {
+		element := clickedElement
 		m.SelectedID = element.ID
+		m.recordClick(element, msg, now)
 		m.setStatus("Selected %q.", selectedLabel(element))
 		return
 	}
 
 	m.SelectedID = ""
+	m.LastClick = ClickState{}
 	m.setStatus("No selection.")
+}
+
+func (m Model) isDoubleClick(element label.Element, msg tea.MouseMsg, now time.Time) bool {
+	if m.LastClick.ElementID == "" || m.LastClick.ElementID != element.ID || m.LastClick.At.IsZero() {
+		return false
+	}
+	if now.Sub(m.LastClick.At) > doubleClickWindow {
+		return false
+	}
+	return absInt(msg.X-m.LastClick.X) <= 1 && absInt(msg.Y-m.LastClick.Y) <= 1
+}
+
+func (m *Model) recordClick(element label.Element, msg tea.MouseMsg, now time.Time) {
+	m.LastClick = ClickState{ElementID: element.ID, X: msg.X, Y: msg.Y, At: now}
+}
+
+func isEditableElement(element label.Element) bool {
+	return element.Text != nil || element.QR != nil
 }
 
 func (m *Model) handleMouseMotion(msg tea.MouseMsg) {

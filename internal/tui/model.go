@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -83,6 +84,13 @@ type DragState struct {
 	OriginalElement label.Element
 }
 
+type ClickState struct {
+	ElementID string
+	X         int
+	Y         int
+	At        time.Time
+}
+
 type Model struct {
 	Width  int
 	Height int
@@ -92,6 +100,7 @@ type Model struct {
 
 	SelectedID string
 	Drag       DragState
+	LastClick  ClickState
 	NextID     int
 	FontPath   string
 	Fonts      []FontOption
