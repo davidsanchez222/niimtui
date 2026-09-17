@@ -282,8 +282,8 @@ func footerLines(m Model, width int) []string {
 		helpItem("del", "remove"),
 		helpItem("hjkl", "move"),
 		helpItem("shift+arrows", "fast move"),
-		helpItem("+/-", "font"),
-		helpItem("f", "font face"),
+		helpItem("+/-", "inc/dec font size"),
+		helpItem("f", "choose font"),
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "preview"),

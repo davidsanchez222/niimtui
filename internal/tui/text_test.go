@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/image/font/gofont/goregular"
@@ -40,6 +41,51 @@ func TestResizeQRElementKeepsSquareAspectFromVerticalHandle(t *testing.T) {
 	}
 	if updated.HeightMM <= original.HeightMM {
 		t.Fatalf("QR height = %.2f, want greater than %.2f", updated.HeightMM, original.HeightMM)
+	}
+}
+
+func TestDoubleClickTextElementBeginsEditing(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Canvas = newCanvas(80, 24, m.Document.WidthMM, m.Document.HeightMM)
+	element, ok := m.selectedElement()
+	if !ok || element.Text == nil {
+		t.Fatal("expected selected text element")
+	}
+	x, y := elementClickPoint(m, element)
+	now := time.Now()
+
+	m.handleMousePressAt(leftClick(x, y), now)
+	m.handleMousePressAt(leftClick(x, y), now.Add(100*time.Millisecond))
+
+	if !m.EditingText {
+		t.Fatal("double click did not begin text editing")
+	}
+	if m.TextBuffer != element.Text.Value {
+		t.Fatalf("text buffer = %q, want %q", m.TextBuffer, element.Text.Value)
+	}
+}
+
+func TestDoubleClickQRElementBeginsEditing(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Canvas = newCanvas(80, 24, m.Document.WidthMM, m.Document.HeightMM)
+	m.addQRElement()
+	m.EditingText = false
+	m.TextBuffer = ""
+	element, ok := m.selectedElement()
+	if !ok || element.QR == nil {
+		t.Fatal("expected selected QR element")
+	}
+	x, y := elementClickPoint(m, element)
+	now := time.Now()
+
+	m.handleMousePressAt(leftClick(x, y), now)
+	m.handleMousePressAt(leftClick(x, y), now.Add(100*time.Millisecond))
+
+	if !m.EditingText {
+		t.Fatal("double click did not begin QR editing")
+	}
+	if m.TextBuffer != element.QR.Value {
+		t.Fatalf("text buffer = %q, want %q", m.TextBuffer, element.QR.Value)
 	}
 }
 
@@ -266,4 +312,13 @@ func writeTestFont(t *testing.T, name string) string {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	return path
+}
+
+func leftClick(x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+}
+
+func elementClickPoint(m Model, element label.Element) (int, int) {
+	r := m.elementScreenRect(element)
+	return r.left + max((r.right-r.left)/2, 1), r.top + max((r.bottom-r.top)/2, 1)
 }
