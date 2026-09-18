@@ -16,6 +16,8 @@ const textPaddingMM = 0.5
 
 const textInkTopSafetyPx = 10
 
+const textInkBottomSafetyPx = 4
+
 const textThreshold = 192
 
 type TextLayout struct {
@@ -189,7 +191,7 @@ func layoutTextWithFace(text string, face font.Face, maxWidthPx int) TextLayout 
 		Lines:          lines,
 		LineHeightPx:   lineHeight,
 		AscentPx:       -inkTop + textInkTopSafetyPx,
-		BlockHeightPx:  blockHeight + textInkTopSafetyPx,
+		BlockHeightPx:  blockHeight + textInkTopSafetyPx + textInkBottomSafetyPx,
 		MaxLineWidthPx: maxLineWidth,
 	}
 }

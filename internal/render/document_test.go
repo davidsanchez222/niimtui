@@ -236,8 +236,9 @@ func TestRequiredTextHeightUsesTightTextPadding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LayoutTextWithFontPath() error = %v", err)
 	}
-	if layout.BlockHeightPx > layout.LineHeightPx+textInkTopSafetyPx {
-		t.Fatalf("block height = %d, want no greater than line height %d plus safety %d", layout.BlockHeightPx, layout.LineHeightPx, textInkTopSafetyPx)
+	safetyPx := textInkTopSafetyPx + textInkBottomSafetyPx
+	if layout.BlockHeightPx > layout.LineHeightPx+safetyPx {
+		t.Fatalf("block height = %d, want no greater than line height %d plus safety %d", layout.BlockHeightPx, layout.LineHeightPx, safetyPx)
 	}
 	want := pxToMM(layout.BlockHeightPx + 2*textPaddingPx())
 	if height != want {
@@ -248,7 +249,7 @@ func TestRequiredTextHeightUsesTightTextPadding(t *testing.T) {
 	}
 }
 
-func TestLayoutTextKeepsTopInkSafety(t *testing.T) {
+func TestLayoutTextKeepsInkSafety(t *testing.T) {
 	layout, err := LayoutText("Box", 18, mmToPx(30))
 	if err != nil {
 		t.Fatalf("LayoutText() error = %v", err)
@@ -256,8 +257,8 @@ func TestLayoutTextKeepsTopInkSafety(t *testing.T) {
 	if layout.AscentPx <= 0 {
 		t.Fatalf("ascent = %d, want positive", layout.AscentPx)
 	}
-	if layout.BlockHeightPx <= textInkTopSafetyPx {
-		t.Fatalf("block height = %d, want greater than safety %d", layout.BlockHeightPx, textInkTopSafetyPx)
+	if layout.BlockHeightPx <= textInkTopSafetyPx+textInkBottomSafetyPx {
+		t.Fatalf("block height = %d, want greater than safety %d", layout.BlockHeightPx, textInkTopSafetyPx+textInkBottomSafetyPx)
 	}
 }
 
