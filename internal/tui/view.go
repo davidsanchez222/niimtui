@@ -186,21 +186,23 @@ func renderCanvasLine(row []rune) string {
 
 func devicePanelLines(m Model, width int) []string {
 	lines := []string{
-		propertyTitleStyle.Render("Printer"),
+		centerStyledLine(propertyTitleStyle.Render("Printer"), width),
 		"",
-		"┌──────────────────────┐",
-		"│                      │",
-		"│       printer        │",
-		"│     placeholder      │",
-		"│                      │",
-		"└──────────────────────┘",
+	}
+	art := printerArt(m.Print.Model, m.PrinterArtVariant)
+	if len(art) > 0 {
+		lines = append(lines, artLines(art, width)...)
+	}
+	lines = append(lines,
 		"",
 		propertyItem("Model", sidebarValue("Model", m.Print.Model, "none", width)),
+		propertyItem("Art", sidebarValue("Art", printerArtVariantLabel(m.Print.Model, m.PrinterArtVariant), "none", width)),
+		"",
 		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
 		propertyItem("Device", sidebarValue("Device", m.Print.DeviceName, emptyFallback(m.Print.Identifier, "unknown"), width)),
 		"",
 		connectionStatusLine(m),
-	}
+	)
 	if matched := connectionMetaString(m.ConnectMeta, "matched_name"); matched != "" && matched != m.Print.DeviceName {
 		lines = append(lines, propertyItem("BLE", truncateText(matched, sidebarValueWidth("BLE", width))))
 	}
@@ -211,6 +213,14 @@ func devicePanelLines(m Model, width int) []string {
 		lines = append(lines, "", propertyLabel("Error"), truncateText(m.ConnectErr, width))
 	}
 	return padLines(lines, width)
+}
+
+func artLines(lines []string, width int) []string {
+	rendered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		rendered = append(rendered, truncateText(line, width))
+	}
+	return rendered
 }
 
 func propertyPanelLines(m Model, width int) []string {
@@ -285,6 +295,7 @@ func footerLines(m Model, width int) []string {
 		helpItem("[]/{}", "resize"),
 		helpItem("+/-", "inc/dec font size"),
 		helpItem("f", "choose font"),
+		helpItem("v", "art"),
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "preview"),

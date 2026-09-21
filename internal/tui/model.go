@@ -115,6 +115,8 @@ type Model struct {
 	ConnectErr  string
 	ConnectMeta map[string]any
 
+	PrinterArtVariant int
+
 	EditingText bool
 	TextBuffer  string
 	StatusBase  string

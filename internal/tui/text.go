@@ -316,6 +316,17 @@ func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
 	return true
 }
 
+func (m *Model) cyclePrinterArtVariant() bool {
+	count := printerArtVariantCount(m.Print.Model)
+	if count <= 1 {
+		m.setStatus("No alternate printer art for %s.", emptyFallback(m.Print.Model, "unknown model"))
+		return true
+	}
+	m.PrinterArtVariant = positiveMod(m.PrinterArtVariant+1, count)
+	m.setStatus("Printer art: %s", printerArtVariantLabel(m.Print.Model, m.PrinterArtVariant))
+	return true
+}
+
 func (m *Model) adjustSelectedFont(delta float64) bool {
 	element, ok := m.selectedElement()
 	if !ok || element.Text == nil {
