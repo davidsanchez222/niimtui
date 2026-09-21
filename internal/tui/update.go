@@ -121,6 +121,8 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.beginEditingSelected()
 	case "f":
 		return m.toggleFontPicker()
+	case "v":
+		return m.cyclePrinterArtVariant()
 	case "delete", "backspace":
 		return m.deleteSelected()
 	case "k", "up":

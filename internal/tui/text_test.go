@@ -186,6 +186,45 @@ func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
 	}
 }
 
+func TestPrinterArtLoadsModelVariants(t *testing.T) {
+	for _, model := range []string{"B1", "D110"} {
+		variants := printerArtVariants(model)
+		if len(variants) != 1 {
+			t.Fatalf("printerArtVariants(%q) count = %d, want 1", model, len(variants))
+		}
+		for _, variant := range variants {
+			if len(variant.Lines) == 0 {
+				t.Fatalf("variant %q has no lines", variant.Name)
+			}
+		}
+	}
+}
+
+func TestPrinterArtFallsBackForUnknownModel(t *testing.T) {
+	art := printerArt("", 99)
+	if len(art) == 0 {
+		t.Fatal("printerArt() returned no fallback art")
+	}
+	if label := printerArtVariantLabel("", 99); label != "generic 1/1" {
+		t.Fatalf("fallback label = %q, want generic 1/1", label)
+	}
+}
+
+func TestCyclePrinterArtVariantWraps(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{Model: "B1"})
+	count := printerArtVariantCount(m.Print.Model)
+	if count != 1 {
+		t.Fatalf("variant count = %d, want 1", count)
+	}
+
+	if !m.cyclePrinterArtVariant() {
+		t.Fatal("cyclePrinterArtVariant() = false, want true")
+	}
+	if m.PrinterArtVariant != 0 {
+		t.Fatalf("variant = %d, want 0", m.PrinterArtVariant)
+	}
+}
+
 func TestApplySelectedFontUpdatesSelectedTextAndDefault(t *testing.T) {
 	fontPath := writeTestFont(t, "Go-Regular.ttf")
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
