@@ -1,0 +1,212 @@
+package tui
+
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"niimtui/internal/label"
+	"niimtui/internal/render"
+)
+
+const livePreviewDebounce = 150 * time.Millisecond
+
+type livePreviewTickMsg struct {
+	Seq int
+}
+
+type livePreviewRenderedMsg struct {
+	Seq      int
+	PNG      []byte
+	PNGHash  string
+	WidthPx  int
+	HeightPx int
+}
+
+type livePreviewFailedMsg struct {
+	Seq int
+	Err error
+}
+
+func livePreviewDebounceCmd(seq int) tea.Cmd {
+	return tea.Tick(livePreviewDebounce, func(time.Time) tea.Msg {
+		return livePreviewTickMsg{Seq: seq}
+	})
+}
+
+func renderLivePreviewCmd(m Model, seq int) tea.Cmd {
+	doc := m.Document
+	printConfig := m.Print
+	protocol := m.Preview.Protocol
+	return func() tea.Msg {
+		result, err := render.RenderDocument(doc)
+		if err != nil {
+			return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("render label: %w", err)}
+		}
+		result, err = preparePrintPreviewResult(result, printConfig)
+		if err != nil {
+			return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("fit preview: %w", err)}
+		}
+		if protocol == LivePreviewOpen {
+			if err := os.MkdirAll("testlabels", 0o755); err != nil {
+				return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("create preview directory: %w", err)}
+			}
+			if err := os.WriteFile(previewOutputPath, result.PreviewPNG, 0o644); err != nil {
+				return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("write preview: %w", err)}
+			}
+		}
+		return livePreviewRenderedMsg{
+			Seq:      seq,
+			PNG:      result.PreviewPNG,
+			PNGHash:  pngHash(result.PreviewPNG),
+			WidthPx:  result.WidthPx,
+			HeightPx: result.HeightPx,
+		}
+	}
+}
+
+func (m Model) handleLivePreviewRendered(msg livePreviewRenderedMsg) (Model, tea.Cmd) {
+	if msg.Seq != m.Preview.RequestedSeq || m.Preview.Protocol == LivePreviewDisabled {
+		return m, nil
+	}
+	m.Preview.RenderedSeq = msg.Seq
+	m.Preview.PNG = msg.PNG
+	m.Preview.PNGHash = msg.PNGHash
+	m.Preview.Err = ""
+	if m.Preview.Protocol == LivePreviewKitty || m.Preview.Protocol == LivePreviewITerm2 {
+		return m, terminalLivePreviewCmd(m)
+	}
+	if m.Preview.Protocol != LivePreviewOpen || msg.PNGHash == m.Preview.LastOpenHash {
+		return m, nil
+	}
+	m.Preview.LastOpenHash = msg.PNGHash
+	return m, openPreviewCmd(previewOutputPath)
+}
+
+func preparePrintPreviewResult(result render.Result, printConfig PrintConfig) (render.Result, error) {
+	if printConfig.Model == "" {
+		return result, nil
+	}
+	fitted, err := render.FitToPrinterWidth(result, printConfig.Model)
+	if err != nil {
+		return render.Result{}, err
+	}
+	offsetX, offsetY := render.ModelPrintOffsetMM(printConfig.Model, printConfig.OffsetXMM, printConfig.OffsetYMM)
+	return render.ApplyPrintOffset(fitted, offsetX, offsetY)
+}
+
+func openPreviewCmd(path string) tea.Cmd {
+	return func() tea.Msg {
+		_, _ = openPreviewFile(path)
+		return nil
+	}
+}
+
+func terminalLivePreviewCmd(m Model) tea.Cmd {
+	protocol := m.Preview.Protocol
+	png := append([]byte(nil), m.Preview.PNG...)
+	width := m.Width
+	height := m.Height
+	return func() tea.Msg {
+		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, width, height)
+		return nil
+	}
+}
+
+func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, width, height int) (int, error) {
+	cols, rows := livePreviewLegendCellSize(width)
+	left := max(width-cols-2, 1)
+	top := max(height-rows-1, 1)
+	escape := terminalImageEscape(protocol, png, cols, rows)
+	if escape == "" {
+		return 0, nil
+	}
+	return fmt.Fprintf(w, "\x1b7\x1b[%d;%dH%s\x1b8", top, left, escape)
+}
+
+func (m Model) livePreviewKey() string {
+	if m.Preview.Protocol == LivePreviewDisabled {
+		return ""
+	}
+	return documentPreviewKey(m.Document, m.Print)
+}
+
+func documentPreviewKey(doc label.Document, printConfig PrintConfig) string {
+	payload := struct {
+		Document  label.Document `json:"document"`
+		Model     string         `json:"model"`
+		OffsetXMM float64        `json:"offset_x_mm"`
+		OffsetYMM float64        `json:"offset_y_mm"`
+	}{
+		Document:  doc,
+		Model:     printConfig.Model,
+		OffsetXMM: printConfig.OffsetXMM,
+		OffsetYMM: printConfig.OffsetYMM,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Sprintf("%#v", payload)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func pngHash(png []byte) string {
+	sum := sha256.Sum256(png)
+	return hex.EncodeToString(sum[:])
+}
+
+func terminalImageEscape(protocol LivePreviewProtocol, png []byte, cols, rows int) string {
+	if len(png) == 0 || cols <= 0 || rows <= 0 {
+		return ""
+	}
+	encoded := base64.StdEncoding.EncodeToString(png)
+	switch protocol {
+	case LivePreviewKitty:
+		return kittyImageEscape(encoded, cols, rows)
+	case LivePreviewITerm2:
+		return fmt.Sprintf("\x1b]1337;File=inline=1;width=%dpx;height=%dpx;preserveAspectRatio=1:%s\a", cols*8, rows*16, encoded)
+	default:
+		return ""
+	}
+}
+
+func livePreviewLegendCellSize(width int) (int, int) {
+	cols := min(max(width/10, 10), 18)
+	rows := 4
+	cols = min(cols, max(width, 1))
+	return cols, rows
+}
+
+func kittyImageEscape(encoded string, cols, rows int) string {
+	const chunkSize = 4096
+	var b strings.Builder
+	for start := 0; start < len(encoded); start += chunkSize {
+		end := start + chunkSize
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		more := 0
+		if end < len(encoded) {
+			more = 1
+		}
+		if start == 0 {
+			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,c=%d,r=%d,m=%d;%s\x1b\\", cols, rows, more, encoded[start:end])
+			continue
+		}
+		fmt.Fprintf(&b, "\x1b_Gm=%d;%s\x1b\\", more, encoded[start:end])
+	}
+	return b.String()
+}
+
+func (m Model) hasTerminalLivePreview() bool {
+	return (m.Preview.Protocol == LivePreviewKitty || m.Preview.Protocol == LivePreviewITerm2) && len(m.Preview.PNG) > 0
+}
