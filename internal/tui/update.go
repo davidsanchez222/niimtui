@@ -3,6 +3,12 @@ package tui
 import tea "github.com/charmbracelet/bubbletea"
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	beforePreviewKey := m.livePreviewKey()
+	updated, cmd := m.update(msg)
+	return updated.withLivePreviewSchedule(beforePreviewKey, cmd)
+}
+
+func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	if m.EditingText {
 		switch msg := msg.(type) {
 		case tea.WindowSizeMsg:
@@ -28,7 +34,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshStatus()
 		return m, nil
 	case tea.MouseMsg:
-		return m.updateMouse(msg)
+		updated, cmd := m.updateMouse(msg)
+		if model, ok := updated.(Model); ok {
+			return model, cmd
+		}
+		return m, cmd
 	case tea.KeyMsg:
 		if m.FontPickerOpen && m.handleFontPickerKey(msg) {
 			return m, nil
@@ -55,6 +65,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case printResultMsg:
 		m.handlePrintResult(msg)
 		return m, nil
+	case livePreviewTickMsg:
+		if msg.Seq != m.Preview.RequestedSeq || m.Preview.Protocol == LivePreviewDisabled {
+			return m, nil
+		}
+		return m, renderLivePreviewCmd(m, msg.Seq)
+	case livePreviewRenderedMsg:
+		return m.handleLivePreviewRendered(msg)
+	case livePreviewFailedMsg:
+		if msg.Seq == m.Preview.RequestedSeq {
+			m.Preview.Err = msg.Err.Error()
+			m.setStatus("Realtime preview failed: %v", msg.Err)
+		}
+		return m, nil
 	case printerConnectedMsg:
 		m.Connection = ConnectionConnected
 		m.ConnectErr = ""
@@ -69,6 +92,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) withLivePreviewSchedule(beforeKey string, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if m.Preview.Protocol == LivePreviewDisabled {
+		return m, cmd
+	}
+	afterKey := m.livePreviewKey()
+	if beforeKey == afterKey {
+		return m, cmd
+	}
+	m.Preview.RequestedSeq++
+	m.Preview.LastKey = afterKey
+	return m, tea.Batch(cmd, livePreviewDebounceCmd(m.Preview.RequestedSeq))
 }
 
 func (m *Model) reconnectPrinter() tea.Cmd {

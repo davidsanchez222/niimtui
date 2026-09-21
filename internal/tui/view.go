@@ -298,7 +298,7 @@ func footerLines(m Model, width int) []string {
 		helpItem("v", "art"),
 	}, "  ")
 	preview := strings.Join([]string{
-		helpItem("p", "preview"),
+		helpItem("p", "open preview"),
 		printHelp + reconnectHelp(m) + helpItem("esc", "clear"),
 		helpItem("q", "quit"),
 		helpItem("ctrl+c", "quit"),

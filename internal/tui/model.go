@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -123,6 +125,28 @@ type Model struct {
 
 	Status string
 	Ready  bool
+
+	Preview LivePreviewState
+}
+
+type LivePreviewProtocol string
+
+const (
+	LivePreviewDisabled LivePreviewProtocol = ""
+	LivePreviewKitty    LivePreviewProtocol = "kitty"
+	LivePreviewITerm2   LivePreviewProtocol = "iterm2"
+	LivePreviewOpen     LivePreviewProtocol = "open"
+)
+
+type LivePreviewState struct {
+	Protocol     LivePreviewProtocol
+	RequestedSeq int
+	RenderedSeq  int
+	PNG          []byte
+	PNGHash      string
+	LastOpenHash string
+	LastKey      string
+	Err          string
 }
 
 func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig) Model {
@@ -143,6 +167,12 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 	clampElementToDocument(&sample, doc)
 	_ = doc.AddElement(sample)
 	status := "Click to select. Drag to move. Drag handles to resize."
+	preview := LivePreviewState{Protocol: detectLivePreviewProtocol()}
+	if preview.Protocol != LivePreviewDisabled {
+		preview.RequestedSeq = 1
+		preview.LastKey = documentPreviewKey(doc, printConfig)
+		status = fmt.Sprintf("Realtime preview: %s. %s", livePreviewProtocolLabel(preview.Protocol), status)
+	}
 	connection := ConnectionUnavailable
 	if printConfig.Session != nil {
 		connection = ConnectionConnecting
@@ -160,14 +190,23 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 		Connection:      connection,
 		StatusBase:      status,
 		Status:          status,
+		Preview:         preview,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
+	cmds := []tea.Cmd{}
 	if m.Print.Session == nil {
+		if m.Preview.Protocol != LivePreviewDisabled && m.Preview.RequestedSeq > 0 {
+			return livePreviewDebounceCmd(m.Preview.RequestedSeq)
+		}
 		return nil
 	}
-	return connectPrinterCmd(m.Print.Session)
+	cmds = append(cmds, connectPrinterCmd(m.Print.Session))
+	if m.Preview.Protocol != LivePreviewDisabled && m.Preview.RequestedSeq > 0 {
+		cmds = append(cmds, livePreviewDebounceCmd(m.Preview.RequestedSeq))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) setStatus(format string, args ...any) {
@@ -194,5 +233,41 @@ func connectPrinterCmd(session PrinterSession) tea.Cmd {
 			return printerConnectionFailedMsg{Err: err}
 		}
 		return printerConnectedMsg{Info: ConnectionInfo{Meta: meta}}
+	}
+}
+
+func detectLivePreviewProtocol() LivePreviewProtocol {
+	termProgram := strings.ToLower(strings.TrimSpace(envValue("TERM_PROGRAM")))
+	term := strings.ToLower(strings.TrimSpace(envValue("TERM")))
+	if envValue("KITTY_WINDOW_ID") != "" || strings.Contains(term, "xterm-kitty") || termProgram == "ghostty" {
+		return LivePreviewKitty
+	}
+	if strings.Contains(termProgram, "wezterm") || strings.Contains(termProgram, "iterm") {
+		return LivePreviewITerm2
+	}
+	if runtime.GOOS == "darwin" {
+		return LivePreviewOpen
+	}
+	return LivePreviewDisabled
+}
+
+var envValue = func(key string) string {
+	return strings.TrimSpace(getenv(key))
+}
+
+var getenv = func(key string) string {
+	return os.Getenv(key)
+}
+
+func livePreviewProtocolLabel(protocol LivePreviewProtocol) string {
+	switch protocol {
+	case LivePreviewKitty:
+		return "terminal image"
+	case LivePreviewITerm2:
+		return "terminal image"
+	case LivePreviewOpen:
+		return "macOS open fallback"
+	default:
+		return "disabled"
 	}
 }

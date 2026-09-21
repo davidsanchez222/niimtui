@@ -57,15 +57,7 @@ func (m *Model) exportPreview() bool {
 }
 
 func (m Model) preparePrintPreview(result render.Result) (render.Result, error) {
-	if m.Print.Model == "" {
-		return result, nil
-	}
-	fitted, err := render.FitToPrinterWidth(result, m.Print.Model)
-	if err != nil {
-		return render.Result{}, err
-	}
-	offsetX, offsetY := render.ModelPrintOffsetMM(m.Print.Model, m.Print.OffsetXMM, m.Print.OffsetYMM)
-	return render.ApplyPrintOffset(fitted, offsetX, offsetY)
+	return preparePrintPreviewResult(result, m.Print)
 }
 
 func openPreviewFile(path string) (bool, error) {
