@@ -70,8 +70,10 @@ var (
 )
 
 const (
-	minTerminalWidth  = 140
-	minTerminalHeight = 30
+	minTerminalWidth   = 140
+	minTerminalHeight  = 30
+	printableGuideRune = '┊'
+	roundGuideInsetMM  = 4.0
 )
 
 func (m Model) View() string {
@@ -152,6 +154,7 @@ func renderCanvas(m Model) string {
 	if canvas.Width < 2 || canvas.Height < 2 {
 		return ""
 	}
+	isRound := strings.EqualFold(m.Document.Shape, "round")
 
 	grid := make([][]rune, canvas.Height)
 	for y := range grid {
@@ -175,8 +178,10 @@ func renderCanvas(m Model) string {
 	}
 
 	drawDocumentPreview(grid, canvas, m.Document)
-	drawPrintableAreaGuide(grid, canvas, m)
-	if strings.EqualFold(m.Document.Shape, "round") {
+	if !isRound {
+		drawPrintableAreaGuide(grid, canvas, m)
+	}
+	if isRound {
 		drawRoundGuide(grid, canvas)
 	}
 
@@ -255,7 +260,7 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 			b.WriteString(focusHintStyle.Render(string(r)))
 			continue
 		}
-		if r == '┊' || r == '┬' || r == '┴' {
+		if r == printableGuideRune || r == '┬' || r == '┴' {
 			b.WriteString(printableGuideStyle.Render(string(r)))
 			continue
 		}
@@ -764,21 +769,48 @@ func drawRoundGuide(grid [][]rune, canvas Canvas) {
 	}
 	cx := visualWidth / 2
 	cy := visualHeight / 2
-	tolerance := math.Max(0.35, radius*0.08)
+	visualPerMM := 0.0
+	if canvas.LabelWidthMM > 0 && canvas.LabelHeightMM > 0 {
+		visualPerMM = minPositiveFloat(visualWidth/canvas.LabelWidthMM, visualHeight/canvas.LabelHeightMM)
+	}
+	if visualPerMM <= 0 {
+		visualPerMM = radius * 0.04
+	}
 
-	for y := 0; y < innerHeight; y++ {
-		for x := 0; x < innerWidth; x++ {
-			vx := (float64(x) + 0.5) * terminalCellWidthToHeightRatio
-			vy := float64(y) + 0.5
-			distance := math.Hypot(vx-cx, vy-cy)
-			if math.Abs(distance-radius) <= tolerance {
-				grid[y+1][x+1] = '·'
-			}
+	guideRadius := radius - roundGuideInsetMM*visualPerMM
+	if guideRadius <= 0 {
+		return
+	}
+	steps := max(int(math.Ceil(guideRadius*math.Pi*2)), 24)
+	for i := 0; i < steps; i++ {
+		angle := 2 * math.Pi * float64(i) / float64(steps)
+		cellX := int(math.Round((cx+math.Cos(angle)*guideRadius)/terminalCellWidthToHeightRatio - 0.5))
+		cellY := int(math.Round(cy + math.Sin(angle)*guideRadius - 0.5))
+		if cellX >= 0 && cellX < innerWidth && cellY >= 0 && cellY < innerHeight {
+			grid[cellY+1][cellX+1] = printableGuideRune
 		}
 	}
 }
 
+func minPositiveFloat(a, b float64) float64 {
+	switch {
+	case a > 0 && b > 0 && a < b:
+		return a
+	case a > 0 && b > 0:
+		return b
+	case a > 0:
+		return a
+	case b > 0:
+		return b
+	default:
+		return 0
+	}
+}
+
 func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
+	if strings.EqualFold(m.Document.Shape, "round") {
+		return
+	}
 	printableWidthMM := render.ModelPrintableWidthMM(m.Print.Model)
 	if printableWidthMM <= 0 || printableWidthMM >= m.Document.WidthMM {
 		return
@@ -797,8 +829,8 @@ func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
 	grid[canvas.Height-1][left] = '┴'
 	grid[canvas.Height-1][right] = '┴'
 	for y := 1; y < canvas.Height-1; y++ {
-		grid[y][left] = '┊'
-		grid[y][right] = '┊'
+		grid[y][left] = printableGuideRune
+		grid[y][right] = printableGuideRune
 	}
 }
 
