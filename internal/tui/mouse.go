@@ -57,6 +57,12 @@ func (m *Model) handleMousePress(msg tea.MouseMsg) {
 
 func (m *Model) handleMousePressAt(msg tea.MouseMsg, now time.Time) {
 	clickedElement, clicked := m.elementAt(msg.X, msg.Y)
+	if m.FocusPickerOpen {
+		m.FocusPickerOpen = false
+	}
+	if m.FontPickerOpen && (!clicked || clickedElement.ID != m.SelectedID) {
+		m.closeFontPicker()
+	}
 	if clicked && m.isDoubleClick(clickedElement, msg, now) && isEditableElement(clickedElement) {
 		m.SelectedID = clickedElement.ID
 		m.Drag = DragState{}

@@ -34,10 +34,6 @@ func printerArtVariantLabel(model string, variant int) string {
 	return fmt.Sprintf("%s %d/%d", printerArtModelKey(model), variant+1, len(variants))
 }
 
-func printerArtVariantCount(model string) int {
-	return len(printerArtVariants(model))
-}
-
 func printerArtVariants(model string) []printerArtVariant {
 	key := printerArtModelKey(model)
 	variants := loadPrinterArtVariants(key)

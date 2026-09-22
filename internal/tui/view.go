@@ -30,20 +30,32 @@ var (
 
 	propertySelectedStyle = lipgloss.NewStyle().
 				Bold(true).
+				Foreground(lipgloss.Color("215"))
+
+	propertyLabelStyle = lipgloss.NewStyle().
+				Bold(true).
 				Foreground(lipgloss.Color("229"))
 
 	mutedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
+			Foreground(lipgloss.Color("244"))
 
 	helpLabelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255"))
+			Foreground(lipgloss.Color("250"))
 
 	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252"))
+			Bold(true).
+			Foreground(lipgloss.Color("16")).
+			Background(lipgloss.Color("215")).
+			Padding(0, 2)
+
+	focusHintStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("16")).
+			Background(lipgloss.Color("205"))
 
 	keyStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("229"))
+			Foreground(lipgloss.Color("215"))
 
 	headerWordStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -82,8 +94,10 @@ func (m Model) View() string {
 
 	viewWidth := max(m.Width, leftWidth+gap+m.Canvas.Width+gap+propertiesWidth)
 	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, logoHeader())
+	status := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, statusStyle.Render(truncateText(m.Status, max(viewWidth-8, 1))))
 	lines := []string{
 		title,
+		status,
 		"",
 	}
 	for i := 0; i < bodyHeight; i++ {
@@ -164,17 +178,44 @@ func renderCanvas(m Model) string {
 			}
 		}
 	}
+	focusCells := map[int]map[int]bool(nil)
+	if m.FocusPickerOpen {
+		focusCells = drawFocusHints(grid, canvas, m)
+	}
 
 	lines := make([]string, 0, canvas.Height)
 	for y := 0; y < canvas.Height; y++ {
-		lines = append(lines, renderCanvasLine(grid[y]))
+		lines = append(lines, renderCanvasLine(grid[y], focusCells[y]))
 	}
 	return strings.Join(lines, "\n")
 }
 
-func renderCanvasLine(row []rune) string {
+func drawFocusHints(grid [][]rune, canvas Canvas, m Model) map[int]map[int]bool {
+	focusCells := make(map[int]map[int]bool)
+	for _, hint := range m.focusHints() {
+		r := m.elementScreenRect(hint.Element)
+		x := clampInt(r.left-canvas.X, 1, max(canvas.Width-2, 1))
+		y := clampInt(r.top-canvas.Y-1, 1, max(canvas.Height-2, 1))
+		runes := []rune(hint.Hint)
+		if len(runes) == 0 || y < 0 || y >= len(grid) || x < 0 || x >= len(grid[y]) {
+			continue
+		}
+		grid[y][x] = runes[0]
+		if focusCells[y] == nil {
+			focusCells[y] = make(map[int]bool)
+		}
+		focusCells[y][x] = true
+	}
+	return focusCells
+}
+
+func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 	var b strings.Builder
-	for _, r := range row {
+	for x, r := range row {
+		if focusCells[x] {
+			b.WriteString(focusHintStyle.Render(string(r)))
+			continue
+		}
 		if r == '┊' || r == '┬' || r == '┴' {
 			b.WriteString(printableGuideStyle.Render(string(r)))
 			continue
@@ -233,10 +274,13 @@ func propertyPanelLines(m Model, width int) []string {
 		for range previewHeight {
 			lines = append(lines, "")
 		}
-	} else if m.Preview.Protocol == LivePreviewOpen {
-		lines = append(lines, mutedStyle.Render("macOS open fallback"))
 	} else {
-		lines = append(lines, mutedStyle.Render("terminal image unavailable"))
+		lines = append(lines, mutedStyle.Render("Press p to open preview"))
+	}
+	if m.HelpOpen {
+		lines = append(lines, "", propertyTitleStyle.Render("Help"), "")
+		lines = append(lines, helpPanelLines(width)...)
+		return padLines(lines, width)
 	}
 	lines = append(lines,
 		"",
@@ -271,7 +315,7 @@ func propertyPanelLines(m Model, width int) []string {
 			propertyItem("Text", element.Text.Value),
 			propertyItem("Font Size", fmt.Sprintf("%.0f", element.Text.FontSize)),
 			propertyItem("Font", truncateText(m.selectedFontName(element.Text.FontPath), sidebarValueWidth("Font", width))),
-			helpItem("f", "choose font"),
+			helpItem("F", "search fonts"),
 		)
 		if m.FontPickerOpen {
 			lines = append(lines, fontPickerLines(m, width)...)
@@ -295,22 +339,43 @@ func propertyPanelLines(m Model, width int) []string {
 	return padLines(lines, width)
 }
 
+func helpPanelLines(width int) []string {
+	lines := []string{
+		helpItem("f", "focus element"),
+		helpItem("t", "add text"),
+		helpItem("r", "add QR"),
+		helpItem("i", "edit selected"),
+		helpItem("F", "font search for text"),
+		helpItem("hjkl/arrows", "move selected"),
+		helpItem("HJKL", "resize edges"),
+		helpItem("[]", "resize diagonal"),
+		helpItem("p", "open preview"),
+		helpItem("?", "toggle help"),
+		helpItem("esc", "clear/cancel"),
+		helpItem("q", "quit"),
+	}
+	for i, line := range lines {
+		lines[i] = truncateText(line, width)
+	}
+	return lines
+}
+
 func footerLines(m Model, width int) []string {
 	printHelp := ""
 	if m.Print.Session != nil {
 		printHelp = helpItem("P", "print") + "  "
 	}
 	controls := strings.Join([]string{
+		helpItem("f", "focus"),
 		helpItem("t", "text"),
 		helpItem("r", "QR"),
 		helpItem("i", "edit"),
 		helpItem("del", "remove"),
 		helpItem("arrows/hjkl", "move"),
-		helpItem("shift+arrows", "fast move"),
-		helpItem("[]/{}", "resize"),
+		helpItem("HJKL", "resize edges"),
+		helpItem("[]/{}", "resize diagonal"),
 		helpItem("+/-", "inc/dec font size"),
-		helpItem("f", "choose font"),
-		helpItem("v", "art"),
+		helpItem("?", "help"),
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "open preview"),
@@ -321,7 +386,6 @@ func footerLines(m Model, width int) []string {
 
 	return []string{
 		footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
-		centerStyledLine(statusStyle.Render(m.Status), width),
 		centerStyledLine(controls, width),
 		centerStyledLine(preview, width),
 	}
@@ -332,7 +396,7 @@ func propertyItem(label, value string) string {
 }
 
 func propertyLabel(label string) string {
-	return keyStyle.Render(label + ":")
+	return propertyLabelStyle.Render(label + ":")
 }
 
 func fontPickerLines(m Model, width int) []string {
@@ -423,7 +487,7 @@ func connectionStatusLine(m Model) string {
 	case ConnectionConnected:
 		return connectionDotStyle("42").Render("●") + helpLabelStyle.Render(" connected")
 	case ConnectionConnecting:
-		return connectionDotStyle("229").Render("●") + helpLabelStyle.Render(" connecting")
+		return connectionDotStyle("215").Render("●") + helpLabelStyle.Render(" connecting")
 	case ConnectionDisconnected:
 		return connectionDotStyle("203").Render("●") + helpLabelStyle.Render(" disconnected")
 	default:

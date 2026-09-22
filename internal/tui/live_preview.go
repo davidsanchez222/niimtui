@@ -55,7 +55,6 @@ func livePreviewRedrawCmd(seq int) tea.Cmd {
 func renderLivePreviewCmd(m Model, seq int) tea.Cmd {
 	doc := m.Document
 	printConfig := m.Print
-	protocol := m.Preview.Protocol
 	return func() tea.Msg {
 		result, err := render.RenderDocument(doc)
 		if err != nil {
@@ -64,14 +63,6 @@ func renderLivePreviewCmd(m Model, seq int) tea.Cmd {
 		result, err = preparePrintPreviewResult(result, printConfig)
 		if err != nil {
 			return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("fit preview: %w", err)}
-		}
-		if protocol == LivePreviewOpen {
-			if err := os.MkdirAll("testlabels", 0o755); err != nil {
-				return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("create preview directory: %w", err)}
-			}
-			if err := os.WriteFile(previewOutputPath, result.PreviewPNG, 0o644); err != nil {
-				return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("write preview: %w", err)}
-			}
 		}
 		return livePreviewRenderedMsg{
 			Seq:      seq,
@@ -91,14 +82,10 @@ func (m Model) handleLivePreviewRendered(msg livePreviewRenderedMsg) (Model, tea
 	m.Preview.PNG = msg.PNG
 	m.Preview.PNGHash = msg.PNGHash
 	m.Preview.Err = ""
-	if m.Preview.Protocol == LivePreviewKitty || m.Preview.Protocol == LivePreviewITerm2 {
+	if m.Preview.Protocol == LivePreviewKitty {
 		return m, terminalLivePreviewCmd(m)
 	}
-	if m.Preview.Protocol != LivePreviewOpen || msg.PNGHash == m.Preview.LastOpenHash {
-		return m, nil
-	}
-	m.Preview.LastOpenHash = msg.PNGHash
-	return m, openPreviewCmd(previewOutputPath)
+	return m, nil
 }
 
 func preparePrintPreviewResult(result render.Result, printConfig PrintConfig) (render.Result, error) {

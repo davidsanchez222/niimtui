@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -112,6 +111,9 @@ type Model struct {
 	FontPickerIndex  int
 	FontPickerQuery  string
 
+	FocusPickerOpen bool
+	HelpOpen        bool
+
 	Print       PrintConfig
 	Connection  ConnectionStatus
 	ConnectErr  string
@@ -134,8 +136,6 @@ type LivePreviewProtocol string
 const (
 	LivePreviewDisabled LivePreviewProtocol = ""
 	LivePreviewKitty    LivePreviewProtocol = "kitty"
-	LivePreviewITerm2   LivePreviewProtocol = "iterm2"
-	LivePreviewOpen     LivePreviewProtocol = "open"
 )
 
 type LivePreviewState struct {
@@ -243,9 +243,6 @@ func detectLivePreviewProtocol() LivePreviewProtocol {
 	if envValue("KITTY_WINDOW_ID") != "" || strings.Contains(term, "xterm-kitty") || termProgram == "ghostty" {
 		return LivePreviewKitty
 	}
-	if runtime.GOOS == "darwin" {
-		return LivePreviewOpen
-	}
 	return LivePreviewDisabled
 }
 
@@ -261,10 +258,6 @@ func livePreviewProtocolLabel(protocol LivePreviewProtocol) string {
 	switch protocol {
 	case LivePreviewKitty:
 		return "terminal image"
-	case LivePreviewITerm2:
-		return "terminal image"
-	case LivePreviewOpen:
-		return "macOS open fallback"
 	default:
 		return "disabled"
 	}

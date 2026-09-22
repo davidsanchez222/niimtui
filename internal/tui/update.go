@@ -40,6 +40,10 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, cmd
 	case tea.KeyMsg:
+		if m.FocusPickerOpen {
+			m.handleFocusPickerKey(msg)
+			return m, nil
+		}
 		if m.FontPickerOpen && m.handleFontPickerKey(msg) {
 			return m, nil
 		}
@@ -57,6 +61,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.closePrinterSession()
 			return m, tea.Quit
 		case "esc":
+			if m.HelpOpen {
+				m.HelpOpen = false
+				m.setStatus("Help closed.")
+				return m, nil
+			}
 			m.Drag = DragState{}
 			m.SelectedID = ""
 			m.setStatus("Selection cleared.")
@@ -169,9 +178,17 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "i":
 		return m.beginEditingSelected()
 	case "f":
+		return m.openFocusPicker()
+	case "F":
 		return m.toggleFontPicker()
-	case "v":
-		return m.cyclePrinterArtVariant()
+	case "?":
+		m.HelpOpen = !m.HelpOpen
+		if m.HelpOpen {
+			m.setStatus("Help opened. Press ? or esc to close.")
+		} else {
+			m.setStatus("Help closed.")
+		}
+		return true
 	case "delete", "backspace":
 		return m.deleteSelected()
 	case "k", "up":
@@ -182,14 +199,14 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.nudgeSelected(-1, 0)
 	case "l", "right":
 		return m.nudgeSelected(1, 0)
-	case "shift+up":
-		return m.nudgeSelected(0, -5)
-	case "shift+down":
-		return m.nudgeSelected(0, 5)
-	case "shift+left":
-		return m.nudgeSelected(-5, 0)
-	case "shift+right":
-		return m.nudgeSelected(5, 0)
+	case "H":
+		return m.resizeSelected(HandleLeft, -1, 0)
+	case "J":
+		return m.resizeSelected(HandleBottom, 0, 1)
+	case "K":
+		return m.resizeSelected(HandleTop, 0, -1)
+	case "L":
+		return m.resizeSelected(HandleRight, 1, 0)
 	case "]":
 		return m.resizeSelected(HandleBottomRight, 1, 1)
 	case "[":

@@ -166,6 +166,70 @@ func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
 	}
 }
 
+func TestCapitalHJKLResizeSelectedElementEdges(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	initial, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element")
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")}) {
+		t.Fatal("H was not handled")
+	}
+	left, _ := m.selectedElement()
+	if left.XMM >= initial.XMM || left.WidthMM <= initial.WidthMM {
+		t.Fatalf("after H x/width = %.1f/%.1f, want left edge expanded from %.1f/%.1f", left.XMM, left.WidthMM, initial.XMM, initial.WidthMM)
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")}) {
+		t.Fatal("L was not handled")
+	}
+	right, _ := m.selectedElement()
+	if right.WidthMM <= left.WidthMM {
+		t.Fatalf("after L width = %.1f, want greater than %.1f", right.WidthMM, left.WidthMM)
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("K")}) {
+		t.Fatal("K was not handled")
+	}
+	top, _ := m.selectedElement()
+	if top.YMM >= right.YMM || top.HeightMM <= right.HeightMM {
+		t.Fatalf("after K y/height = %.1f/%.1f, want top edge expanded from %.1f/%.1f", top.YMM, top.HeightMM, right.YMM, right.HeightMM)
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("J")}) {
+		t.Fatal("J was not handled")
+	}
+	bottom, _ := m.selectedElement()
+	if bottom.HeightMM <= top.HeightMM {
+		t.Fatalf("after J height = %.1f, want greater than %.1f", bottom.HeightMM, top.HeightMM)
+	}
+}
+
+func TestShiftArrowsAreNotFastMoveCommands(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	if m.handleCommandKey(tea.KeyMsg{Type: tea.KeyShiftRight}) {
+		t.Fatal("shift+right should not be handled")
+	}
+}
+
+func TestFocusPickerSelectsElementByHint(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addQRElement()
+	m.SelectedID = ""
+
+	if !m.openFocusPicker() {
+		t.Fatal("openFocusPicker() = false, want true")
+	}
+	m.handleFocusPickerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if m.FocusPickerOpen {
+		t.Fatal("focus picker still open after selecting hint")
+	}
+	if m.SelectedID != "qr-2" {
+		t.Fatalf("selected id = %q, want qr-2", m.SelectedID)
+	}
+}
+
 func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
 	m := NewModel(50, 30, "rect", "/tmp/example.ttf", PrintConfig{})
 	initial, ok := m.selectedElement()
@@ -207,21 +271,6 @@ func TestPrinterArtFallsBackForUnknownModel(t *testing.T) {
 	}
 	if label := printerArtVariantLabel("", 99); label != "generic 1/1" {
 		t.Fatalf("fallback label = %q, want generic 1/1", label)
-	}
-}
-
-func TestCyclePrinterArtVariantWraps(t *testing.T) {
-	m := NewModel(50, 30, "rect", "", PrintConfig{Model: "B1"})
-	count := printerArtVariantCount(m.Print.Model)
-	if count != 1 {
-		t.Fatalf("variant count = %d, want 1", count)
-	}
-
-	if !m.cyclePrinterArtVariant() {
-		t.Fatal("cyclePrinterArtVariant() = false, want true")
-	}
-	if m.PrinterArtVariant != 0 {
-		t.Fatalf("variant = %d, want 0", m.PrinterArtVariant)
 	}
 }
 
@@ -312,6 +361,37 @@ func TestFontPickerSearchFiltersAndAppliesMatch(t *testing.T) {
 	}
 	if selected.Text.FontPath != jetBrainsPath {
 		t.Fatalf("selected font path = %q, want %q", selected.Text.FontPath, jetBrainsPath)
+	}
+}
+
+func TestCapitalFOpensFontPickerForText(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("F")}) {
+		t.Fatal("F was not handled")
+	}
+	if !m.FontPickerOpen || !m.FontPickerSearch {
+		t.Fatal("font picker did not open in search mode")
+	}
+
+	m.closeFontPicker()
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")}) {
+		t.Fatal("f was not handled")
+	}
+	if !m.FocusPickerOpen {
+		t.Fatal("lowercase f did not open focus picker")
+	}
+}
+
+func TestFontPickerClosesOnOutsideClick(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Canvas = newCanvas(80, 24, m.Document.WidthMM, m.Document.HeightMM)
+	m.FontPickerOpen = true
+	m.FontPickerSearch = true
+	m.FontPickerQuery = "jet"
+
+	m.handleMousePressAt(leftClick(0, 0), time.Now())
+	if m.FontPickerOpen || m.FontPickerSearch || m.FontPickerQuery != "" {
+		t.Fatalf("font picker state = open %t search %t query %q, want closed/cleared", m.FontPickerOpen, m.FontPickerSearch, m.FontPickerQuery)
 	}
 }
 

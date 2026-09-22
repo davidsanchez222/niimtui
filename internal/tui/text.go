@@ -89,9 +89,8 @@ func (m *Model) deleteSelected() bool {
 	m.SelectedID = ""
 	m.Drag = DragState{}
 	m.EditingText = false
-	m.FontPickerOpen = false
-	m.FontPickerSearch = false
-	m.FontPickerQuery = ""
+	m.FocusPickerOpen = false
+	m.closeFontPicker()
 	m.TextBuffer = ""
 	m.setStatus("Deleted %q.", deletedID)
 	return true
@@ -103,9 +102,7 @@ func (m *Model) toggleFontPicker() bool {
 		return false
 	}
 	if m.FontPickerOpen {
-		m.FontPickerOpen = false
-		m.FontPickerSearch = false
-		m.FontPickerQuery = ""
+		m.closeFontPicker()
 		m.setStatus("Font picker closed.")
 		return true
 	}
@@ -125,9 +122,7 @@ func (m *Model) handleFontPickerKey(msg tea.KeyMsg) bool {
 			m.setStatus("Browsing font results. Use j/k or ctrl+d/u, enter to apply.")
 			return true
 		}
-		m.FontPickerOpen = false
-		m.FontPickerSearch = false
-		m.FontPickerQuery = ""
+		m.closeFontPicker()
 		m.setStatus("Font picker closed.")
 		return true
 	case "up", "ctrl+p":
@@ -181,6 +176,12 @@ func (m *Model) handleFontPickerKey(msg tea.KeyMsg) bool {
 		}
 	}
 	return true
+}
+
+func (m *Model) closeFontPicker() {
+	m.FontPickerOpen = false
+	m.FontPickerSearch = false
+	m.FontPickerQuery = ""
 }
 
 const fontPickerPageSize = 7
@@ -313,17 +314,6 @@ func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
 		return false
 	}
 	m.setStatus("Resized to %.1fmm x %.1fmm", updated.WidthMM, updated.HeightMM)
-	return true
-}
-
-func (m *Model) cyclePrinterArtVariant() bool {
-	count := printerArtVariantCount(m.Print.Model)
-	if count <= 1 {
-		m.setStatus("No alternate printer art for %s.", emptyFallback(m.Print.Model, "unknown model"))
-		return true
-	}
-	m.PrinterArtVariant = positiveMod(m.PrinterArtVariant+1, count)
-	m.setStatus("Printer art: %s", printerArtVariantLabel(m.Print.Model, m.PrinterArtVariant))
 	return true
 }
 

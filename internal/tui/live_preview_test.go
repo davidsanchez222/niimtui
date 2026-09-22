@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"runtime"
 	"strings"
 	"testing"
 
@@ -21,32 +20,26 @@ func TestDetectLivePreviewProtocolPrefersKitty(t *testing.T) {
 }
 
 func TestDetectLivePreviewProtocolITermUsesFallback(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("macOS open fallback is darwin-only")
-	}
 	withEnv(t, map[string]string{
 		"KITTY_WINDOW_ID": "",
 		"TERM_PROGRAM":    "iTerm.app",
 		"TERM":            "xterm-256color",
 	})
 
-	if got := detectLivePreviewProtocol(); got != LivePreviewOpen {
-		t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewOpen)
+	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+		t.Fatalf("detectLivePreviewProtocol() = %q, want disabled", got)
 	}
 }
 
-func TestDetectLivePreviewProtocolMacOpenFallback(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("macOS open fallback is darwin-only")
-	}
+func TestDetectLivePreviewProtocolDoesNotAutoOpenFallback(t *testing.T) {
 	withEnv(t, map[string]string{
 		"KITTY_WINDOW_ID": "",
 		"TERM_PROGRAM":    "Apple_Terminal",
 		"TERM":            "xterm-256color",
 	})
 
-	if got := detectLivePreviewProtocol(); got != LivePreviewOpen {
-		t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewOpen)
+	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+		t.Fatalf("detectLivePreviewProtocol() = %q, want disabled", got)
 	}
 }
 
