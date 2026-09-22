@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,43 +167,69 @@ func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
 	}
 }
 
-func TestCapitalHJKLResizeSelectedElementEdges(t *testing.T) {
+func TestCapitalHJKLResizeSelectedElementDimensions(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	initial, ok := m.selectedElement()
 	if !ok {
 		t.Fatal("expected selected element")
 	}
+	initial.WidthMM = 25
+	initial.HeightMM = 20
+	if !m.Document.UpdateElement(initial) {
+		t.Fatal("failed to expand selected element for test")
+	}
 
 	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")}) {
 		t.Fatal("H was not handled")
 	}
-	left, _ := m.selectedElement()
-	if left.XMM >= initial.XMM || left.WidthMM <= initial.WidthMM {
-		t.Fatalf("after H x/width = %.1f/%.1f, want left edge expanded from %.1f/%.1f", left.XMM, left.WidthMM, initial.XMM, initial.WidthMM)
+	shrunkWidth, _ := m.selectedElement()
+	if shrunkWidth.XMM != initial.XMM || shrunkWidth.WidthMM >= initial.WidthMM {
+		t.Fatalf("after H x/width = %.1f/%.1f, want same x and narrower than %.1f/%.1f", shrunkWidth.XMM, shrunkWidth.WidthMM, initial.XMM, initial.WidthMM)
 	}
 
 	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")}) {
 		t.Fatal("L was not handled")
 	}
-	right, _ := m.selectedElement()
-	if right.WidthMM <= left.WidthMM {
-		t.Fatalf("after L width = %.1f, want greater than %.1f", right.WidthMM, left.WidthMM)
+	grownWidth, _ := m.selectedElement()
+	if grownWidth.WidthMM <= shrunkWidth.WidthMM {
+		t.Fatalf("after L width = %.1f, want greater than %.1f", grownWidth.WidthMM, shrunkWidth.WidthMM)
 	}
 
 	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("K")}) {
 		t.Fatal("K was not handled")
 	}
-	top, _ := m.selectedElement()
-	if top.YMM >= right.YMM || top.HeightMM <= right.HeightMM {
-		t.Fatalf("after K y/height = %.1f/%.1f, want top edge expanded from %.1f/%.1f", top.YMM, top.HeightMM, right.YMM, right.HeightMM)
+	shrunkHeight, _ := m.selectedElement()
+	if shrunkHeight.YMM != grownWidth.YMM || shrunkHeight.HeightMM >= grownWidth.HeightMM {
+		t.Fatalf("after K y/height = %.1f/%.1f, want same y and shorter than %.1f/%.1f", shrunkHeight.YMM, shrunkHeight.HeightMM, grownWidth.YMM, grownWidth.HeightMM)
 	}
 
 	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("J")}) {
 		t.Fatal("J was not handled")
 	}
-	bottom, _ := m.selectedElement()
-	if bottom.HeightMM <= top.HeightMM {
-		t.Fatalf("after J height = %.1f, want greater than %.1f", bottom.HeightMM, top.HeightMM)
+	grownHeight, _ := m.selectedElement()
+	if grownHeight.HeightMM <= shrunkHeight.HeightMM {
+		t.Fatalf("after J height = %.1f, want greater than %.1f", grownHeight.HeightMM, shrunkHeight.HeightMM)
+	}
+}
+
+func TestAutoInsertDefaultOffForNewElements(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
+	if m.EditingText {
+		t.Fatal("text element entered edit mode with auto insert off")
+	}
+	m.addQRElement()
+	if m.EditingText {
+		t.Fatal("QR element entered edit mode with auto insert off")
+	}
+}
+
+func TestAutoInsertOptionEntersEditModeForNewElements(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.AutoInsert = true
+	m.addTextElement()
+	if !m.EditingText {
+		t.Fatal("text element did not enter edit mode with auto insert on")
 	}
 }
 
@@ -379,6 +406,69 @@ func TestCapitalFOpensFontPickerForText(t *testing.T) {
 	}
 	if !m.FocusPickerOpen {
 		t.Fatal("lowercase f did not open focus picker")
+	}
+}
+
+func TestCtrlCQuitsWhileFontPickerIsSearching(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.FontPickerOpen = true
+	m.FontPickerSearch = true
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("ctrl+c returned nil command")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("ctrl+c command msg = %T, want tea.QuitMsg", msg)
+	}
+}
+
+func TestMenuTogglesAutoInsert(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	if !m.toggleMenu() {
+		t.Fatal("toggleMenu() = false, want true")
+	}
+	if !m.MenuOpen {
+		t.Fatal("menu did not open")
+	}
+	m.MenuIndex = 0
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.AutoInsert {
+		t.Fatal("auto insert was not enabled")
+	}
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.AutoInsert {
+		t.Fatal("auto insert was not disabled")
+	}
+}
+
+func TestHelpAndMenuRenderAsModalViews(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Ready = true
+	m.Width = minTerminalWidth
+	m.Height = minTerminalHeight
+	m.reflow()
+	m.HelpOpen = true
+	help := m.View()
+	if !strings.Contains(help, "Show focus hints") {
+		t.Fatal("help modal content missing")
+	}
+	m.HelpOpen = false
+	m.MenuOpen = true
+	menu := m.View()
+	if !strings.Contains(menu, "Auto Insert") || !strings.Contains(menu, "Edit Config") {
+		t.Fatal("menu modal content missing")
+	}
+}
+
+func TestSmallTerminalWarning(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Ready = true
+	m.Width = minTerminalWidth - 1
+	m.Height = minTerminalHeight
+	view := m.View()
+	if !strings.Contains(view, "Terminal size too small") || !strings.Contains(view, "Width = 140") {
+		t.Fatal("small terminal warning missing required text")
 	}
 }
 

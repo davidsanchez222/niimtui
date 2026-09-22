@@ -113,6 +113,9 @@ type Model struct {
 
 	FocusPickerOpen bool
 	HelpOpen        bool
+	MenuOpen        bool
+	MenuIndex       int
+	AutoInsert      bool
 
 	Print       PrintConfig
 	Connection  ConnectionStatus

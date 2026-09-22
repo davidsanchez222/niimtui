@@ -39,8 +39,13 @@ func (m *Model) addTextElement() {
 
 	m.SelectedID = id
 	m.TextBuffer = element.Text.Value
-	m.EditingText = true
-	m.refreshStatus()
+	if m.AutoInsert {
+		m.EditingText = true
+		m.refreshStatus()
+		return
+	}
+	m.EditingText = false
+	m.setStatus("Added text box. Move it, then press i to edit.")
 }
 
 func (m *Model) addQRElement() {
@@ -63,8 +68,13 @@ func (m *Model) addQRElement() {
 
 	m.SelectedID = id
 	m.TextBuffer = element.QR.Value
-	m.EditingText = true
-	m.refreshStatus()
+	if m.AutoInsert {
+		m.EditingText = true
+		m.refreshStatus()
+		return
+	}
+	m.EditingText = false
+	m.setStatus("Added QR code. Move it, then press i to edit.")
 }
 
 func (m *Model) beginEditingSelected() bool {
@@ -309,6 +319,33 @@ func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
 		return false
 	}
 	updated := resizeElement(element, handle, dxMM, dyMM)
+	clampElementToDocument(&updated, m.Document)
+	if !m.Document.UpdateElement(updated) {
+		return false
+	}
+	m.setStatus("Resized to %.1fmm x %.1fmm", updated.WidthMM, updated.HeightMM)
+	return true
+}
+
+func (m *Model) resizeSelectedDimensions(dwMM, dhMM float64) bool {
+	element, ok := m.selectedElement()
+	if !ok {
+		return false
+	}
+	updated := element
+	if updated.QR != nil {
+		size := updated.WidthMM
+		if dwMM != 0 {
+			size += dwMM
+		} else {
+			size += dhMM
+		}
+		updated.WidthMM = size
+		updated.HeightMM = size
+	} else {
+		updated.WidthMM += dwMM
+		updated.HeightMM += dhMM
+	}
 	clampElementToDocument(&updated, m.Document)
 	if !m.Document.UpdateElement(updated) {
 		return false

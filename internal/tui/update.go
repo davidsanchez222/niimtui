@@ -9,6 +9,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		m.closePrinterSession()
+		return m, tea.Quit
+	}
 	if m.EditingText {
 		switch msg := msg.(type) {
 		case tea.WindowSizeMsg:
@@ -40,6 +44,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, cmd
 	case tea.KeyMsg:
+		if m.MenuOpen {
+			m.handleMenuKey(msg)
+			return m, nil
+		}
+		if m.HelpOpen {
+			switch msg.String() {
+			case "?", "esc":
+				m.HelpOpen = false
+				m.setStatus("Help closed.")
+			}
+			return m, nil
+		}
 		if m.FocusPickerOpen {
 			m.handleFocusPickerKey(msg)
 			return m, nil
@@ -57,15 +73,10 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "q":
 			m.closePrinterSession()
 			return m, tea.Quit
 		case "esc":
-			if m.HelpOpen {
-				m.HelpOpen = false
-				m.setStatus("Help closed.")
-				return m, nil
-			}
 			m.Drag = DragState{}
 			m.SelectedID = ""
 			m.setStatus("Selection cleared.")
@@ -164,7 +175,7 @@ func (m *Model) reflow() {
 	canvasHeight := max(m.Height-6, 6)
 	m.Canvas = newCanvas(canvasWidth, canvasHeight, m.Document.WidthMM, m.Document.HeightMM)
 	m.Canvas.X = toolWidth + 2
-	m.Canvas.Y = 2
+	m.Canvas.Y = 3
 }
 
 func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
@@ -181,9 +192,14 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.openFocusPicker()
 	case "F":
 		return m.toggleFontPicker()
+	case "m":
+		return m.toggleMenu()
 	case "?":
 		m.HelpOpen = !m.HelpOpen
 		if m.HelpOpen {
+			m.MenuOpen = false
+			m.FocusPickerOpen = false
+			m.closeFontPicker()
 			m.setStatus("Help opened. Press ? or esc to close.")
 		} else {
 			m.setStatus("Help closed.")
@@ -200,13 +216,13 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "l", "right":
 		return m.nudgeSelected(1, 0)
 	case "H":
-		return m.resizeSelected(HandleLeft, -1, 0)
+		return m.resizeSelectedDimensions(-1, 0)
 	case "J":
-		return m.resizeSelected(HandleBottom, 0, 1)
+		return m.resizeSelectedDimensions(0, 1)
 	case "K":
-		return m.resizeSelected(HandleTop, 0, -1)
+		return m.resizeSelectedDimensions(0, -1)
 	case "L":
-		return m.resizeSelected(HandleRight, 1, 0)
+		return m.resizeSelectedDimensions(1, 0)
 	case "]":
 		return m.resizeSelected(HandleBottomRight, 1, 1)
 	case "[":

@@ -69,9 +69,17 @@ var (
 			Foreground(lipgloss.Color("238"))
 )
 
+const (
+	minTerminalWidth  = 140
+	minTerminalHeight = 30
+)
+
 func (m Model) View() string {
 	if !m.Ready {
 		return "Loading label designer..."
+	}
+	if m.Width < minTerminalWidth || m.Height < minTerminalHeight {
+		return smallTerminalView(m.Width, m.Height)
 	}
 
 	leftWidth := 30
@@ -97,8 +105,13 @@ func (m Model) View() string {
 	status := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, statusStyle.Render(truncateText(m.Status, max(viewWidth-8, 1))))
 	lines := []string{
 		title,
-		status,
 		"",
+		status,
+	}
+	if m.HelpOpen || m.MenuOpen {
+		lines = append(lines, modalBodyLines(m, viewWidth, bodyHeight)...)
+		lines = append(lines, footerLines(m, viewWidth)...)
+		return strings.Join(lines, "\n")
 	}
 	for i := 0; i < bodyHeight; i++ {
 		lines = append(lines, leftLines[i]+strings.Repeat(" ", gap)+canvasLines[i]+strings.Repeat(" ", gap)+propertyLines[i])
@@ -106,6 +119,32 @@ func (m Model) View() string {
 	lines = append(lines, footerLines(m, viewWidth)...)
 
 	return strings.Join(lines, "\n")
+}
+
+func smallTerminalView(width, height int) string {
+	message := strings.Join([]string{
+		propertyTitleStyle.Render("Terminal size too small:"),
+		fmt.Sprintf("Width = %s Height = %s", propertyLabelStyle.Render(fmt.Sprint(width)), propertyLabelStyle.Render(fmt.Sprint(height))),
+		"",
+		propertyTitleStyle.Render("Needed for current config:"),
+		fmt.Sprintf("Width = %s Height = %s", propertyLabelStyle.Render(fmt.Sprint(minTerminalWidth)), propertyLabelStyle.Render(fmt.Sprint(minTerminalHeight))),
+	}, "\n")
+	return lipgloss.Place(max(width, 1), max(height, 1), lipgloss.Center, lipgloss.Center, message)
+}
+
+func modalBodyLines(m Model, width, height int) []string {
+	content := helpModalContent()
+	if m.MenuOpen {
+		content = menuModalContent(m)
+	}
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("111")).
+		Padding(1, 3).
+		Width(58).
+		Render(strings.Join(content, "\n"))
+	body := lipgloss.Place(width, max(height, 8), lipgloss.Center, lipgloss.Center, box)
+	return strings.Split(body, "\n")
 }
 
 func renderCanvas(m Model) string {
@@ -277,11 +316,6 @@ func propertyPanelLines(m Model, width int) []string {
 	} else {
 		lines = append(lines, mutedStyle.Render("Press p to open preview"))
 	}
-	if m.HelpOpen {
-		lines = append(lines, "", propertyTitleStyle.Render("Help"), "")
-		lines = append(lines, helpPanelLines(width)...)
-		return padLines(lines, width)
-	}
 	lines = append(lines,
 		"",
 		propertyTitleStyle.Render("Properties"),
@@ -339,25 +373,60 @@ func propertyPanelLines(m Model, width int) []string {
 	return padLines(lines, width)
 }
 
-func helpPanelLines(width int) []string {
+func helpModalContent() []string {
+	return []string{
+		propertyTitleStyle.Render("Help"),
+		"",
+		helpRow("f", "Show focus hints for keyboard-only element selection"),
+		helpRow("t", "Add a text box and select it"),
+		helpRow("r", "Add a QR code and select it"),
+		helpRow("i", "Edit selected text or QR contents"),
+		helpRow("F", "Search fonts for the selected text box"),
+		helpRow("hjkl / arrows", "Move selected element by 1 mm"),
+		helpRow("H / L", "Shrink / grow selected width"),
+		helpRow("K / J", "Shrink / grow selected height"),
+		helpRow("[ ] / { }", "Resize diagonally from the bottom-right"),
+		helpRow("+ / -", "Increase / decrease selected text font size"),
+		helpRow("p", "Open the native OS preview image"),
+		helpRow("m", "Open the options menu"),
+		helpRow("?", "Toggle this help popup"),
+		helpRow("esc", "Close popup or clear selection"),
+		helpRow("ctrl+c", "Quit immediately"),
+	}
+}
+
+func menuModalContent(m Model) []string {
+	autoInsert := "off"
+	if m.AutoInsert {
+		autoInsert = "on"
+	}
+	items := []string{
+		"Auto Insert: " + autoInsert,
+		"Edit Config: coming soon",
+		"Close",
+	}
 	lines := []string{
-		helpItem("f", "focus element"),
-		helpItem("t", "add text"),
-		helpItem("r", "add QR"),
-		helpItem("i", "edit selected"),
-		helpItem("F", "font search for text"),
-		helpItem("hjkl/arrows", "move selected"),
-		helpItem("HJKL", "resize edges"),
-		helpItem("[]", "resize diagonal"),
-		helpItem("p", "open preview"),
-		helpItem("?", "toggle help"),
-		helpItem("esc", "clear/cancel"),
-		helpItem("q", "quit"),
+		propertyTitleStyle.Render("Menu"),
+		"",
 	}
-	for i, line := range lines {
-		lines[i] = truncateText(line, width)
+	for i, item := range items {
+		prefix := "  "
+		style := helpLabelStyle
+		if i == m.MenuIndex {
+			prefix = "> "
+			style = propertySelectedStyle
+		}
+		lines = append(lines, style.Render(prefix+item))
 	}
+	lines = append(lines,
+		"",
+		mutedStyle.Render("j/k or arrows move, enter selects, esc closes"),
+	)
 	return lines
+}
+
+func helpRow(key, description string) string {
+	return keyStyle.Render(fitLine(key, 14)) + helpLabelStyle.Render(description)
 }
 
 func footerLines(m Model, width int) []string {
@@ -372,9 +441,10 @@ func footerLines(m Model, width int) []string {
 		helpItem("i", "edit"),
 		helpItem("del", "remove"),
 		helpItem("arrows/hjkl", "move"),
-		helpItem("HJKL", "resize edges"),
+		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
 		helpItem("+/-", "inc/dec font size"),
+		helpItem("m", "menu"),
 		helpItem("?", "help"),
 	}, "  ")
 	preview := strings.Join([]string{
