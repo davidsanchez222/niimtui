@@ -269,14 +269,13 @@ func devicePanelLines(m Model, width int) []string {
 		centerStyledLine(propertyTitleStyle.Render("Printer"), width),
 		"",
 	}
-	art := printerArt(m.Print.Model, m.PrinterArtVariant)
+	art := printerArt(m.Print.Model)
 	if len(art) > 0 {
 		lines = append(lines, artLines(art, width)...)
 	}
 	lines = append(lines,
 		"",
 		propertyItem("Model", sidebarValue("Model", m.Print.Model, "none", width)),
-		propertyItem("Art", sidebarValue("Art", printerArtVariantLabel(m.Print.Model, m.PrinterArtVariant), "none", width)),
 		"",
 		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
 		propertyItem("Device", sidebarValue("Device", m.Print.DeviceName, emptyFallback(m.Print.Identifier, "unknown"), width)),

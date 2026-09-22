@@ -2,7 +2,6 @@ package tui
 
 import (
 	"embed"
-	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -11,44 +10,36 @@ import (
 //go:embed printer_art/*.txt
 var printerArtFiles embed.FS
 
-type printerArtVariant struct {
+type printerArtAsset struct {
 	Name  string
 	Lines []string
 }
 
-func printerArt(model string, variant int) []string {
-	variants := printerArtVariants(model)
-	if len(variants) == 0 {
+func printerArt(model string) []string {
+	art := printerArtForKey(printerArtModelKey(model))
+	if len(art) == 0 {
+		art = printerArtForKey("generic")
+	}
+	if len(art) == 0 {
 		return nil
 	}
-	variant = positiveMod(variant, len(variants))
-	return append([]string(nil), variants[variant].Lines...)
+	return append([]string(nil), art...)
 }
 
-func printerArtVariantLabel(model string, variant int) string {
-	variants := printerArtVariants(model)
-	if len(variants) == 0 {
-		return "none"
+func printerArtForKey(key string) []string {
+	assets := loadPrinterArtAssets(key)
+	if len(assets) == 0 {
+		return nil
 	}
-	variant = positiveMod(variant, len(variants))
-	return fmt.Sprintf("%s %d/%d", printerArtModelKey(model), variant+1, len(variants))
+	return assets[0].Lines
 }
 
-func printerArtVariants(model string) []printerArtVariant {
-	key := printerArtModelKey(model)
-	variants := loadPrinterArtVariants(key)
-	if len(variants) > 0 {
-		return variants
-	}
-	return loadPrinterArtVariants("generic")
-}
-
-func loadPrinterArtVariants(key string) []printerArtVariant {
+func loadPrinterArtAssets(key string) []printerArtAsset {
 	entries, err := printerArtFiles.ReadDir("printer_art")
 	if err != nil {
 		return nil
 	}
-	variants := make([]printerArtVariant, 0)
+	assets := make([]printerArtAsset, 0)
 	prefix := key + "-"
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) || path.Ext(entry.Name()) != ".txt" {
@@ -58,12 +49,12 @@ func loadPrinterArtVariants(key string) []printerArtVariant {
 		if err != nil {
 			continue
 		}
-		variants = append(variants, printerArtVariant{Name: strings.TrimSuffix(entry.Name(), ".txt"), Lines: splitPrinterArt(data)})
+		assets = append(assets, printerArtAsset{Name: strings.TrimSuffix(entry.Name(), ".txt"), Lines: splitPrinterArt(data)})
 	}
-	sort.Slice(variants, func(i, j int) bool {
-		return variants[i].Name < variants[j].Name
+	sort.Slice(assets, func(i, j int) bool {
+		return assets[i].Name < assets[j].Name
 	})
-	return variants
+	return assets
 }
 
 func splitPrinterArt(data []byte) []string {
@@ -85,15 +76,4 @@ func printerArtModelKey(model string) string {
 	default:
 		return "generic"
 	}
-}
-
-func positiveMod(value, mod int) int {
-	if mod <= 0 {
-		return 0
-	}
-	value %= mod
-	if value < 0 {
-		value += mod
-	}
-	return value
 }

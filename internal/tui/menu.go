@@ -24,13 +24,21 @@ func (m *Model) handleMenuKey(msg tea.KeyMsg) bool {
 		m.MenuOpen = false
 		m.setStatus("Menu closed.")
 	case "up", "k":
-		m.MenuIndex = positiveMod(m.MenuIndex-1, menuItemCount)
+		m.MenuIndex = wrapMenuIndex(m.MenuIndex - 1)
 	case "down", "j":
-		m.MenuIndex = positiveMod(m.MenuIndex+1, menuItemCount)
+		m.MenuIndex = wrapMenuIndex(m.MenuIndex + 1)
 	case "enter":
 		m.activateMenuItem()
 	}
 	return true
+}
+
+func wrapMenuIndex(index int) int {
+	index %= menuItemCount
+	if index < 0 {
+		index += menuItemCount
+	}
+	return index
 }
 
 func (m *Model) activateMenuItem() {

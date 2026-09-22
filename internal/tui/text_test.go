@@ -47,7 +47,8 @@ func TestResizeQRElementKeepsSquareAspectFromVerticalHandle(t *testing.T) {
 
 func TestDoubleClickTextElementBeginsEditing(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
-	m.Canvas = newCanvas(80, 24, m.Document.WidthMM, m.Document.HeightMM)
+	m.addTextElement()
+	m.Canvas = newCanvas(160, 60, m.Document.WidthMM, m.Document.HeightMM)
 	element, ok := m.selectedElement()
 	if !ok || element.Text == nil {
 		t.Fatal("expected selected text element")
@@ -92,6 +93,7 @@ func TestDoubleClickQRElementBeginsEditing(t *testing.T) {
 
 func TestArrowKeysMoveSelectedElement(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
 	initial, ok := m.selectedElement()
 	if !ok {
 		t.Fatal("expected selected element")
@@ -139,6 +141,7 @@ func TestMovingQRElementKeepsScreenRectSize(t *testing.T) {
 
 func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
 	initial, ok := m.selectedElement()
 	if !ok {
 		t.Fatal("expected selected element")
@@ -169,6 +172,7 @@ func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
 
 func TestCapitalHJKLResizeSelectedElementDimensions(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
 	initial, ok := m.selectedElement()
 	if !ok {
 		t.Fatal("expected selected element")
@@ -248,23 +252,19 @@ func TestFocusPickerSelectsElementByHint(t *testing.T) {
 	if !m.openFocusPicker() {
 		t.Fatal("openFocusPicker() = false, want true")
 	}
-	m.handleFocusPickerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m.handleFocusPickerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
 	if m.FocusPickerOpen {
 		t.Fatal("focus picker still open after selecting hint")
 	}
-	if m.SelectedID != "qr-2" {
-		t.Fatalf("selected id = %q, want qr-2", m.SelectedID)
+	if m.SelectedID != "qr-1" {
+		t.Fatalf("selected id = %q, want qr-1", m.SelectedID)
 	}
 }
 
-func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
+func TestNewModelAppliesFontPathToAddedText(t *testing.T) {
 	m := NewModel(50, 30, "rect", "/tmp/example.ttf", PrintConfig{})
-	initial, ok := m.selectedElement()
-	if !ok || initial.Text == nil {
-		t.Fatal("expected initial selected text element")
-	}
-	if initial.Text.FontPath != "/tmp/example.ttf" {
-		t.Fatalf("initial font path = %q, want custom path", initial.Text.FontPath)
+	if len(m.Document.Elements) != 0 {
+		t.Fatalf("initial element count = %d, want 0", len(m.Document.Elements))
 	}
 
 	m.addTextElement()
@@ -277,33 +277,26 @@ func TestNewModelAppliesFontPathToInitialAndAddedText(t *testing.T) {
 	}
 }
 
-func TestPrinterArtLoadsModelVariants(t *testing.T) {
+func TestPrinterArtLoadsModelArt(t *testing.T) {
 	for _, model := range []string{"B1", "D110"} {
-		variants := printerArtVariants(model)
-		if len(variants) != 1 {
-			t.Fatalf("printerArtVariants(%q) count = %d, want 1", model, len(variants))
-		}
-		for _, variant := range variants {
-			if len(variant.Lines) == 0 {
-				t.Fatalf("variant %q has no lines", variant.Name)
-			}
+		art := printerArt(model)
+		if len(art) == 0 {
+			t.Fatalf("printerArt(%q) returned no art", model)
 		}
 	}
 }
 
 func TestPrinterArtFallsBackForUnknownModel(t *testing.T) {
-	art := printerArt("", 99)
+	art := printerArt("")
 	if len(art) == 0 {
 		t.Fatal("printerArt() returned no fallback art")
-	}
-	if label := printerArtVariantLabel("", 99); label != "generic 1/1" {
-		t.Fatalf("fallback label = %q, want generic 1/1", label)
 	}
 }
 
 func TestApplySelectedFontUpdatesSelectedTextAndDefault(t *testing.T) {
 	fontPath := writeTestFont(t, "Go-Regular.ttf")
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
 	m.Fonts = []FontOption{
 		{Name: "Default", Path: ""},
 		{Name: "Go-Regular", Path: fontPath},
@@ -357,6 +350,7 @@ func TestFontPickerSearchFiltersAndAppliesMatch(t *testing.T) {
 	jetBrainsPath := writeTestFont(t, "JetBrainsMonoNerdFont-Regular.ttf")
 	goRegularPath := writeTestFont(t, "Go-Regular.ttf")
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
 	m.Fonts = []FontOption{
 		{Name: "Default", Path: ""},
 		{Name: "Go-Regular", Path: goRegularPath},
@@ -393,6 +387,7 @@ func TestFontPickerSearchFiltersAndAppliesMatch(t *testing.T) {
 
 func TestCapitalFOpensFontPickerForText(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
 	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("F")}) {
 		t.Fatal("F was not handled")
 	}

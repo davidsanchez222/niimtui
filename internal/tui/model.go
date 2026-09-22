@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -122,8 +121,6 @@ type Model struct {
 	ConnectErr  string
 	ConnectMeta map[string]any
 
-	PrinterArtVariant int
-
 	EditingText bool
 	TextBuffer  string
 	StatusBase  string
@@ -158,18 +155,6 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 	if strings.TrimSpace(shape) != "" {
 		doc.Shape = strings.ToLower(strings.TrimSpace(shape))
 	}
-	sample := label.NewTextElement(
-		"text-1",
-		"Storage Box 12",
-		math.Max(widthMM*0.15, 2),
-		math.Max(heightMM*0.20, 2),
-		math.Max(math.Min(widthMM*0.45, widthMM-4), 10),
-		math.Max(math.Min(heightMM*0.22, heightMM-4), 6),
-		40,
-	)
-	sample.Text.FontPath = fontPath
-	clampElementToDocument(&sample, doc)
-	_ = doc.AddElement(sample)
 	status := "Click to select. Drag to move. Drag handles to resize."
 	preview := LivePreviewState{Protocol: detectLivePreviewProtocol()}
 	if preview.Protocol != LivePreviewDisabled {
@@ -185,8 +170,7 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 	fonts := discoverFonts(fontPath)
 	return Model{
 		Document:        doc,
-		SelectedID:      sample.ID,
-		NextID:          2,
+		NextID:          1,
 		FontPath:        fontPath,
 		Fonts:           fonts,
 		FontPickerIndex: fontOptionIndex(fonts, fontPath),
