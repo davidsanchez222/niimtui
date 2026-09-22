@@ -113,18 +113,24 @@ func openPreviewCmd(path string) tea.Cmd {
 func terminalLivePreviewCmd(m Model) tea.Cmd {
 	protocol := m.Preview.Protocol
 	png := append([]byte(nil), m.Preview.PNG...)
-	width := m.Width
-	height := m.Height
+	canvasWidth := m.Canvas.Width
 	return func() tea.Msg {
-		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, width, height)
+		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasWidth)
 		return nil
 	}
 }
 
-func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, width, height int) (int, error) {
-	cols, rows := livePreviewLegendCellSize(width)
-	left := max(width-cols-2, 1)
-	top := max(height-rows-1, 1)
+func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasWidth int) (int, error) {
+	const (
+		leftPanelWidth  = 30
+		propertiesWidth = 28
+		gap             = 2
+		bodyTop         = 3
+	)
+	panelLeft := leftPanelWidth + gap + canvasWidth + gap + 1
+	cols, rows := livePreviewPanelCellSize(propertiesWidth)
+	left := panelLeft
+	top := bodyTop + 2
 	escape := terminalImageEscape(protocol, png, cols, rows)
 	if escape == "" {
 		return 0, nil
@@ -179,8 +185,8 @@ func terminalImageEscape(protocol LivePreviewProtocol, png []byte, cols, rows in
 	}
 }
 
-func livePreviewLegendCellSize(width int) (int, int) {
-	cols := min(max(width/10, 10), 18)
+func livePreviewPanelCellSize(width int) (int, int) {
+	cols := min(max(width-4, 10), 20)
 	rows := 4
 	cols = min(cols, max(width, 1))
 	return cols, rows
