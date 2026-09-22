@@ -20,15 +20,18 @@ func TestDetectLivePreviewProtocolPrefersKitty(t *testing.T) {
 	}
 }
 
-func TestDetectLivePreviewProtocolITerm(t *testing.T) {
+func TestDetectLivePreviewProtocolITermUsesFallback(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS open fallback is darwin-only")
+	}
 	withEnv(t, map[string]string{
 		"KITTY_WINDOW_ID": "",
 		"TERM_PROGRAM":    "iTerm.app",
 		"TERM":            "xterm-256color",
 	})
 
-	if got := detectLivePreviewProtocol(); got != LivePreviewITerm2 {
-		t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewITerm2)
+	if got := detectLivePreviewProtocol(); got != LivePreviewOpen {
+		t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewOpen)
 	}
 }
 

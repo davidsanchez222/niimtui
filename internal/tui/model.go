@@ -146,6 +146,7 @@ type LivePreviewState struct {
 	PNGHash      string
 	LastOpenHash string
 	LastKey      string
+	RedrawSeq    int
 	Err          string
 }
 
@@ -241,9 +242,6 @@ func detectLivePreviewProtocol() LivePreviewProtocol {
 	term := strings.ToLower(strings.TrimSpace(envValue("TERM")))
 	if envValue("KITTY_WINDOW_ID") != "" || strings.Contains(term, "xterm-kitty") || termProgram == "ghostty" {
 		return LivePreviewKitty
-	}
-	if strings.Contains(termProgram, "wezterm") || strings.Contains(termProgram, "iterm") {
-		return LivePreviewITerm2
 	}
 	if runtime.GOOS == "darwin" {
 		return LivePreviewOpen

@@ -36,9 +36,19 @@ type livePreviewFailedMsg struct {
 	Err error
 }
 
+type livePreviewRedrawMsg struct {
+	Seq int
+}
+
 func livePreviewDebounceCmd(seq int) tea.Cmd {
 	return tea.Tick(livePreviewDebounce, func(time.Time) tea.Msg {
 		return livePreviewTickMsg{Seq: seq}
+	})
+}
+
+func livePreviewRedrawCmd(seq int) tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
+		return livePreviewRedrawMsg{Seq: seq}
 	})
 }
 
@@ -135,7 +145,16 @@ func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []b
 	if escape == "" {
 		return 0, nil
 	}
-	return fmt.Fprintf(w, "\x1b7\x1b[%d;%dH%s\x1b8", top, left, escape)
+	return fmt.Fprintf(w, "\x1b7%s\x1b_Ga=d,d=I,i=4242;\x1b\\\x1b[%d;%dH%s\x1b8", clearTerminalLivePreview(left, top, propertiesWidth, rows), top, left, escape)
+}
+
+func clearTerminalLivePreview(left, top, width, rows int) string {
+	var b strings.Builder
+	blank := strings.Repeat(" ", max(width, 1))
+	for row := 0; row < rows; row++ {
+		fmt.Fprintf(&b, "\x1b[%d;%dH%s", top+row, left, blank)
+	}
+	return b.String()
 }
 
 func (m Model) livePreviewKey() string {
@@ -178,8 +197,6 @@ func terminalImageEscape(protocol LivePreviewProtocol, png []byte, cols, rows in
 	switch protocol {
 	case LivePreviewKitty:
 		return kittyImageEscape(encoded, cols, rows)
-	case LivePreviewITerm2:
-		return fmt.Sprintf("\x1b]1337;File=inline=1;width=%dpx;height=%dpx;preserveAspectRatio=1:%s\a", cols*8, rows*16, encoded)
 	default:
 		return ""
 	}
@@ -205,7 +222,7 @@ func kittyImageEscape(encoded string, cols, rows int) string {
 			more = 1
 		}
 		if start == 0 {
-			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,c=%d,r=%d,m=%d;%s\x1b\\", cols, rows, more, encoded[start:end])
+			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,i=4242,c=%d,r=%d,m=%d;%s\x1b\\", cols, rows, more, encoded[start:end])
 			continue
 		}
 		fmt.Fprintf(&b, "\x1b_Gm=%d;%s\x1b\\", more, encoded[start:end])
@@ -214,5 +231,5 @@ func kittyImageEscape(encoded string, cols, rows int) string {
 }
 
 func (m Model) hasTerminalLivePreview() bool {
-	return (m.Preview.Protocol == LivePreviewKitty || m.Preview.Protocol == LivePreviewITerm2) && len(m.Preview.PNG) > 0
+	return m.Preview.Protocol == LivePreviewKitty && len(m.Preview.PNG) > 0
 }

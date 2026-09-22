@@ -17,7 +17,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.Ready = true
 			m.reflow()
 			m.refreshStatus()
-			return m, nil
+			return m, m.livePreviewResizeCmd()
 		case tea.KeyMsg:
 			m.handleTextEditing(msg)
 			return m, nil
@@ -32,7 +32,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Ready = true
 		m.reflow()
 		m.refreshStatus()
-		return m, nil
+		return m, m.livePreviewResizeCmd()
 	case tea.MouseMsg:
 		updated, cmd := m.updateMouse(msg)
 		if model, ok := updated.(Model); ok {
@@ -78,6 +78,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.setStatus("Realtime preview failed: %v", msg.Err)
 		}
 		return m, nil
+	case livePreviewRedrawMsg:
+		if m.hasTerminalLivePreview() && msg.Seq == m.Preview.RedrawSeq {
+			return m, terminalLivePreviewCmd(m)
+		}
+		return m, nil
 	case printerConnectedMsg:
 		m.Connection = ConnectionConnected
 		m.ConnectErr = ""
@@ -92,6 +97,14 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) livePreviewResizeCmd() tea.Cmd {
+	if m.hasTerminalLivePreview() {
+		m.Preview.RedrawSeq++
+		return livePreviewRedrawCmd(m.Preview.RedrawSeq)
+	}
+	return nil
 }
 
 func (m Model) withLivePreviewSchedule(beforeKey string, cmd tea.Cmd) (tea.Model, tea.Cmd) {
