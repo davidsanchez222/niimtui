@@ -225,6 +225,21 @@ func artLines(lines []string, width int) []string {
 
 func propertyPanelLines(m Model, width int) []string {
 	lines := []string{
+		propertyTitleStyle.Render("Live Preview"),
+		"",
+	}
+	if m.hasTerminalLivePreview() {
+		_, previewHeight := livePreviewPanelCellSize(width)
+		for range previewHeight {
+			lines = append(lines, "")
+		}
+	} else if m.Preview.Protocol == LivePreviewOpen {
+		lines = append(lines, mutedStyle.Render("macOS open fallback"))
+	} else {
+		lines = append(lines, mutedStyle.Render("terminal image unavailable"))
+	}
+	lines = append(lines,
+		"",
 		propertyTitleStyle.Render("Properties"),
 		"",
 		propertyItem("Label W", fmt.Sprintf("%.1f mm", m.Document.WidthMM)),
@@ -232,7 +247,7 @@ func propertyPanelLines(m Model, width int) []string {
 		propertyItem("Shape", m.Document.Shape),
 		propertyItem("Print", printDirectionLabel(m.Print.Model)),
 		"",
-	}
+	)
 
 	element, ok := m.selectedElement()
 	if !ok {
