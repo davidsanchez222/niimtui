@@ -322,6 +322,9 @@ func devicePanelLines(m Model, width int) []string {
 		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
 		propertyItem("Device", sidebarValue("Device", m.Print.DeviceName, emptyFallback(m.Print.Identifier, "unknown"), width)),
 		"",
+		propertyItem("Preset", sidebarValue("Preset", m.currentPresetLabel(), "custom", width)),
+		presetSwitchHelp(m),
+		"",
 		connectionStatusLine(m),
 	)
 	if matched := connectionMetaString(m.ConnectMeta, "matched_name"); matched != "" && matched != m.Print.DeviceName {
@@ -334,6 +337,20 @@ func devicePanelLines(m Model, width int) []string {
 		lines = append(lines, "", propertyLabel("Error"), truncateText(m.ConnectErr, width))
 	}
 	return padLines(lines, width)
+}
+
+func (m Model) currentPresetLabel() string {
+	if m.Preset >= 0 && m.Preset < len(m.Presets) {
+		return m.Presets[m.Preset].Name
+	}
+	return fmt.Sprintf("%.0fx%.0f %s", m.Document.WidthMM, m.Document.HeightMM, m.Document.Shape)
+}
+
+func presetSwitchHelp(m Model) string {
+	if len(m.Presets) == 0 {
+		return mutedStyle.Render("No presets loaded")
+	}
+	return helpItem("n", "next preset") + "  " + helpItem("N", "prev")
 }
 
 func artLines(lines []string, width int) []string {
@@ -350,7 +367,7 @@ func propertyPanelLines(m Model, width int) []string {
 		"",
 	}
 	if m.hasTerminalLivePreview() {
-		_, previewHeight := livePreviewPanelCellSize(width)
+		_, previewHeight := m.livePreviewPanelCellSize(width)
 		for range previewHeight {
 			lines = append(lines, "")
 		}

@@ -1,6 +1,10 @@
 package tui
 
-import "testing"
+import (
+	"testing"
+
+	"niimtui/internal/config"
+)
 
 func TestDrawRoundGuideUsesPrintableGuideRune(t *testing.T) {
 	canvas := Canvas{Width: 32, Height: 16, LabelWidthMM: 50, LabelHeightMM: 50}
@@ -65,6 +69,31 @@ func TestReflowCentersWideCanvasVertically(t *testing.T) {
 	wantY := layoutBodyTop + (m.canvasPanelHeight()-m.Canvas.Height)/2
 	if m.Canvas.Y != wantY {
 		t.Fatalf("canvas y = %d, want centered y %d", m.Canvas.Y, wantY)
+	}
+}
+
+func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
+	presets := []config.LabelPreset{
+		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"},
+		{Name: "b1-50x50-round", WidthMM: 50, HeightMM: 50, Shape: "round"},
+	}
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{}, presets, "b1-50x30")
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+
+	if !m.switchPreset(1) {
+		t.Fatal("switchPreset() = false, want true")
+	}
+	if m.Document.WidthMM != 50 || m.Document.HeightMM != 50 || m.Document.Shape != "round" {
+		t.Fatalf("document = %.0fx%.0f %s, want 50x50 round", m.Document.WidthMM, m.Document.HeightMM, m.Document.Shape)
+	}
+	if m.Preset != 1 {
+		t.Fatalf("preset index = %d, want 1", m.Preset)
+	}
+	wantX := m.canvasPanelLeft() + (m.canvasPanelWidth()-m.Canvas.Width)/2
+	if m.Canvas.X != wantX {
+		t.Fatalf("canvas x = %d, want centered x %d", m.Canvas.X, wantX)
 	}
 }
 

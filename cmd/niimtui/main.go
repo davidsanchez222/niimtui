@@ -341,6 +341,8 @@ func runTUI(args []string) error {
 	identifier := ""
 	offsetXMM := 0.0
 	offsetYMM := 0.0
+	var presets []config.LabelPreset
+	activePresetName := ""
 	shouldLoadConfig := *widthMM <= 0 || *heightMM <= 0 || *configPath != "" || *printer != ""
 	if !shouldLoadConfig {
 		if path, err := config.DefaultPath(); err == nil {
@@ -357,6 +359,7 @@ func runTUI(args []string) error {
 			}
 			return err
 		}
+		presets = cfg.Presets
 		printerProfile, ok, err := printerForSelector(cfg, printerSelector)
 		if err != nil && (*printer != "" || *widthMM <= 0 || *heightMM <= 0) {
 			return err
@@ -374,6 +377,7 @@ func runTUI(args []string) error {
 			if err != nil {
 				return err
 			}
+			activePresetName = preset.Name
 			if *widthMM <= 0 {
 				*widthMM = preset.WidthMM
 			}
@@ -400,7 +404,7 @@ func runTUI(args []string) error {
 		return errors.New("-height-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 
-	return tui.Run(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1})
+	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {

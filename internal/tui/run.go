@@ -6,10 +6,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"niimtui/internal/config"
 	"niimtui/internal/render"
 )
 
 func Run(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig) error {
+	return RunWithPresets(widthMM, heightMM, shape, fontPath, printConfig, nil, "")
+}
+
+func RunWithPresets(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig, presets []config.LabelPreset, presetName string) error {
 	if widthMM <= 0 || heightMM <= 0 {
 		return fmt.Errorf("label width and height must be greater than zero")
 	}
@@ -22,7 +27,7 @@ func Run(widthMM, heightMM float64, shape, fontPath string, printConfig PrintCon
 		options = append(options, tea.WithoutCatchPanics())
 	}
 
-	p := tea.NewProgram(NewModel(widthMM, heightMM, shape, fontPath, printConfig), options...)
+	p := tea.NewProgram(NewModelWithPresets(widthMM, heightMM, shape, fontPath, printConfig, presets, presetName), options...)
 
 	_, err := p.Run()
 	return err

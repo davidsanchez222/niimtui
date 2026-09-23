@@ -65,6 +65,23 @@ func TestTerminalLivePreviewClearDeletesKittyImage(t *testing.T) {
 	}
 }
 
+func TestLivePreviewPanelCellSizeUsesDocumentAspect(t *testing.T) {
+	square := NewModel(50, 50, "round", "", PrintConfig{})
+	wide := NewModel(50, 30, "rect", "", PrintConfig{})
+	tall := NewModel(30, 50, "rect", "", PrintConfig{})
+
+	_, squareRows := square.livePreviewPanelCellSize(28)
+	_, wideRows := wide.livePreviewPanelCellSize(28)
+	_, tallRows := tall.livePreviewPanelCellSize(28)
+
+	if squareRows <= wideRows {
+		t.Fatalf("square preview rows = %d, want more than wide rows %d", squareRows, wideRows)
+	}
+	if tallRows <= squareRows {
+		t.Fatalf("tall preview rows = %d, want more than square rows %d", tallRows, squareRows)
+	}
+}
+
 func TestLivePreviewResizeClearsWhenTerminalTooSmall(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.Preview.Protocol = LivePreviewKitty

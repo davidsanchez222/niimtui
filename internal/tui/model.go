@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"niimtui/internal/api"
+	"niimtui/internal/config"
 	"niimtui/internal/label"
 	"niimtui/internal/render"
 )
@@ -97,6 +98,8 @@ type Model struct {
 
 	Document label.Document
 	Canvas   Canvas
+	Presets  []config.LabelPreset
+	Preset   int
 
 	SelectedID string
 	Drag       DragState
@@ -151,6 +154,10 @@ type LivePreviewState struct {
 }
 
 func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig) Model {
+	return NewModelWithPresets(widthMM, heightMM, shape, fontPath, printConfig, nil, "")
+}
+
+func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig, presets []config.LabelPreset, presetName string) Model {
 	doc := label.NewDocument(widthMM, heightMM)
 	if strings.TrimSpace(shape) != "" {
 		doc.Shape = strings.ToLower(strings.TrimSpace(shape))
@@ -168,8 +175,11 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 	}
 
 	fonts := discoverFonts(fontPath)
+	presets = validTUIPresets(presets)
 	return Model{
 		Document:        doc,
+		Presets:         presets,
+		Preset:          activePresetIndex(presets, presetName, doc),
 		NextID:          1,
 		FontPath:        fontPath,
 		Fonts:           fonts,
@@ -180,6 +190,34 @@ func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig Pri
 		Status:          status,
 		Preview:         preview,
 	}
+}
+
+func validTUIPresets(presets []config.LabelPreset) []config.LabelPreset {
+	valid := make([]config.LabelPreset, 0, len(presets))
+	for _, preset := range presets {
+		if preset.WidthMM <= 0 || preset.HeightMM <= 0 {
+			continue
+		}
+		valid = append(valid, preset)
+	}
+	return valid
+}
+
+func activePresetIndex(presets []config.LabelPreset, name string, doc label.Document) int {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		for i, preset := range presets {
+			if preset.Name == name {
+				return i
+			}
+		}
+	}
+	for i, preset := range presets {
+		if preset.WidthMM == doc.WidthMM && preset.HeightMM == doc.HeightMM && strings.EqualFold(preset.Shape, doc.Shape) {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m Model) Init() tea.Cmd {

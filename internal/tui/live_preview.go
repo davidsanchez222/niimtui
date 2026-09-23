@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -19,7 +20,13 @@ import (
 
 const livePreviewDebounce = 150 * time.Millisecond
 
-const terminalLivePreviewImageID = 4242
+const (
+	terminalLivePreviewImageID = 4242
+	terminalLivePreviewMaxRows = 14
+	terminalLivePreviewMinRows = 3
+	terminalLivePreviewMaxCols = 20
+	terminalLivePreviewMinCols = 10
+)
 
 type livePreviewTickMsg struct {
 	Seq int
@@ -116,8 +123,9 @@ func terminalLivePreviewCmd(m Model) tea.Cmd {
 	protocol := m.Preview.Protocol
 	png := append([]byte(nil), m.Preview.PNG...)
 	canvasPanelWidth := m.canvasPanelWidth()
+	cols, rows := m.livePreviewPanelCellSize(layoutPropertiesWidth)
 	return func() tea.Msg {
-		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasPanelWidth)
+		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasPanelWidth, cols, rows)
 		return nil
 	}
 }
@@ -129,9 +137,8 @@ func clearTerminalLivePreviewCmd(canvasPanelWidth int) tea.Cmd {
 	}
 }
 
-func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasPanelWidth int) (int, error) {
+func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasPanelWidth, cols, rows int) (int, error) {
 	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + layoutPanelGap + 1
-	cols, rows := livePreviewPanelCellSize(layoutPropertiesWidth)
 	left := panelLeft
 	top := layoutBodyTop + 2
 	escape := terminalImageEscape(protocol, png, cols, rows)
@@ -143,10 +150,9 @@ func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []b
 
 func writeTerminalLivePreviewClear(w io.Writer, canvasPanelWidth int) (int, error) {
 	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + layoutPanelGap + 1
-	_, rows := livePreviewPanelCellSize(layoutPropertiesWidth)
 	left := panelLeft
 	top := layoutBodyTop + 2
-	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, layoutPropertiesWidth, rows))
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, layoutPropertiesWidth, terminalLivePreviewMaxRows))
 }
 
 func terminalLivePreviewDeleteEscape() string {
@@ -207,9 +213,16 @@ func terminalImageEscape(protocol LivePreviewProtocol, png []byte, cols, rows in
 	}
 }
 
-func livePreviewPanelCellSize(width int) (int, int) {
-	cols := min(max(width-4, 10), 20)
+func (m Model) livePreviewPanelCellSize(width int) (int, int) {
+	cols := min(max(width-4, terminalLivePreviewMinCols), terminalLivePreviewMaxCols)
+	aspectWidth := m.Document.WidthMM
+	aspectHeight := m.Document.HeightMM
 	rows := 4
+	if aspectWidth > 0 && aspectHeight > 0 {
+		aspect := aspectWidth / aspectHeight
+		rows = int(math.Round((float64(cols) * terminalCellWidthToHeightRatio) / aspect))
+	}
+	rows = min(max(rows, terminalLivePreviewMinRows), terminalLivePreviewMaxRows)
 	cols = min(cols, max(width, 1))
 	return cols, rows
 }

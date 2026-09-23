@@ -1,6 +1,10 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	beforePreviewKey := m.livePreviewKey()
@@ -193,6 +197,10 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.toggleFontPicker()
 	case "m":
 		return m.toggleMenu()
+	case "n":
+		return m.switchPreset(1)
+	case "N":
+		return m.switchPreset(-1)
 	case "?":
 		m.HelpOpen = !m.HelpOpen
 		if m.HelpOpen {
@@ -239,4 +247,43 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	default:
 		return false
 	}
+}
+
+func (m *Model) switchPreset(delta int) bool {
+	if len(m.Presets) == 0 || delta == 0 {
+		m.setStatus("No label presets available.")
+		return true
+	}
+	index := m.Preset
+	if index < 0 || index >= len(m.Presets) {
+		index = activePresetIndex(m.Presets, "", m.Document)
+	}
+	if index < 0 {
+		index = 0
+	} else {
+		index = (index + delta) % len(m.Presets)
+		if index < 0 {
+			index += len(m.Presets)
+		}
+	}
+	m.applyPreset(index)
+	return true
+}
+
+func (m *Model) applyPreset(index int) {
+	if index < 0 || index >= len(m.Presets) {
+		return
+	}
+	preset := m.Presets[index]
+	m.Preset = index
+	m.Document.WidthMM = preset.WidthMM
+	m.Document.HeightMM = preset.HeightMM
+	m.Document.Shape = strings.ToLower(strings.TrimSpace(preset.Shape))
+	if m.Document.Shape == "" {
+		m.Document.Shape = "rect"
+	}
+	m.SelectedID = ""
+	m.Drag = DragState{}
+	m.reflow()
+	m.setStatus("Label preset: %s (%.0fx%.0f %s).", preset.Name, preset.WidthMM, preset.HeightMM, m.Document.Shape)
 }
