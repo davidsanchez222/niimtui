@@ -122,7 +122,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 func (m *Model) livePreviewResizeCmd() tea.Cmd {
 	if m.hasTerminalLivePreview() {
 		if m.isTerminalTooSmall() {
-			return clearTerminalLivePreviewCmd(m.Canvas.Width)
+			return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 		}
 		m.Preview.RedrawSeq++
 		return livePreviewRedrawCmd(m.Preview.RedrawSeq)
@@ -170,15 +170,11 @@ func (m *Model) closePrinterSession() {
 }
 
 func (m *Model) reflow() {
-	toolWidth := 30
-	propertiesWidth := 28
-	framePadding := 8
-
-	canvasWidth := max(m.Width-toolWidth-propertiesWidth-framePadding, 12)
-	canvasHeight := max(m.Height-6, 6)
+	canvasWidth := m.canvasPanelWidth()
+	canvasHeight := m.canvasPanelHeight()
 	m.Canvas = newCanvas(canvasWidth, canvasHeight, m.Document.WidthMM, m.Document.HeightMM)
-	m.Canvas.X = toolWidth + 2
-	m.Canvas.Y = 3
+	m.Canvas.X = m.canvasPanelLeft() + max((canvasWidth-m.Canvas.Width)/2, 0)
+	m.Canvas.Y = layoutBodyTop + max((canvasHeight-m.Canvas.Height)/2, 0)
 }
 
 func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {

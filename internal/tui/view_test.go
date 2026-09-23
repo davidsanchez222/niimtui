@@ -44,6 +44,30 @@ func TestDrawPrintableAreaGuideSkipsRoundLabels(t *testing.T) {
 	}
 }
 
+func TestReflowCentersCanvasInPanel(t *testing.T) {
+	m := NewModel(50, 50, "round", "", PrintConfig{})
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+
+	wantX := m.canvasPanelLeft() + (m.canvasPanelWidth()-m.Canvas.Width)/2
+	if m.Canvas.X != wantX {
+		t.Fatalf("canvas x = %d, want centered x %d", m.Canvas.X, wantX)
+	}
+}
+
+func TestReflowCentersWideCanvasVertically(t *testing.T) {
+	m := NewModel(80, 30, "rect", "", PrintConfig{})
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+
+	wantY := layoutBodyTop + (m.canvasPanelHeight()-m.Canvas.Height)/2
+	if m.Canvas.Y != wantY {
+		t.Fatalf("canvas y = %d, want centered y %d", m.Canvas.Y, wantY)
+	}
+}
+
 func newTestGrid(canvas Canvas) [][]rune {
 	grid := make([][]rune, canvas.Height)
 	for y := range grid {

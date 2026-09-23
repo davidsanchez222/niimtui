@@ -70,10 +70,15 @@ var (
 )
 
 const (
-	minTerminalWidth   = 140
-	minTerminalHeight  = 30
-	printableGuideRune = '┊'
-	roundGuideInsetMM  = 4.0
+	minTerminalWidth      = 140
+	minTerminalHeight     = 30
+	layoutLeftPanelWidth  = 30
+	layoutPropertiesWidth = 28
+	layoutPanelGap        = 2
+	layoutFramePadding    = 8
+	layoutBodyTop         = 3
+	printableGuideRune    = '┊'
+	roundGuideInsetMM     = 4.0
 )
 
 func (m Model) View() string {
@@ -84,25 +89,23 @@ func (m Model) View() string {
 		return smallTerminalView(m.Width, m.Height)
 	}
 
-	leftWidth := 30
-	gap := 2
-	propertiesWidth := 28
-	canvasLines := strings.Split(renderCanvas(m), "\n")
-	leftLines := devicePanelLines(m, leftWidth)
-	propertyLines := propertyPanelLines(m, propertiesWidth)
+	canvasPanelWidth := m.canvasPanelWidth()
+	canvasLines := centerCanvasLines(strings.Split(renderCanvas(m), "\n"), canvasPanelWidth, m.canvasPanelHeight())
+	leftLines := devicePanelLines(m, layoutLeftPanelWidth)
+	propertyLines := propertyPanelLines(m, layoutPropertiesWidth)
 	bodyHeight := max(max(len(leftLines), len(canvasLines)), len(propertyLines))
 
 	for len(leftLines) < bodyHeight {
-		leftLines = append(leftLines, strings.Repeat(" ", leftWidth))
+		leftLines = append(leftLines, strings.Repeat(" ", layoutLeftPanelWidth))
 	}
 	for len(canvasLines) < bodyHeight {
-		canvasLines = append(canvasLines, strings.Repeat(" ", m.Canvas.Width))
+		canvasLines = append(canvasLines, strings.Repeat(" ", canvasPanelWidth))
 	}
 	for len(propertyLines) < bodyHeight {
-		propertyLines = append(propertyLines, strings.Repeat(" ", propertiesWidth))
+		propertyLines = append(propertyLines, strings.Repeat(" ", layoutPropertiesWidth))
 	}
 
-	viewWidth := max(m.Width, leftWidth+gap+m.Canvas.Width+gap+propertiesWidth)
+	viewWidth := max(m.Width, layoutLeftPanelWidth+layoutPanelGap+canvasPanelWidth+layoutPanelGap+layoutPropertiesWidth)
 	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, logoHeader())
 	status := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, statusStyle.Render(truncateText(m.Status, max(viewWidth-8, 1))))
 	lines := []string{
@@ -116,7 +119,7 @@ func (m Model) View() string {
 		return strings.Join(lines, "\n")
 	}
 	for i := 0; i < bodyHeight; i++ {
-		lines = append(lines, leftLines[i]+strings.Repeat(" ", gap)+canvasLines[i]+strings.Repeat(" ", gap)+propertyLines[i])
+		lines = append(lines, leftLines[i]+strings.Repeat(" ", layoutPanelGap)+canvasLines[i]+strings.Repeat(" ", layoutPanelGap)+propertyLines[i])
 	}
 	lines = append(lines, footerLines(m, viewWidth)...)
 
@@ -125,6 +128,36 @@ func (m Model) View() string {
 
 func (m Model) isTerminalTooSmall() bool {
 	return m.Width < minTerminalWidth || m.Height < minTerminalHeight
+}
+
+func (m Model) canvasPanelWidth() int {
+	return max(m.Width-layoutLeftPanelWidth-layoutPropertiesWidth-layoutFramePadding, 12)
+}
+
+func (m Model) canvasPanelHeight() int {
+	return max(m.Height-6, 6)
+}
+
+func (m Model) canvasPanelLeft() int {
+	return layoutLeftPanelWidth + layoutPanelGap
+}
+
+func centerCanvasLines(lines []string, width, height int) []string {
+	if height < len(lines) {
+		height = len(lines)
+	}
+	centered := make([]string, 0, height)
+	topPadding := max((height-len(lines))/2, 0)
+	for range topPadding {
+		centered = append(centered, strings.Repeat(" ", width))
+	}
+	for _, line := range lines {
+		centered = append(centered, centerStyledLine(line, width))
+	}
+	for len(centered) < height {
+		centered = append(centered, strings.Repeat(" ", width))
+	}
+	return centered
 }
 
 func smallTerminalView(width, height int) string {

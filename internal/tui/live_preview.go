@@ -111,54 +111,42 @@ func openPreviewCmd(path string) tea.Cmd {
 
 func terminalLivePreviewCmd(m Model) tea.Cmd {
 	if m.isTerminalTooSmall() {
-		return clearTerminalLivePreviewCmd(m.Canvas.Width)
+		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}
 	protocol := m.Preview.Protocol
 	png := append([]byte(nil), m.Preview.PNG...)
-	canvasWidth := m.Canvas.Width
+	canvasPanelWidth := m.canvasPanelWidth()
 	return func() tea.Msg {
-		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasWidth)
+		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasPanelWidth)
 		return nil
 	}
 }
 
-func clearTerminalLivePreviewCmd(canvasWidth int) tea.Cmd {
+func clearTerminalLivePreviewCmd(canvasPanelWidth int) tea.Cmd {
 	return func() tea.Msg {
-		_, _ = writeTerminalLivePreviewClear(os.Stdout, canvasWidth)
+		_, _ = writeTerminalLivePreviewClear(os.Stdout, canvasPanelWidth)
 		return nil
 	}
 }
 
-func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasWidth int) (int, error) {
-	const (
-		leftPanelWidth  = 30
-		propertiesWidth = 28
-		gap             = 2
-		bodyTop         = 3
-	)
-	panelLeft := leftPanelWidth + gap + canvasWidth + gap + 1
-	cols, rows := livePreviewPanelCellSize(propertiesWidth)
+func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasPanelWidth int) (int, error) {
+	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + layoutPanelGap + 1
+	cols, rows := livePreviewPanelCellSize(layoutPropertiesWidth)
 	left := panelLeft
-	top := bodyTop + 2
+	top := layoutBodyTop + 2
 	escape := terminalImageEscape(protocol, png, cols, rows)
 	if escape == "" {
 		return 0, nil
 	}
-	return fmt.Fprintf(w, "\x1b7%s%s\x1b[%d;%dH%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, propertiesWidth, rows), top, left, escape)
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b[%d;%dH%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, layoutPropertiesWidth, rows), top, left, escape)
 }
 
-func writeTerminalLivePreviewClear(w io.Writer, canvasWidth int) (int, error) {
-	const (
-		leftPanelWidth  = 30
-		propertiesWidth = 28
-		gap             = 2
-		bodyTop         = 3
-	)
-	panelLeft := leftPanelWidth + gap + canvasWidth + gap + 1
-	_, rows := livePreviewPanelCellSize(propertiesWidth)
+func writeTerminalLivePreviewClear(w io.Writer, canvasPanelWidth int) (int, error) {
+	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + layoutPanelGap + 1
+	_, rows := livePreviewPanelCellSize(layoutPropertiesWidth)
 	left := panelLeft
-	top := bodyTop + 2
-	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, propertiesWidth, rows))
+	top := layoutBodyTop + 2
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, layoutPropertiesWidth, rows))
 }
 
 func terminalLivePreviewDeleteEscape() string {
