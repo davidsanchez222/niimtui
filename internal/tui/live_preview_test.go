@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -47,6 +48,37 @@ func TestTerminalImageEscapeKittyIncludesCellSize(t *testing.T) {
 	escape := terminalImageEscape(LivePreviewKitty, []byte{1, 2, 3}, 12, 5)
 	if !strings.Contains(escape, "c=12,r=5") {
 		t.Fatalf("kitty escape = %q, want cell size", escape)
+	}
+}
+
+func TestTerminalLivePreviewClearDeletesKittyImage(t *testing.T) {
+	var b bytes.Buffer
+	if _, err := writeTerminalLivePreviewClear(&b, 40); err != nil {
+		t.Fatalf("writeTerminalLivePreviewClear() error = %v", err)
+	}
+	output := b.String()
+	if !strings.Contains(output, "a=d,d=I,i=4242") {
+		t.Fatalf("clear output = %q, want kitty image delete", output)
+	}
+	if strings.Contains(output, "a=T") {
+		t.Fatalf("clear output = %q, should not draw an image", output)
+	}
+}
+
+func TestLivePreviewResizeClearsWhenTerminalTooSmall(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Preview.Protocol = LivePreviewKitty
+	m.Preview.PNG = []byte{1, 2, 3}
+	m.Width = minTerminalWidth - 1
+	m.Height = minTerminalHeight
+	m.reflow()
+
+	cmd := m.livePreviewResizeCmd()
+	if cmd == nil {
+		t.Fatal("expected clear command")
+	}
+	if m.Preview.RedrawSeq != 0 {
+		t.Fatalf("redraw seq = %d, want 0 for immediate clear", m.Preview.RedrawSeq)
 	}
 }
 

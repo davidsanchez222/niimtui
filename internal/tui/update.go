@@ -121,6 +121,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 func (m *Model) livePreviewResizeCmd() tea.Cmd {
 	if m.hasTerminalLivePreview() {
+		if m.isTerminalTooSmall() {
+			return clearTerminalLivePreviewCmd(m.Canvas.Width)
+		}
 		m.Preview.RedrawSeq++
 		return livePreviewRedrawCmd(m.Preview.RedrawSeq)
 	}

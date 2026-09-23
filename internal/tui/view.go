@@ -80,7 +80,7 @@ func (m Model) View() string {
 	if !m.Ready {
 		return "Loading label designer..."
 	}
-	if m.Width < minTerminalWidth || m.Height < minTerminalHeight {
+	if m.isTerminalTooSmall() {
 		return smallTerminalView(m.Width, m.Height)
 	}
 
@@ -121,6 +121,10 @@ func (m Model) View() string {
 	lines = append(lines, footerLines(m, viewWidth)...)
 
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) isTerminalTooSmall() bool {
+	return m.Width < minTerminalWidth || m.Height < minTerminalHeight
 }
 
 func smallTerminalView(width, height int) string {

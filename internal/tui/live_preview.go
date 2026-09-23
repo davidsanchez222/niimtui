@@ -19,6 +19,8 @@ import (
 
 const livePreviewDebounce = 150 * time.Millisecond
 
+const terminalLivePreviewImageID = 4242
+
 type livePreviewTickMsg struct {
 	Seq int
 }
@@ -108,11 +110,21 @@ func openPreviewCmd(path string) tea.Cmd {
 }
 
 func terminalLivePreviewCmd(m Model) tea.Cmd {
+	if m.isTerminalTooSmall() {
+		return clearTerminalLivePreviewCmd(m.Canvas.Width)
+	}
 	protocol := m.Preview.Protocol
 	png := append([]byte(nil), m.Preview.PNG...)
 	canvasWidth := m.Canvas.Width
 	return func() tea.Msg {
 		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasWidth)
+		return nil
+	}
+}
+
+func clearTerminalLivePreviewCmd(canvasWidth int) tea.Cmd {
+	return func() tea.Msg {
+		_, _ = writeTerminalLivePreviewClear(os.Stdout, canvasWidth)
 		return nil
 	}
 }
@@ -132,7 +144,25 @@ func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []b
 	if escape == "" {
 		return 0, nil
 	}
-	return fmt.Fprintf(w, "\x1b7%s\x1b_Ga=d,d=I,i=4242;\x1b\\\x1b[%d;%dH%s\x1b8", clearTerminalLivePreview(left, top, propertiesWidth, rows), top, left, escape)
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b[%d;%dH%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, propertiesWidth, rows), top, left, escape)
+}
+
+func writeTerminalLivePreviewClear(w io.Writer, canvasWidth int) (int, error) {
+	const (
+		leftPanelWidth  = 30
+		propertiesWidth = 28
+		gap             = 2
+		bodyTop         = 3
+	)
+	panelLeft := leftPanelWidth + gap + canvasWidth + gap + 1
+	_, rows := livePreviewPanelCellSize(propertiesWidth)
+	left := panelLeft
+	top := bodyTop + 2
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, propertiesWidth, rows))
+}
+
+func terminalLivePreviewDeleteEscape() string {
+	return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d;\x1b\\", terminalLivePreviewImageID)
 }
 
 func clearTerminalLivePreview(left, top, width, rows int) string {
