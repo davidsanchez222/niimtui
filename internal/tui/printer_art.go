@@ -40,7 +40,7 @@ func loadPrinterArtAssets(key string) []printerArtAsset {
 		return nil
 	}
 	assets := make([]printerArtAsset, 0)
-	prefix := key + "-"
+	prefix := key
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) || path.Ext(entry.Name()) != ".txt" {
 			continue

@@ -302,15 +302,22 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 }
 
 func devicePanelLines(m Model, width int) []string {
+	// lines := []string{
+	// 	centerStyledLine(propertyTitleStyle.Render("Printer"), width),
+	// }
 	lines := []string{
-		centerStyledLine(propertyTitleStyle.Render("Printer"), width),
+		// propertyTitleStyle.Render("Printer"),
+		// "",
 	}
+
 	art := printerArt(m.Print.Model)
 	if len(art) > 0 {
 		lines = append(lines, artLines(art, width)...)
 	}
+
 	lines = append(lines,
-		"",
+		// "",
+		propertyTitleStyle.Render("Printer"),
 		propertyItem("Model", sidebarValue("Model", m.Print.Model, "none", width)),
 		"",
 		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
@@ -331,6 +338,7 @@ func devicePanelLines(m Model, width int) []string {
 	if m.ConnectErr != "" {
 		lines = append(lines, "", propertyLabel("Error"), truncateText(m.ConnectErr, width))
 	}
+
 	return padLines(lines, width)
 }
 
