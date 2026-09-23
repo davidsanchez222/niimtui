@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"context"
+	"strings"
 	"testing"
 
+	"niimtui/internal/api"
 	"niimtui/internal/config"
+	"niimtui/internal/render"
 )
 
 func TestDrawPrintableAreaGuideSkipsRoundLabels(t *testing.T) {
@@ -72,6 +76,30 @@ func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 		t.Fatalf("canvas x = %d, want centered x %d", m.Canvas.X, wantX)
 	}
 }
+
+func TestConnectHelpRendersInPrinterPanel(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{Session: noopPrinterSession{}})
+	m.Connection = ConnectionDisconnected
+	leftPanel := strings.Join(devicePanelLines(m, layoutLeftPanelWidth), "\n")
+	if !strings.Contains(leftPanel, "reconnect") {
+		t.Fatalf("printer panel = %q, want reconnect help", leftPanel)
+	}
+
+	footer := strings.Join(footerLines(m, minTerminalWidth), "\n")
+	if strings.Contains(footer, "reconnect") {
+		t.Fatalf("footer = %q, want reconnect help moved out", footer)
+	}
+}
+
+type noopPrinterSession struct{}
+
+func (noopPrinterSession) Connect(context.Context) (map[string]any, error) { return nil, nil }
+
+func (noopPrinterSession) PrintImage(context.Context, render.Result, int) api.PrintResponse {
+	return api.PrintResponse{OK: true}
+}
+
+func (noopPrinterSession) Close() error { return nil }
 
 func newTestGrid(canvas Canvas) [][]rune {
 	grid := make([][]rune, canvas.Height)

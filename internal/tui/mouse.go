@@ -181,18 +181,19 @@ func (m Model) handleAt(element label.Element, x, y int) (ResizeHandle, bool) {
 }
 
 func (m Model) elementScreenRect(element label.Element) screenRect {
-	left := m.Canvas.X + 1 + int(math.Floor(element.XMM*m.Canvas.CellsPerMMX))
-	top := m.Canvas.Y + 1 + int(math.Floor(element.YMM*m.Canvas.CellsPerMMY))
-	right := m.Canvas.X + int(math.Ceil((element.XMM+element.WidthMM)*m.Canvas.CellsPerMMX))
-	bottom := m.Canvas.Y + int(math.Ceil((element.YMM+element.HeightMM)*m.Canvas.CellsPerMMY))
-
+	minX := m.Canvas.X + 1
+	minY := m.Canvas.Y + 1
 	maxX := m.Canvas.X + m.Canvas.Width - 2
 	maxY := m.Canvas.Y + m.Canvas.Height - 2
+	width := min(max(int(math.Round(element.WidthMM*m.Canvas.CellsPerMMX))-1, 1), max(maxX-minX, 1))
+	height := min(max(int(math.Round(element.HeightMM*m.Canvas.CellsPerMMY))-1, 1), max(maxY-minY, 1))
 
-	left = clampInt(left, m.Canvas.X+1, maxX)
-	top = clampInt(top, m.Canvas.Y+1, maxY)
-	right = clampInt(right, left, maxX)
-	bottom = clampInt(bottom, top, maxY)
+	left := minX + int(math.Round(element.XMM*m.Canvas.CellsPerMMX))
+	top := minY + int(math.Round(element.YMM*m.Canvas.CellsPerMMY))
+	left = clampInt(left, minX, maxX-width)
+	top = clampInt(top, minY, maxY-height)
+	right := left + width
+	bottom := top + height
 
 	return screenRect{left: left, top: top, right: right, bottom: bottom}
 }

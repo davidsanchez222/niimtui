@@ -304,7 +304,6 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 func devicePanelLines(m Model, width int) []string {
 	lines := []string{
 		centerStyledLine(propertyTitleStyle.Render("Printer"), width),
-		"",
 	}
 	art := printerArt(m.Print.Model)
 	if len(art) > 0 {
@@ -321,6 +320,7 @@ func devicePanelLines(m Model, width int) []string {
 		presetSwitchHelp(m),
 		"",
 		connectionStatusLine(m),
+		connectHelp(m),
 	)
 	if matched := connectionMetaString(m.ConnectMeta, "matched_name"); matched != "" && matched != m.Print.DeviceName {
 		lines = append(lines, propertyItem("BLE", truncateText(matched, sidebarValueWidth("BLE", width))))
@@ -372,7 +372,6 @@ func propertyPanelLines(m Model, width int) []string {
 	lines = append(lines,
 		"",
 		propertyTitleStyle.Render("Properties"),
-		"",
 		propertyItem("Label W", fmt.Sprintf("%.1f mm", m.Document.WidthMM)),
 		propertyItem("Label H", fmt.Sprintf("%.1f mm", m.Document.HeightMM)),
 		propertyItem("Shape", m.Document.Shape),
@@ -432,10 +431,10 @@ func helpModalContent() []string {
 		"",
 		helpRow("f", "Show focus hints for keyboard-only element selection"),
 		helpRow("t", "Add a text box and select it"),
-		helpRow("r", "Add a QR code and select it"),
+		helpRow("q", "Add a QR code and select it"),
 		helpRow("i", "Edit selected text or QR contents"),
 		helpRow("F", "Search fonts for the selected text box"),
-		helpRow("hjkl / arrows", "Move selected element by 1 mm"),
+		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
 		helpRow("K / J", "Shrink / grow selected height"),
 		helpRow("[ ] / { }", "Resize diagonally from the bottom-right"),
@@ -490,7 +489,7 @@ func footerLines(m Model, width int) []string {
 	controls := strings.Join([]string{
 		helpItem("f", "focus"),
 		helpItem("t", "text"),
-		helpItem("r", "QR"),
+		helpItem("q", "QR"),
 		helpItem("i", "edit"),
 		helpItem("del", "remove"),
 		helpItem("arrows/hjkl", "move"),
@@ -502,8 +501,7 @@ func footerLines(m Model, width int) []string {
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "open preview"),
-		printHelp + reconnectHelp(m) + helpItem("esc", "clear"),
-		helpItem("q", "quit"),
+		printHelp + helpItem("esc", "clear"),
 		helpItem("ctrl+c", "quit"),
 	}, "  ")
 
@@ -582,11 +580,15 @@ func (m Model) selectedFontName(fontPath string) string {
 	return fontDisplayName(fontPath)
 }
 
-func reconnectHelp(m Model) string {
+func connectHelp(m Model) string {
 	if m.Print.Session == nil {
 		return ""
 	}
-	return helpItem("c", "reconnect") + "  "
+	label := "connect"
+	if m.Connection == ConnectionConnected || m.Connection == ConnectionDisconnected {
+		label = "reconnect"
+	}
+	return helpItem("c", label)
 }
 
 func emptyFallback(value, fallback string) string {

@@ -49,11 +49,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, cmd
 	case tea.KeyMsg:
 		if m.MenuOpen {
+			if msg.String() == "q" {
+				m.closePrinterSession()
+				return m, tea.Quit
+			}
 			m.handleMenuKey(msg)
 			return m, nil
 		}
 		if m.HelpOpen {
 			switch msg.String() {
+			case "q":
+				m.closePrinterSession()
+				return m, tea.Quit
 			case "?", "esc":
 				m.HelpOpen = false
 				m.setStatus("Help closed.")
@@ -77,9 +84,6 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
-		case "q":
-			m.closePrinterSession()
-			return m, tea.Quit
 		case "esc":
 			m.Drag = DragState{}
 			m.SelectedID = ""
@@ -186,7 +190,7 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "t":
 		m.addTextElement()
 		return true
-	case "r":
+	case "q", "r":
 		m.addQRElement()
 		return true
 	case "i":
@@ -215,13 +219,13 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "delete", "backspace":
 		return m.deleteSelected()
 	case "k", "up":
-		return m.nudgeSelected(0, -1)
+		return m.nudgeSelectedCells(0, -1)
 	case "j", "down":
-		return m.nudgeSelected(0, 1)
+		return m.nudgeSelectedCells(0, 1)
 	case "h", "left":
-		return m.nudgeSelected(-1, 0)
+		return m.nudgeSelectedCells(-1, 0)
 	case "l", "right":
-		return m.nudgeSelected(1, 0)
+		return m.nudgeSelectedCells(1, 0)
 	case "H":
 		return m.resizeSelectedDimensions(-1, 0)
 	case "J":

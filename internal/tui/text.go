@@ -313,6 +313,39 @@ func (m *Model) nudgeSelected(dxMM, dyMM float64) bool {
 	return true
 }
 
+func (m *Model) nudgeSelectedCells(dxCells, dyCells int) bool {
+	element, ok := m.selectedElement()
+	if !ok {
+		return false
+	}
+	if m.Canvas.CellsPerMMX <= 0 || m.Canvas.CellsPerMMY <= 0 {
+		return m.nudgeSelected(float64(dxCells), float64(dyCells))
+	}
+
+	r := m.elementScreenRect(element)
+	minX := m.Canvas.X + 1
+	minY := m.Canvas.Y + 1
+	maxX := m.Canvas.X + m.Canvas.Width - 2
+	maxY := m.Canvas.Y + m.Canvas.Height - 2
+	width := r.right - r.left
+	height := r.bottom - r.top
+
+	if dxCells != 0 {
+		left := clampInt(r.left+dxCells, minX, maxX-width)
+		element.XMM = float64(left-minX) / m.Canvas.CellsPerMMX
+	}
+	if dyCells != 0 {
+		top := clampInt(r.top+dyCells, minY, maxY-height)
+		element.YMM = float64(top-minY) / m.Canvas.CellsPerMMY
+	}
+	clampElementToDocument(&element, m.Document)
+	if !m.Document.UpdateElement(element) {
+		return false
+	}
+	m.setStatus("Moved to x %.1fmm y %.1fmm", element.XMM, element.YMM)
+	return true
+}
+
 func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
 	element, ok := m.selectedElement()
 	if !ok {

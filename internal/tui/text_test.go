@@ -139,6 +139,90 @@ func TestMovingQRElementKeepsScreenRectSize(t *testing.T) {
 	}
 }
 
+func TestLowercaseMoveKeepsScreenRectSizeAcrossRoundingBoundaries(t *testing.T) {
+	m := NewModel(50, 50, "round", "", PrintConfig{})
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+	element := label.NewQRElement("qr", "https://example.com", 10, 0, 18)
+	m.Document.Elements = []label.Element{element}
+	m.SelectedID = element.ID
+
+	for y := 0.0; y <= m.Document.HeightMM-element.HeightMM-1; y++ {
+		element.YMM = y
+		if !m.Document.UpdateElement(element) {
+			t.Fatal("failed to position QR element")
+		}
+		before := m.elementScreenRect(element)
+		if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}) {
+			t.Fatal("j was not handled")
+		}
+		moved, ok := m.selectedElement()
+		if !ok {
+			t.Fatal("selected element missing")
+		}
+		after := m.elementScreenRect(moved)
+		if before.right-before.left != after.right-after.left || before.bottom-before.top != after.bottom-after.top {
+			t.Fatalf("y %.1f screen size changed from %dx%d to %dx%d", y, before.right-before.left, before.bottom-before.top, after.right-after.left, after.bottom-after.top)
+		}
+		element = moved
+	}
+}
+
+func TestLowercaseMoveMovesScreenRectOneCell(t *testing.T) {
+	m := NewModel(50, 50, "round", "", PrintConfig{})
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+	element := label.NewQRElement("qr", "https://example.com", 5, 14, 18)
+	m.Document.Elements = []label.Element{element}
+	m.SelectedID = element.ID
+	before := m.elementScreenRect(element)
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}) {
+		t.Fatal("j was not handled")
+	}
+	moved, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("selected element missing")
+	}
+	after := m.elementScreenRect(moved)
+
+	if after.top != before.top+1 || after.bottom != before.bottom+1 {
+		t.Fatalf("screen y moved from %d..%d to %d..%d, want one-cell move", before.top, before.bottom, after.top, after.bottom)
+	}
+	if after.right-after.left != before.right-before.left || after.bottom-after.top != before.bottom-before.top {
+		t.Fatalf("screen size changed from %dx%d to %dx%d", before.right-before.left, before.bottom-before.top, after.right-after.left, after.bottom-after.top)
+	}
+}
+
+func TestArrowMoveFromFractionalPositionMovesScreenRectOneCell(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+	element := label.NewQRElement("qr", "https://example.com", 15.5, 13.5, 12)
+	m.Document.Elements = []label.Element{element}
+	m.SelectedID = element.ID
+	before := m.elementScreenRect(element)
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyUp}) {
+		t.Fatal("up arrow was not handled")
+	}
+	moved, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("selected element missing")
+	}
+	after := m.elementScreenRect(moved)
+
+	if after.top != before.top-1 || after.bottom != before.bottom-1 {
+		t.Fatalf("screen y moved from %d..%d to %d..%d, want one-cell up move", before.top, before.bottom, after.top, after.bottom)
+	}
+	if after.right-after.left != before.right-before.left || after.bottom-after.top != before.bottom-before.top {
+		t.Fatalf("screen size changed from %dx%d to %dx%d", before.right-before.left, before.bottom-before.top, after.right-after.left, after.bottom-after.top)
+	}
+}
+
 func TestBracketKeysResizeSelectedElementFromBottomRight(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.addTextElement()
@@ -415,6 +499,33 @@ func TestCtrlCQuitsWhileFontPickerIsSearching(t *testing.T) {
 	msg := cmd()
 	if _, ok := msg.(tea.QuitMsg); !ok {
 		t.Fatalf("ctrl+c command msg = %T, want tea.QuitMsg", msg)
+	}
+}
+
+func TestQAddsQRElementInCanvasMode(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd != nil {
+		if _, ok := cmd().(tea.QuitMsg); ok {
+			t.Fatal("q quit in canvas mode, want add QR")
+		}
+	}
+	model := updated.(Model)
+	if len(model.Document.Elements) != 1 || model.Document.Elements[0].QR == nil {
+		t.Fatalf("elements = %#v, want one QR element", model.Document.Elements)
+	}
+}
+
+func TestQQuitsFromMenu(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.MenuOpen = true
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd == nil {
+		t.Fatal("q from menu returned nil command")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("q from menu command msg = %T, want tea.QuitMsg", msg)
 	}
 }
 
