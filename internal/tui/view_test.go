@@ -6,30 +6,6 @@ import (
 	"niimtui/internal/config"
 )
 
-func TestDrawRoundGuideUsesPrintableGuideRune(t *testing.T) {
-	canvas := Canvas{Width: 32, Height: 16, LabelWidthMM: 50, LabelHeightMM: 50}
-	grid := newTestGrid(canvas)
-
-	drawRoundGuide(grid, canvas)
-
-	guideCount := 0
-	for y, row := range grid {
-		for x, r := range row {
-			switch {
-			case r == printableGuideRune:
-				guideCount++
-			case r == '·':
-				t.Fatalf("round guide at %d,%d uses middle dot, want printable guide rune", x, y)
-			case r >= 0x2800 && r <= 0x28ff:
-				t.Fatalf("round guide at %d,%d uses braille rune %q", x, y, r)
-			}
-		}
-	}
-	if guideCount == 0 {
-		t.Fatal("round guide did not draw printable guide runes")
-	}
-}
-
 func TestDrawPrintableAreaGuideSkipsRoundLabels(t *testing.T) {
 	canvas := newCanvas(80, 24, 50, 50)
 	m := NewModel(50, 50, "round", "", PrintConfig{Model: "B1"})

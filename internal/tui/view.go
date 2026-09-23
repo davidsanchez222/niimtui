@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"image"
-	"math"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -78,7 +77,6 @@ const (
 	layoutFramePadding    = 8
 	layoutBodyTop         = 3
 	printableGuideRune    = '┊'
-	roundGuideInsetMM     = 4.0
 )
 
 func (m Model) View() string {
@@ -217,9 +215,6 @@ func renderCanvas(m Model) string {
 	drawDocumentPreview(grid, canvas, m.Document)
 	if !isRound {
 		drawPrintableAreaGuide(grid, canvas, m)
-	}
-	if isRound {
-		drawRoundGuide(grid, canvas)
 	}
 
 	for _, element := range m.Document.Elements {
@@ -803,59 +798,6 @@ func brailleBit(x, y int) int {
 		return 0x40
 	case x == 1 && y == 3:
 		return 0x80
-	default:
-		return 0
-	}
-}
-
-func drawRoundGuide(grid [][]rune, canvas Canvas) {
-	innerWidth := canvas.Width - 2
-	innerHeight := canvas.Height - 2
-	if innerWidth <= 2 || innerHeight <= 2 {
-		return
-	}
-
-	visualWidth := float64(innerWidth) * terminalCellWidthToHeightRatio
-	visualHeight := float64(innerHeight)
-	radius := math.Min(visualWidth, visualHeight) / 2
-	if radius <= 0 {
-		return
-	}
-	cx := visualWidth / 2
-	cy := visualHeight / 2
-	visualPerMM := 0.0
-	if canvas.LabelWidthMM > 0 && canvas.LabelHeightMM > 0 {
-		visualPerMM = minPositiveFloat(visualWidth/canvas.LabelWidthMM, visualHeight/canvas.LabelHeightMM)
-	}
-	if visualPerMM <= 0 {
-		visualPerMM = radius * 0.04
-	}
-
-	guideRadius := radius - roundGuideInsetMM*visualPerMM
-	if guideRadius <= 0 {
-		return
-	}
-	steps := max(int(math.Ceil(guideRadius*math.Pi*2)), 24)
-	for i := 0; i < steps; i++ {
-		angle := 2 * math.Pi * float64(i) / float64(steps)
-		cellX := int(math.Round((cx+math.Cos(angle)*guideRadius)/terminalCellWidthToHeightRatio - 0.5))
-		cellY := int(math.Round(cy + math.Sin(angle)*guideRadius - 0.5))
-		if cellX >= 0 && cellX < innerWidth && cellY >= 0 && cellY < innerHeight {
-			grid[cellY+1][cellX+1] = printableGuideRune
-		}
-	}
-}
-
-func minPositiveFloat(a, b float64) float64 {
-	switch {
-	case a > 0 && b > 0 && a < b:
-		return a
-	case a > 0 && b > 0:
-		return b
-	case a > 0:
-		return a
-	case b > 0:
-		return b
 	default:
 		return 0
 	}
