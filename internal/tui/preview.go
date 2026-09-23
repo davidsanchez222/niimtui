@@ -102,16 +102,22 @@ func (m *Model) printCurrentDocument() tea.Cmd {
 	}
 }
 
-func (m *Model) handlePrintResult(msg printResultMsg) {
+func (m *Model) handlePrintResult(msg printResultMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.setStatus("Print failed: %v", msg.Err)
-		return
+		return nil
 	}
 	if msg.Closed {
 		m.Connection = ConnectionDisconnected
 		m.ConnectMeta = nil
-		m.setStatus("Printed %d copy to %s (%dx%d). Press c to reconnect.", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)
-		return
+		m.setStatus("Printed %d copy to %s (%dx%d). Reconnecting...", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)
+		if m.Print.Session == nil {
+			return nil
+		}
+		m.Connection = ConnectionConnecting
+		m.ConnectErr = ""
+		return connectPrinterCmd(m.Print.Session)
 	}
 	m.setStatus("Printed %d copy to %s (%dx%d).", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)
+	return nil
 }

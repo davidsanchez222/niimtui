@@ -91,8 +91,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		}
 	case printResultMsg:
-		m.handlePrintResult(msg)
-		return m, nil
+		return m, m.handlePrintResult(msg)
 	case livePreviewTickMsg:
 		if msg.Seq != m.Preview.RequestedSeq || m.Preview.Protocol == LivePreviewDisabled {
 			return m, nil

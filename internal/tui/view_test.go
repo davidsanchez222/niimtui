@@ -91,6 +91,26 @@ func TestConnectHelpRendersInPrinterPanel(t *testing.T) {
 	}
 }
 
+func TestPrintResultReconnectsAfterClosedPrint(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{Session: noopPrinterSession{}})
+	m.Connection = ConnectionConnected
+
+	cmd := m.handlePrintResult(printResultMsg{OK: true, Printer: "test", Copies: 1, WidthPx: 384, HeightPx: 240, Closed: true})
+	if cmd == nil {
+		t.Fatal("handlePrintResult() returned nil command, want reconnect command")
+	}
+	if m.Connection != ConnectionConnecting {
+		t.Fatalf("connection = %s, want connecting", m.Connection)
+	}
+	if !strings.Contains(m.Status, "Printed 1 copy") || !strings.Contains(m.Status, "Reconnecting") {
+		t.Fatalf("status = %q, want printed reconnecting status", m.Status)
+	}
+	msg := cmd()
+	if _, ok := msg.(printerConnectedMsg); !ok {
+		t.Fatalf("reconnect command msg = %T, want printerConnectedMsg", msg)
+	}
+}
+
 type noopPrinterSession struct{}
 
 func (noopPrinterSession) Connect(context.Context) (map[string]any, error) { return nil, nil }
