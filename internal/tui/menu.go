@@ -2,7 +2,7 @@ package tui
 
 import tea "github.com/charmbracelet/bubbletea"
 
-const menuItemCount = 3
+const menuItemCount = 4
 
 func (m *Model) toggleMenu() bool {
 	m.MenuOpen = !m.MenuOpen
@@ -18,7 +18,7 @@ func (m *Model) toggleMenu() bool {
 	return true
 }
 
-func (m *Model) handleMenuKey(msg tea.KeyMsg) bool {
+func (m *Model) handleMenuKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc", "m":
 		m.MenuOpen = false
@@ -28,9 +28,9 @@ func (m *Model) handleMenuKey(msg tea.KeyMsg) bool {
 	case "down", "j":
 		m.MenuIndex = wrapMenuIndex(m.MenuIndex + 1)
 	case "enter":
-		m.activateMenuItem()
+		return m.activateMenuItem()
 	}
-	return true
+	return nil
 }
 
 func wrapMenuIndex(index int) int {
@@ -41,19 +41,22 @@ func wrapMenuIndex(index int) int {
 	return index
 }
 
-func (m *Model) activateMenuItem() {
+func (m *Model) activateMenuItem() tea.Cmd {
 	switch m.MenuIndex {
 	case 0:
+		return m.switchPrinter(1)
+	case 1:
+		m.switchPreset(1)
+	case 2:
 		m.AutoInsert = !m.AutoInsert
 		if m.AutoInsert {
 			m.setStatus("Auto Insert enabled.")
-			return
+			return nil
 		}
 		m.setStatus("Auto Insert disabled.")
-	case 1:
-		m.setStatus("Edit Config is coming soon.")
-	case 2:
+	case 3:
 		m.MenuOpen = false
 		m.setStatus("Menu closed.")
 	}
+	return nil
 }

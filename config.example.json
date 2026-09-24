@@ -4,6 +4,7 @@
     "auth_token": "en343248JFJFnbt382nHFh3dd_932211edPIEMCBq",
     "allowed_origins": ["https://optiserver.tail38b7e.ts.net"]
   },
+  "active_printer": "d110-desk",
   "printers": [
     {
       "name": "d110-desk",

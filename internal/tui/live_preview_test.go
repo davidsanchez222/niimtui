@@ -99,6 +99,21 @@ func TestLivePreviewResizeClearsWhenTerminalTooSmall(t *testing.T) {
 	}
 }
 
+func TestLivePreviewModalClearsTerminalImage(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Preview.Protocol = LivePreviewKitty
+	m.Preview.PNG = []byte{1, 2, 3}
+	m.Width = minTerminalWidth
+	m.Height = minTerminalHeight
+	m.reflow()
+	m.HelpOpen = true
+
+	cmd := m.livePreviewModalCmd(false)
+	if cmd == nil {
+		t.Fatal("expected clear command when modal opens")
+	}
+}
+
 func TestLivePreviewSchedulesWhenDocumentChanges(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.Preview.Protocol = LivePreviewKitty

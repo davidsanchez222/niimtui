@@ -39,7 +39,7 @@ func runSetup(args []string) error {
 	}
 
 	fmt.Fprintln(os.Stdout, setupTitleStyle.Render("niimtui setup"))
-	fmt.Fprintln(os.Stdout, setupHintStyle.Render("Configure your default printer and label roll."))
+	fmt.Fprintln(os.Stdout, setupHintStyle.Render("Configure your installed printers and label rolls."))
 	fmt.Fprintln(os.Stdout)
 
 	if _, err := os.Stat(path); err == nil {
@@ -59,6 +59,70 @@ func runSetup(args []string) error {
 		return fmt.Errorf("check config path: %w", err)
 	}
 
+	printers, presets, activePrinter, err := setupInstalledPrintersAndRolls()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := config.DefaultConfig(printers[0], presets)
+	if err != nil {
+		return err
+	}
+	cfg.Printers = printers
+	cfg.ActivePrinter = activePrinter
+	if err := config.Save(path, cfg); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintf(os.Stdout, "%s %s\n", setupTitleStyle.Render("Saved config:"), path)
+	fmt.Fprintln(os.Stdout, setupHintStyle.Render("You can now run `niimtui` to open the designer."))
+	return nil
+}
+
+func setupInstalledPrintersAndRolls() ([]config.PrinterProfile, []config.LabelPreset, string, error) {
+	var printers []config.PrinterProfile
+	var installedPresets []config.LabelPreset
+	for {
+		printer, presets, err := setupOneInstalledPrinter(printers)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		printers = append(printers, printer)
+		installedPresets = mergePresets(installedPresets, presets)
+
+		addAnother := false
+		if err := huh.NewConfirm().
+			Title("Add another printer?").
+			Affirmative("Add printer").
+			Negative("Done").
+			Value(&addAnother).
+			Run(); err != nil {
+			return nil, nil, "", err
+		}
+		if !addAnother {
+			break
+		}
+	}
+
+	activePrinter := printers[0].Name
+	if len(printers) > 1 {
+		options := make([]huh.Option[string], 0, len(printers))
+		for _, printer := range printers {
+			options = append(options, huh.NewOption(printer.Name+" ("+printer.Model+")", printer.Name))
+		}
+		if err := huh.NewSelect[string]().
+			Title("Which printer should be active by default?").
+			Options(options...).
+			Value(&activePrinter).
+			Run(); err != nil {
+			return nil, nil, "", err
+		}
+	}
+	return printers, installedPresets, activePrinter, nil
+}
+
+func setupOneInstalledPrinter(existing []config.PrinterProfile) (config.PrinterProfile, []config.LabelPreset, error) {
 	model := "B1"
 	modelOptions := make([]huh.Option[string], 0, len(catalog.KnownModels()))
 	for _, knownModel := range catalog.KnownModels() {
@@ -69,30 +133,35 @@ func runSetup(args []string) error {
 		Options(modelOptions...).
 		Value(&model).
 		Run(); err != nil {
-		return err
+		return config.PrinterProfile{}, nil, err
 	}
 
 	presets, err := catalog.LabelPresetsForModel(model)
 	if err != nil {
-		return err
+		return config.PrinterProfile{}, nil, err
 	}
 	if len(presets) == 0 {
-		return fmt.Errorf("no label presets found for model %s", model)
+		return config.PrinterProfile{}, nil, fmt.Errorf("no label presets found for model %s", model)
 	}
 
-	presetName := presets[0].Name
+	selectedPresetNames := []string{presets[0].Name}
 	presetOptions := make([]huh.Option[string], 0, len(presets))
 	for _, preset := range presets {
 		label := fmt.Sprintf("%s (%.3gx%.3gmm %s)", preset.Name, preset.WidthMM, preset.HeightMM, preset.Shape)
 		presetOptions = append(presetOptions, huh.NewOption(label, preset.Name))
 	}
-	if err := huh.NewSelect[string]().
-		Title("Which label roll is installed?").
+	if err := huh.NewMultiSelect[string]().
+		Title("Which label rolls are installed for this printer?").
+		Description("Use space to select or deselect rolls; press enter when done.").
 		Options(presetOptions...).
-		Value(&presetName).
+		Value(&selectedPresetNames).
 		Run(); err != nil {
-		return err
+		return config.PrinterProfile{}, nil, err
 	}
+	if len(selectedPresetNames) == 0 {
+		return config.PrinterProfile{}, nil, fmt.Errorf("at least one installed label roll is required")
+	}
+	selectedPresets := presetsByName(presets, selectedPresetNames)
 
 	useScan := true
 	if err := huh.NewConfirm().
@@ -102,26 +171,15 @@ func runSetup(args []string) error {
 		Negative("Manual").
 		Value(&useScan).
 		Run(); err != nil {
-		return err
+		return config.PrinterProfile{}, nil, err
 	}
 
-	printer, err := setupPrinterProfile(model, presetName, useScan)
+	printer, err := setupPrinterProfile(model, selectedPresetNames[0], useScan)
 	if err != nil {
-		return err
+		return config.PrinterProfile{}, nil, err
 	}
-
-	cfg, err := config.DefaultConfig(printer, presets)
-	if err != nil {
-		return err
-	}
-	if err := config.Save(path, cfg); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintf(os.Stdout, "%s %s\n", setupTitleStyle.Render("Saved config:"), path)
-	fmt.Fprintln(os.Stdout, setupHintStyle.Render("You can now try `niimtui tui` or `niimtui print --image ./testlabels/preview.png`."))
-	return nil
+	printer.Name = uniquePrinterName(defaultPrinterName(model), existing)
+	return printer, selectedPresets, nil
 }
 
 func setupPrinterProfile(model, presetName string, useScan bool) (config.PrinterProfile, error) {
@@ -198,6 +256,8 @@ func chooseScannedDevice() (transport.ScanResult, bool, error) {
 
 	p := tea.NewProgram(newScanPicker(results, errs), tea.WithAltScreen())
 	model, err := p.Run()
+	cancel()
+	waitForScanStreamStop(errs)
 	if err != nil {
 		return transport.ScanResult{}, false, err
 	}
@@ -214,6 +274,13 @@ func chooseScannedDevice() (transport.ScanResult, bool, error) {
 		return transport.ScanResult{}, false, nil
 	}
 	return picker.selected, picker.selected.Address != "", nil
+}
+
+func waitForScanStreamStop(errs <-chan error) {
+	select {
+	case <-errs:
+	case <-time.After(500 * time.Millisecond):
+	}
 }
 
 type scanResultMsg transport.ScanResult
@@ -488,4 +555,65 @@ func defaultPrinterName(model string) string {
 	default:
 		return strings.ToLower(strings.TrimSpace(model)) + "-default"
 	}
+}
+
+func uniquePrinterName(base string, existing []config.PrinterProfile) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		base = "printer"
+	}
+	used := make(map[string]struct{}, len(existing))
+	for _, printer := range existing {
+		used[printer.Name] = struct{}{}
+	}
+	if _, ok := used[base]; !ok {
+		return base
+	}
+	for i := 2; ; i++ {
+		name := fmt.Sprintf("%s-%d", base, i)
+		if _, ok := used[name]; !ok {
+			return name
+		}
+	}
+}
+
+func presetsByName(presets []config.LabelPreset, names []string) []config.LabelPreset {
+	byName := make(map[string]config.LabelPreset, len(presets))
+	for _, preset := range presets {
+		byName[preset.Name] = preset
+	}
+	selected := make([]config.LabelPreset, 0, len(names))
+	seen := map[string]struct{}{}
+	for _, name := range names {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		preset, ok := byName[name]
+		if !ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		selected = append(selected, preset)
+	}
+	return selected
+}
+
+func mergePresets(existing, additional []config.LabelPreset) []config.LabelPreset {
+	seen := make(map[string]struct{}, len(existing)+len(additional))
+	merged := make([]config.LabelPreset, 0, len(existing)+len(additional))
+	for _, preset := range existing {
+		if _, ok := seen[preset.Name]; ok {
+			continue
+		}
+		seen[preset.Name] = struct{}{}
+		merged = append(merged, preset)
+	}
+	for _, preset := range additional {
+		if _, ok := seen[preset.Name]; ok {
+			continue
+		}
+		seen[preset.Name] = struct{}{}
+		merged = append(merged, preset)
+	}
+	return merged
 }

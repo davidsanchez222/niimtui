@@ -53,10 +53,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 				m.closePrinterSession()
 				return m, tea.Quit
 			}
-			m.handleMenuKey(msg)
-			return m, nil
+			wasOpen := m.HelpOpen || m.MenuOpen
+			cmd := m.handleMenuKey(msg)
+			return m, tea.Batch(cmd, m.livePreviewModalCmd(wasOpen))
 		}
 		if m.HelpOpen {
+			wasOpen := m.HelpOpen || m.MenuOpen
 			switch msg.String() {
 			case "q":
 				m.closePrinterSession()
@@ -65,7 +67,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 				m.HelpOpen = false
 				m.setStatus("Help closed.")
 			}
-			return m, nil
+			return m, m.livePreviewModalCmd(wasOpen)
 		}
 		if m.FocusPickerOpen {
 			m.handleFocusPickerKey(msg)
@@ -79,6 +81,27 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		if msg.String() == "c" {
 			return m, m.reconnectPrinter()
+		}
+		if msg.String() == "s" {
+			return m, m.switchPrinter(1)
+		}
+		if msg.String() == "m" {
+			wasOpen := m.HelpOpen || m.MenuOpen
+			m.toggleMenu()
+			return m, m.livePreviewModalCmd(wasOpen)
+		}
+		if msg.String() == "?" {
+			wasOpen := m.HelpOpen || m.MenuOpen
+			m.HelpOpen = !m.HelpOpen
+			if m.HelpOpen {
+				m.MenuOpen = false
+				m.FocusPickerOpen = false
+				m.closeFontPicker()
+				m.setStatus("Help opened. Press ? or esc to close.")
+			} else {
+				m.setStatus("Help closed.")
+			}
+			return m, m.livePreviewModalCmd(wasOpen)
 		}
 		if m.handleCommandKey(msg) {
 			return m, nil
@@ -106,7 +129,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, nil
 	case livePreviewRedrawMsg:
-		if m.hasTerminalLivePreview() && msg.Seq == m.Preview.RedrawSeq {
+		if m.hasTerminalLivePreview() && !m.HelpOpen && !m.MenuOpen && msg.Seq == m.Preview.RedrawSeq {
 			return m, terminalLivePreviewCmd(m)
 		}
 		return m, nil

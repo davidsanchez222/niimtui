@@ -28,8 +28,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		printUsage()
-		return errors.New("missing command")
+		return runDefaultCommand()
 	}
 
 	switch args[0] {
@@ -58,6 +57,22 @@ func run(args []string) error {
 		printUsage()
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runDefaultCommand() error {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("check config path: %w", err)
+		}
+		if err := runSetup(nil); err != nil {
+			return err
+		}
+	}
+	return runTUI(nil)
 }
 
 func runCalibrate(args []string) error {
@@ -333,6 +348,8 @@ func runTUI(args []string) error {
 	}
 	var svc *service.Service
 	var session *service.Session
+	var printers []config.PrinterProfile
+	resolvedConfigPath := *configPath
 	printerSelector := *printer
 	printerProfileName := printerSelector
 	shape := "rect"
@@ -352,6 +369,13 @@ func runTUI(args []string) error {
 		}
 	}
 	if shouldLoadConfig {
+		if resolvedConfigPath == "" {
+			path, err := config.DefaultPath()
+			if err != nil {
+				return err
+			}
+			resolvedConfigPath = path
+		}
 		cfg, err := config.LoadOptional(*configPath)
 		if err != nil {
 			if *widthMM > 0 && *heightMM > 0 && *configPath == "" && *printer == "" {
@@ -360,12 +384,14 @@ func runTUI(args []string) error {
 			return err
 		}
 		presets = cfg.Presets
+		printers = cfg.Printers
 		printerProfile, ok, err := printerForSelector(cfg, printerSelector)
 		if err != nil && (*printer != "" || *widthMM <= 0 || *heightMM <= 0) {
 			return err
 		}
 		if ok {
 			printerProfileName = printerProfile.Name
+			printerSelector = printerProfile.Name
 			printerModel = printerProfile.Model
 			deviceName = printerProfile.DeviceName
 			identifier = printerProfile.Identifier
@@ -391,7 +417,7 @@ func runTUI(args []string) error {
 			return err
 		}
 		if ok {
-			session, err = svc.NewSession(printerSelector)
+			session, err = svc.NewSession(printerProfile.Name)
 			if err != nil {
 				return err
 			}
@@ -404,7 +430,13 @@ func runTUI(args []string) error {
 		return errors.New("-height-mm is required and must be greater than zero unless setup/default config provides a preset")
 	}
 
-	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
+	var newSession tui.PrinterSessionFactory
+	if svc != nil {
+		newSession = func(selector string) (tui.PrinterSession, error) {
+			return svc.NewSession(selector)
+		}
+	}
+	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, NewSession: newSession, ConfigPath: resolvedConfigPath, Printers: printers, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {
@@ -418,8 +450,16 @@ func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPrese
 func printerForSelector(cfg config.Config, printerSelector string) (config.PrinterProfile, bool, error) {
 	printerSelector = strings.TrimSpace(printerSelector)
 	if printerSelector == "" {
+		if cfg.ActivePrinter != "" {
+			for _, candidate := range cfg.Printers {
+				if candidate.Name == cfg.ActivePrinter {
+					return candidate, true, nil
+				}
+			}
+			return config.PrinterProfile{}, false, fmt.Errorf("active printer profile %q not found", cfg.ActivePrinter)
+		}
 		if len(cfg.Printers) != 1 {
-			return config.PrinterProfile{}, false, errors.New("-printer is required when config has multiple printers")
+			return config.PrinterProfile{}, false, errors.New("-printer is required when config has multiple printers and no active_printer")
 		}
 		return cfg.Printers[0], true, nil
 	}
@@ -450,6 +490,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `niimtui
 
 Usage:
+  niimtui
   niimtui serve --config ./config.example.json
   niimtui setup
   niimtui calibrate --config ./config.example.json --printer b1-round --preset b1-50x30 --preview-out ./calibration.png

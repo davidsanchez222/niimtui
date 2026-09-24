@@ -21,8 +21,13 @@ type PrinterSession interface {
 	Close() error
 }
 
+type PrinterSessionFactory func(selector string) (PrinterSession, error)
+
 type PrintConfig struct {
 	Session    PrinterSession
+	NewSession PrinterSessionFactory
+	ConfigPath string
+	Printers   []config.PrinterProfile
 	Printer    string
 	Model      string
 	DeviceName string
@@ -96,10 +101,11 @@ type Model struct {
 	Width  int
 	Height int
 
-	Document label.Document
-	Canvas   Canvas
-	Presets  []config.LabelPreset
-	Preset   int
+	Document   label.Document
+	Canvas     Canvas
+	AllPresets []config.LabelPreset
+	Presets    []config.LabelPreset
+	Preset     int
 
 	SelectedID string
 	Drag       DragState
@@ -176,10 +182,12 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 
 	fonts := discoverFonts(fontPath)
 	presets = validTUIPresets(presets)
+	visiblePresets := presetsForPrinter(presets, printConfig.Model)
 	return Model{
 		Document:        doc,
-		Presets:         presets,
-		Preset:          activePresetIndex(presets, presetName, doc),
+		AllPresets:      presets,
+		Presets:         visiblePresets,
+		Preset:          activePresetIndex(visiblePresets, presetName, doc),
 		NextID:          1,
 		FontPath:        fontPath,
 		Fonts:           fonts,
@@ -190,6 +198,27 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		Status:          status,
 		Preview:         preview,
 	}
+}
+
+func presetsForPrinter(presets []config.LabelPreset, model string) []config.LabelPreset {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return presets
+	}
+	filtered := make([]config.LabelPreset, 0, len(presets))
+	prefix := printerPresetPrefix(model)
+	for _, preset := range presets {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(preset.Name)), prefix) {
+			filtered = append(filtered, preset)
+		}
+	}
+	return filtered
+}
+
+func printerPresetPrefix(model string) string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	model = strings.ReplaceAll(model, " ", "-")
+	return model + "-"
 }
 
 func validTUIPresets(presets []config.LabelPreset) []config.LabelPreset {

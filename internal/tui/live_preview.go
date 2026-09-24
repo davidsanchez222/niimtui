@@ -117,7 +117,7 @@ func openPreviewCmd(path string) tea.Cmd {
 }
 
 func terminalLivePreviewCmd(m Model) tea.Cmd {
-	if m.isTerminalTooSmall() {
+	if m.isTerminalTooSmall() || m.HelpOpen || m.MenuOpen {
 		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}
 	protocol := m.Preview.Protocol
@@ -250,4 +250,19 @@ func kittyImageEscape(encoded string, cols, rows int) string {
 
 func (m Model) hasTerminalLivePreview() bool {
 	return m.Preview.Protocol == LivePreviewKitty && len(m.Preview.PNG) > 0
+}
+
+func (m *Model) livePreviewModalCmd(wasOpen bool) tea.Cmd {
+	if !m.hasTerminalLivePreview() {
+		return nil
+	}
+	isOpen := m.HelpOpen || m.MenuOpen
+	if !wasOpen && isOpen {
+		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
+	}
+	if wasOpen && !isOpen {
+		m.Preview.RedrawSeq++
+		return livePreviewRedrawCmd(m.Preview.RedrawSeq)
+	}
+	return nil
 }

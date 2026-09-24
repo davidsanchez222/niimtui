@@ -588,7 +588,7 @@ func TestMenuTogglesAutoInsert(t *testing.T) {
 	if !m.MenuOpen {
 		t.Fatal("menu did not open")
 	}
-	m.MenuIndex = 0
+	m.MenuIndex = 2
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if !m.AutoInsert {
 		t.Fatal("auto insert was not enabled")
@@ -613,7 +613,7 @@ func TestHelpAndMenuRenderAsModalViews(t *testing.T) {
 	m.HelpOpen = false
 	m.MenuOpen = true
 	menu := m.View()
-	if !strings.Contains(menu, "Auto Insert") || !strings.Contains(menu, "Edit Config") {
+	if !strings.Contains(menu, "Auto Insert") || !strings.Contains(menu, "Printers installed") || !strings.Contains(menu, "Label rolls installed") {
 		t.Fatal("menu modal content missing")
 	}
 }

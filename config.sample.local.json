@@ -6,6 +6,7 @@
 	  "https://homebox.example.ts.net"
 	]
   },
+  "active_printer": "d110-desk",
   "printers": [
     {
       "name": "d110-desk",

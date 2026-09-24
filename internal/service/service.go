@@ -286,10 +286,16 @@ func (s *Service) validateRequest(req api.PrintRequest) (config.PrinterProfile, 
 func (s *Service) resolvePrinter(selector string) (config.PrinterProfile, *api.PrintResponse) {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
+		if s.cfg.ActivePrinter != "" {
+			if printer, ok := s.printersByName[s.cfg.ActivePrinter]; ok {
+				return printer, nil
+			}
+			return config.PrinterProfile{}, errorResponse(ErrPrinterNotFound, fmt.Sprintf("unknown active printer profile %q", s.cfg.ActivePrinter))
+		}
 		if len(s.cfg.Printers) == 1 {
 			return s.cfg.Printers[0], nil
 		}
-		return config.PrinterProfile{}, errorResponse(ErrInvalidRequest, "printer.selector is required")
+		return config.PrinterProfile{}, errorResponse(ErrInvalidRequest, "printer.selector is required when config has multiple printers and no active_printer")
 	}
 
 	printer, ok := s.printersByName[selector]

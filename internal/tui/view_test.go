@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -89,6 +90,50 @@ func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 	wantX := m.canvasPanelLeft() + (m.canvasPanelWidth()-m.Canvas.Width)/2
 	if m.Canvas.X != wantX {
 		t.Fatalf("canvas x = %d, want centered x %d", m.Canvas.X, wantX)
+	}
+}
+
+func TestSwitchPrinterFiltersPresetsAndSavesActivePrinter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := config.Config{
+		Server:        config.ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "test-token"},
+		ActivePrinter: "b1-default",
+		Printers: []config.PrinterProfile{
+			{Name: "b1-default", Model: "B1", Transport: "ble", DeviceName: "B1-Test", DefaultPreset: "b1-50x30"},
+			{Name: "d110-default", Model: "D110", Transport: "ble", DeviceName: "D110-Test", DefaultPreset: "d110-12x40"},
+		},
+		Presets: []config.LabelPreset{
+			{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2},
+			{Name: "d110-12x40", WidthMM: 40, HeightMM: 12, Shape: "rect", Layout: "qr-only", MarginsMM: 1},
+		},
+	}
+	if err := config.Save(path, cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{
+		ConfigPath: path,
+		Printers:   cfg.Printers,
+		Printer:    "b1-default",
+		Model:      "B1",
+		NewSession: func(string) (PrinterSession, error) { return noopPrinterSession{}, nil },
+	}, cfg.Presets, "b1-50x30")
+
+	cmd := m.switchPrinter(1)
+	if cmd == nil {
+		t.Fatal("switchPrinter() returned nil command, want connect command")
+	}
+	if m.Print.Printer != "d110-default" || m.Print.Model != "D110" {
+		t.Fatalf("active printer = %q %q, want d110-default D110", m.Print.Printer, m.Print.Model)
+	}
+	if len(m.Presets) != 1 || m.Presets[0].Name != "d110-12x40" {
+		t.Fatalf("visible presets = %#v, want only d110-12x40", m.Presets)
+	}
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.ActivePrinter != "d110-default" {
+		t.Fatalf("active_printer = %q, want d110-default", loaded.ActivePrinter)
 	}
 }
 

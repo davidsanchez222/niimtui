@@ -11,9 +11,10 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig     `json:"server"`
-	Printers []PrinterProfile `json:"printers"`
-	Presets  []LabelPreset    `json:"presets"`
+	Server        ServerConfig     `json:"server"`
+	ActivePrinter string           `json:"active_printer,omitempty"`
+	Printers      []PrinterProfile `json:"printers"`
+	Presets       []LabelPreset    `json:"presets"`
 }
 
 const appName = "niimtui"
@@ -137,8 +138,9 @@ func DefaultConfig(printer PrinterProfile, presets []LabelPreset) (Config, error
 			Listen:    "127.0.0.1:8443",
 			AuthToken: token,
 		},
-		Printers: []PrinterProfile{printer},
-		Presets:  presets,
+		ActivePrinter: printer.Name,
+		Printers:      []PrinterProfile{printer},
+		Presets:       presets,
 	}, nil
 }
 
@@ -184,6 +186,11 @@ func (c Config) Validate() error {
 		}
 		if printer.DefaultPreset == "" {
 			return fmt.Errorf("config.printers[%q].default_preset is required", printer.Name)
+		}
+	}
+	if c.ActivePrinter != "" {
+		if _, ok := printerNames[c.ActivePrinter]; !ok {
+			return fmt.Errorf("config.active_printer references unknown printer profile %q", c.ActivePrinter)
 		}
 	}
 

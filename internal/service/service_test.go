@@ -165,6 +165,18 @@ func TestResolvePrinterUsesOnlyConfiguredPrinterByDefault(t *testing.T) {
 	}
 }
 
+func TestResolvePrinterUsesActivePrinterByDefault(t *testing.T) {
+	svc := mustService(t)
+	svc.cfg.ActivePrinter = "b1-round"
+	printer, errResp := svc.resolvePrinter("")
+	if errResp != nil {
+		t.Fatalf("resolvePrinter() unexpected error = %#v", errResp)
+	}
+	if printer.Name != "b1-round" {
+		t.Fatalf("printer = %q, want b1-round", printer.Name)
+	}
+}
+
 func mustService(t *testing.T) *Service {
 	t.Helper()
 	cfg := config.Config{

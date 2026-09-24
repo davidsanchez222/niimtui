@@ -331,6 +331,7 @@ func devicePanelLines(m Model, width int) []string {
 		"",
 		propertyItem("Preset", sidebarValue("Preset", m.currentPresetLabel(), "custom", width)),
 		presetSwitchHelp(m),
+		printerSwitchHelp(m),
 		"",
 		connectionStatusLine(m),
 		connectHelp(m),
@@ -357,9 +358,16 @@ func (m Model) currentPresetLabel() string {
 
 func presetSwitchHelp(m Model) string {
 	if len(m.Presets) == 0 {
-		return mutedStyle.Render("No presets loaded")
+		return mutedStyle.Render("No installed rolls for printer")
 	}
 	return helpItem("n", "next preset") + "  " + helpItem("N", "prev")
+}
+
+func printerSwitchHelp(m Model) string {
+	if len(m.Print.Printers) <= 1 {
+		return mutedStyle.Render("One printer installed")
+	}
+	return helpItem("s", "switch printer")
 }
 
 func artLines(lines []string, width int) []string {
@@ -452,6 +460,7 @@ func helpModalContent() []string {
 		helpRow("R", "Rotate the canvas"),
 		helpRow("i", "Edit selected text or QR contents"),
 		helpRow("F", "Search fonts for the selected text box"),
+		helpRow("s", "Switch active printer"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
 		helpRow("K / J", "Shrink / grow selected height"),
@@ -471,8 +480,9 @@ func menuModalContent(m Model) []string {
 		autoInsert = "on"
 	}
 	items := []string{
-		"Auto Insert: " + autoInsert, // "(automatic insert mode when new component created)"
-		"Edit Config: coming soon",
+		"Printers installed: " + installedPrintersLabel(m),
+		"Label rolls installed: " + installedRollsLabel(m),
+		"Auto Insert: " + autoInsert,
 		"Close",
 	}
 	lines := []string{
@@ -493,6 +503,36 @@ func menuModalContent(m Model) []string {
 		mutedStyle.Render("j/k or arrows move, enter selects, esc closes"),
 	)
 	return lines
+}
+
+func installedPrintersLabel(m Model) string {
+	if len(m.Print.Printers) == 0 {
+		return "none"
+	}
+	names := make([]string, 0, len(m.Print.Printers))
+	for _, printer := range m.Print.Printers {
+		name := printer.Name
+		if printer.Name == m.Print.Printer {
+			name += " *"
+		}
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
+}
+
+func installedRollsLabel(m Model) string {
+	if len(m.Presets) == 0 {
+		return "none for " + emptyFallback(m.Print.Model, "active printer")
+	}
+	names := make([]string, 0, len(m.Presets))
+	for i, preset := range m.Presets {
+		name := preset.Name
+		if i == m.Preset {
+			name += " *"
+		}
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
 }
 
 func helpRow(key, description string) string {

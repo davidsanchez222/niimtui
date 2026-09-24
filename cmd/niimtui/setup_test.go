@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"niimtui/internal/config"
 	"niimtui/internal/transport"
 )
 
@@ -112,6 +113,23 @@ func TestKnownNiimbotRankMatchesOnlyPrefixWithSeparator(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("knownNiimbotRank(%q) known = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestPrinterForSelectorUsesActivePrinter(t *testing.T) {
+	cfg := config.Config{
+		ActivePrinter: "d110-default",
+		Printers: []config.PrinterProfile{
+			{Name: "b1-default", Model: "B1"},
+			{Name: "d110-default", Model: "D110"},
+		},
+	}
+	printer, ok, err := printerForSelector(cfg, "")
+	if err != nil {
+		t.Fatalf("printerForSelector() error = %v", err)
+	}
+	if !ok || printer.Name != "d110-default" {
+		t.Fatalf("printer = %#v ok %t, want d110-default true", printer, ok)
 	}
 }
 

@@ -22,9 +22,11 @@ const (
 
 type Backend struct {
 	adapter *bluetooth.Adapter
+}
 
-	enableOnce sync.Once
-	enableErr  error
+var defaultAdapterEnable struct {
+	once sync.Once
+	err  error
 }
 
 func New() *Backend {
@@ -172,10 +174,10 @@ func (b *Backend) ScanStream(ctx context.Context) (<-chan transport.ScanResult, 
 }
 
 func (b *Backend) enable() error {
-	b.enableOnce.Do(func() {
-		b.enableErr = b.adapter.Enable()
+	defaultAdapterEnable.once.Do(func() {
+		defaultAdapterEnable.err = b.adapter.Enable()
 	})
-	return b.enableErr
+	return defaultAdapterEnable.err
 }
 
 func (b *Backend) scanForDevice(ctx context.Context, printer config.PrinterProfile) (bluetooth.Address, string, error) {

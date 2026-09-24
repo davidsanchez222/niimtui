@@ -53,4 +53,25 @@ func TestSaveAndLoadDefaultConfig(t *testing.T) {
 	if loaded.Server.AuthToken == "" {
 		t.Fatal("loaded auth token is empty")
 	}
+	if loaded.ActivePrinter != printer.Name {
+		t.Fatalf("active printer = %q, want %q", loaded.ActivePrinter, printer.Name)
+	}
+}
+
+func TestValidateRejectsUnknownActivePrinter(t *testing.T) {
+	cfg := Config{
+		Server:        ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "test-token"},
+		ActivePrinter: "missing",
+		Printers: []PrinterProfile{{
+			Name:          "b1-default",
+			Model:         "B1",
+			Transport:     "ble",
+			DeviceName:    "B1-Test",
+			DefaultPreset: "b1-50x30",
+		}},
+		Presets: []LabelPreset{{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2}},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error = nil, want unknown active printer error")
+	}
 }
