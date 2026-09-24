@@ -85,6 +85,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.String() == "s" {
 			return m, m.switchPrinter(1)
 		}
+		if msg.String() == "z" {
+			m.undo()
+			return m, nil
+		}
+		if msg.String() == "Z" {
+			m.redo()
+			return m, nil
+		}
+		if msg.String() == "B" {
+			m.cycleRedoBranch()
+			return m, nil
+		}
 		if msg.String() == "m" {
 			wasOpen := m.HelpOpen || m.MenuOpen
 			m.toggleMenu()
@@ -221,6 +233,14 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.rotateCanvas()
 	case "i":
 		return m.beginEditingSelected()
+	case "y":
+		return m.copySelected()
+	case "x":
+		return m.cutSelected()
+	case "v":
+		return m.pasteClipboard()
+	case "d":
+		return m.duplicateSelected()
 	case "f":
 		return m.openFocusPicker()
 	case "F":
@@ -297,6 +317,7 @@ func (m *Model) switchPreset(delta int) bool {
 		}
 	}
 	m.applyPreset(index)
+	m.commitHistory("change label roll")
 	return true
 }
 

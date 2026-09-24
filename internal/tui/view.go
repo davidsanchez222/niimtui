@@ -137,7 +137,7 @@ func (m Model) canvasPanelWidth() int {
 }
 
 func (m Model) canvasPanelHeight() int {
-	return max(m.Height-6, 6)
+	return max(m.Height-8, 6)
 }
 
 func (m Model) canvasPanelLeft() int {
@@ -459,6 +459,8 @@ func helpModalContent() []string {
 		helpRow("r", "Rotate selected element"),
 		helpRow("R", "Rotate the canvas"),
 		helpRow("i", "Edit selected text or QR contents"),
+		helpRow("y / x / v / d", "Copy / cut / paste / duplicate selected component"),
+		helpRow("z / Z / B", "Undo / redo / cycle redo branch"),
 		helpRow("F", "Search fonts for the selected text box"),
 		helpRow("s", "Switch active printer"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
@@ -544,17 +546,29 @@ func footerLines(m Model, width int) []string {
 	if m.Print.Session != nil {
 		printHelp = helpItem("P", "print") + "  "
 	}
-	controls := strings.Join([]string{
+	createEdit := strings.Join([]string{
 		helpItem("f", "focus"),
 		helpItem("t", "text"),
 		helpItem("q", "QR"),
-		helpItem("r/R", "rotate"),
 		helpItem("i", "edit"),
 		helpItem("bksp/del", "remove"),
+		helpItem("r", "rotate"),
+		helpItem("R", "rotate canvas"),
+	}, "  ")
+	clipboardHistory := strings.Join([]string{
+		helpItem("y", "copy"),
+		helpItem("x", "cut"),
+		helpItem("v", "paste"),
+		helpItem("d", "duplicate"),
+		helpItem("z", "undo"),
+		helpItem("Z", "redo"),
+		helpItem("B", "redo branch"),
+	}, "  ")
+	movement := strings.Join([]string{
 		helpItem("arrows/hjkl", "move"),
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
-		helpItem("+/-", "inc/dec font size"),
+		helpItem("+/-", "font size"),
 		helpItem("m", "menu"),
 		helpItem("?", "help"),
 	}, "  ")
@@ -566,7 +580,9 @@ func footerLines(m Model, width int) []string {
 
 	return []string{
 		footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
-		centerStyledLine(controls, width),
+		centerStyledLine(createEdit, width),
+		centerStyledLine(clipboardHistory, width),
+		centerStyledLine(movement, width),
 		centerStyledLine(preview, width),
 	}
 }

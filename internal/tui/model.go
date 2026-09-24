@@ -97,6 +97,20 @@ type ClickState struct {
 	At        time.Time
 }
 
+type HistorySnapshot struct {
+	Document   label.Document
+	SelectedID string
+	NextID     int
+	Preset     int
+}
+
+type HistoryNode struct {
+	Parent   *HistoryNode
+	Children []*HistoryNode
+	Label    string
+	Snapshot HistorySnapshot
+}
+
 type Model struct {
 	Width  int
 	Height int
@@ -111,6 +125,9 @@ type Model struct {
 	Drag       DragState
 	LastClick  ClickState
 	NextID     int
+	Clipboard  []label.Element
+	History    *HistoryNode
+	RedoBranch int
 	FontPath   string
 	Fonts      []FontOption
 
@@ -183,7 +200,7 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 	fonts := discoverFonts(fontPath)
 	presets = validTUIPresets(presets)
 	visiblePresets := presetsForPrinter(presets, printConfig.Model)
-	return Model{
+	m := Model{
 		Document:        doc,
 		AllPresets:      presets,
 		Presets:         visiblePresets,
@@ -198,6 +215,8 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		Status:          status,
 		Preview:         preview,
 	}
+	m.initHistory()
+	return m
 }
 
 func presetsForPrinter(presets []config.LabelPreset, model string) []config.LabelPreset {

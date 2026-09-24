@@ -567,6 +567,131 @@ func TestCapitalRRotatesCanvasAndElements(t *testing.T) {
 	}
 }
 
+func TestCopyPasteSelectedComponent(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
+	element, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element")
+	}
+	element.Text.Value = "Copied"
+	m.Document.UpdateElement(element)
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) {
+		t.Fatal("copy key was not handled")
+	}
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}) {
+		t.Fatal("paste key was not handled")
+	}
+	if len(m.Document.Elements) != 2 {
+		t.Fatalf("element count = %d, want 2", len(m.Document.Elements))
+	}
+	pasted, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected pasted selection")
+	}
+	if pasted.ID == element.ID {
+		t.Fatal("pasted element reused source ID")
+	}
+	if pasted.Text == nil || pasted.Text.Value != "Copied" {
+		t.Fatalf("pasted text = %#v, want Copied", pasted.Text)
+	}
+}
+
+func TestCutSelectedComponentCanUndo(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}) {
+		t.Fatal("cut key was not handled")
+	}
+	if len(m.Document.Elements) != 0 || len(m.Clipboard) != 1 {
+		t.Fatalf("after cut elements=%d clipboard=%d, want 0 and 1", len(m.Document.Elements), len(m.Clipboard))
+	}
+	m.undo()
+	if len(m.Document.Elements) != 1 {
+		t.Fatalf("after undo elements=%d, want 1", len(m.Document.Elements))
+	}
+}
+
+func TestDuplicateSelectedComponent(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addQRElement()
+	source, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected QR")
+	}
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")}) {
+		t.Fatal("duplicate key was not handled")
+	}
+	duplicated, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected duplicated selection")
+	}
+	if len(m.Document.Elements) != 2 || duplicated.ID == source.ID || duplicated.QR == nil || duplicated.QR.Value != source.QR.Value {
+		t.Fatalf("duplicated element = %#v elements=%d", duplicated, len(m.Document.Elements))
+	}
+}
+
+func TestUndoRedoDocumentEdits(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
+	m.addQRElement()
+	if len(m.Document.Elements) != 2 {
+		t.Fatalf("element count = %d, want 2", len(m.Document.Elements))
+	}
+	m.undo()
+	if len(m.Document.Elements) != 1 {
+		t.Fatalf("after undo elements=%d, want 1", len(m.Document.Elements))
+	}
+	m.redo()
+	if len(m.Document.Elements) != 2 {
+		t.Fatalf("after redo elements=%d, want 2", len(m.Document.Elements))
+	}
+}
+
+func TestUndoTreeCyclesRedoBranches(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
+	m.addQRElement()
+	m.undo()
+	m.addTextElement()
+	m.undo()
+	if m.History == nil || len(m.History.Children) != 2 {
+		t.Fatalf("redo branches = %d, want 2", len(m.History.Children))
+	}
+	m.cycleRedoBranch()
+	m.redo()
+	if _, ok := m.Document.ElementByID("qr-2"); !ok {
+		t.Fatalf("redo branch did not restore qr-2: %#v", m.Document.Elements)
+	}
+}
+
+func TestMouseDragCreatesSingleUndoStep(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+	m.addTextElement()
+	before := m.History
+	element, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element")
+	}
+	x, y := elementClickPoint(m, element)
+	m.handleMousePressAt(leftClick(x, y), time.Now())
+	m.handleMouseMotion(tea.MouseMsg{X: x + 2, Y: y + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion})
+	model, _ := m.updateMouse(tea.MouseMsg{X: x + 2, Y: y + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	m = model.(Model)
+	if m.History == before || m.History.Parent != before {
+		t.Fatal("drag did not create exactly one history child")
+	}
+	m.undo()
+	restored, ok := m.selectedElement()
+	if !ok || restored.XMM != element.XMM || restored.YMM != element.YMM {
+		t.Fatalf("undo drag restored = %#v, want original %#v", restored, element)
+	}
+}
+
 func TestQQuitsFromMenu(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.MenuOpen = true

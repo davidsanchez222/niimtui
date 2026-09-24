@@ -43,6 +43,11 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.handleMouseMotion(msg)
 	case tea.MouseActionRelease:
 		if m.Drag.Mode != DragNone {
+			label := "move component"
+			if m.Drag.Mode == DragResize {
+				label = "resize component"
+			}
+			m.commitHistory(label)
 			m.setStatus("Drag complete.")
 		}
 		m.Drag = DragState{}

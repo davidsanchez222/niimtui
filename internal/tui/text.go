@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -18,8 +17,7 @@ const (
 )
 
 func (m *Model) addTextElement() {
-	id := fmt.Sprintf("text-%d", m.NextID)
-	m.NextID++
+	id := m.nextElementID(label.ElementText)
 
 	element := label.NewTextElement(
 		id,
@@ -45,12 +43,12 @@ func (m *Model) addTextElement() {
 		return
 	}
 	m.EditingText = false
+	m.commitHistory("add text")
 	m.setStatus("Added text box. Move it, then press i to edit.")
 }
 
 func (m *Model) addQRElement() {
-	id := fmt.Sprintf("qr-%d", m.NextID)
-	m.NextID++
+	id := m.nextElementID(label.ElementQR)
 
 	sizeMM := math.Max(math.Min(m.Document.WidthMM, m.Document.HeightMM)*0.35, 8)
 	element := label.NewQRElement(
@@ -74,6 +72,7 @@ func (m *Model) addQRElement() {
 		return
 	}
 	m.EditingText = false
+	m.commitHistory("add QR")
 	m.setStatus("Added QR code. Move it, then press i to edit.")
 }
 
@@ -102,6 +101,7 @@ func (m *Model) deleteSelected() bool {
 	m.FocusPickerOpen = false
 	m.closeFontPicker()
 	m.TextBuffer = ""
+	m.commitHistory("delete component")
 	m.setStatus("Deleted %q.", deletedID)
 	return true
 }
@@ -294,6 +294,7 @@ func (m *Model) applySelectedFont() bool {
 	m.FontPickerOpen = false
 	m.FontPickerSearch = false
 	m.FontPickerQuery = ""
+	m.commitHistory("change font")
 	m.setStatus("Font set to %s.", fontOption.Name)
 	return true
 }
@@ -309,6 +310,7 @@ func (m *Model) nudgeSelected(dxMM, dyMM float64) bool {
 	if !m.Document.UpdateElement(element) {
 		return false
 	}
+	m.commitHistory("move component")
 	m.setStatus("Moved to x %.1fmm y %.1fmm", element.XMM, element.YMM)
 	return true
 }
@@ -342,6 +344,7 @@ func (m *Model) nudgeSelectedCells(dxCells, dyCells int) bool {
 	if !m.Document.UpdateElement(element) {
 		return false
 	}
+	m.commitHistory("move component")
 	m.setStatus("Moved to x %.1fmm y %.1fmm", element.XMM, element.YMM)
 	return true
 }
@@ -361,6 +364,7 @@ func (m *Model) rotateSelectedElement() bool {
 	if !m.Document.UpdateElement(element) {
 		return false
 	}
+	m.commitHistory("rotate component")
 	m.setStatus("Rotated %s to %d deg.", element.ID, element.Rotation)
 	return true
 }
@@ -384,6 +388,7 @@ func (m *Model) rotateCanvas() bool {
 	m.Document.Rotation = normalizedTUIRotation(m.Document.Rotation + 90)
 	m.Preset = -1
 	m.reflow()
+	m.commitHistory("rotate canvas")
 	m.setStatus("Rotated canvas to %d deg (%.1f x %.1fmm).", m.Document.Rotation, m.Document.WidthMM, m.Document.HeightMM)
 	return true
 }
@@ -411,6 +416,7 @@ func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
 	if !m.Document.UpdateElement(updated) {
 		return false
 	}
+	m.commitHistory("resize component")
 	m.setStatus("Resized to %.1fmm x %.1fmm", updated.WidthMM, updated.HeightMM)
 	return true
 }
@@ -438,6 +444,7 @@ func (m *Model) resizeSelectedDimensions(dwMM, dhMM float64) bool {
 	if !m.Document.UpdateElement(updated) {
 		return false
 	}
+	m.commitHistory("resize component")
 	m.setStatus("Resized to %.1fmm x %.1fmm", updated.WidthMM, updated.HeightMM)
 	return true
 }
@@ -456,6 +463,7 @@ func (m *Model) adjustSelectedFont(delta float64) bool {
 	if !m.Document.UpdateElement(element) {
 		return false
 	}
+	m.commitHistory("change font size")
 	m.setStatus("Font size %.0f", fontSize)
 	return true
 }
@@ -465,6 +473,7 @@ func (m *Model) handleTextEditing(msg tea.KeyMsg) {
 	case "esc":
 		m.EditingText = false
 		m.TextBuffer = ""
+		m.commitHistory("edit text")
 		m.setStatus("Exited text editing.")
 		return
 	case "enter":
@@ -495,6 +504,7 @@ func (m *Model) handleTextEditing(msg tea.KeyMsg) {
 func (m *Model) finishTextEdit() {
 	m.EditingText = false
 	m.TextBuffer = ""
+	m.commitHistory("edit text")
 	m.setStatus("Exited text editing.")
 }
 
