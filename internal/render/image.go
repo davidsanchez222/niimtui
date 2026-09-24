@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math"
 	"os"
 )
 
@@ -68,10 +69,17 @@ func FitToPrinterWidth(result Result, model string) (Result, error) {
 		return result, nil
 	}
 
-	cropMinX := bounds.Min.X + (bounds.Dx()-maxWidth)/2
-	crop := image.Rect(cropMinX, bounds.Min.Y, cropMinX+maxWidth, bounds.Max.Y)
+	scale := float64(maxWidth) / float64(bounds.Dx())
+	scaledHeight := int(math.Round(float64(bounds.Dy()) * scale))
+	if scaledHeight < 1 {
+		scaledHeight = 1
+	}
+
 	fitted := image.NewGray(image.Rect(0, 0, maxWidth, bounds.Dy()))
-	draw.Draw(fitted, fitted.Bounds(), gray, crop.Min, draw.Src)
+	draw.Draw(fitted, fitted.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+	top := max(0, (fitted.Bounds().Dy()-scaledHeight)/2)
+	dstRect := image.Rect(0, top, maxWidth, top+scaledHeight).Intersect(fitted.Bounds())
+	scaleNearest(fitted, dstRect, gray, bounds)
 
 	var preview bytes.Buffer
 	if err := png.Encode(&preview, fitted); err != nil {

@@ -49,14 +49,14 @@ func TestPNGFileLoadsMonochromeRenderResult(t *testing.T) {
 	}
 }
 
-func TestFitToPrinterWidthCropsB1ImagesToPrintableWidth(t *testing.T) {
+func TestFitToPrinterWidthScalesB1ImagesToPrintableWidth(t *testing.T) {
 	img := image.NewGray(image.Rect(0, 0, 400, 240))
 	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
 		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
 			img.SetGray(x, y, color.Gray{Y: 255})
 		}
 	}
-	img.SetGray(399, 239, color.Gray{Y: 0})
+	img.SetGray(0, 120, color.Gray{Y: 0})
 
 	result, err := FitToPrinterWidth(Result{Image: img, WidthPx: 400, HeightPx: 240, PrintablePx: img.Bounds()}, "B1")
 	if err != nil {
@@ -70,6 +70,17 @@ func TestFitToPrinterWidthCropsB1ImagesToPrintableWidth(t *testing.T) {
 	}
 	if len(result.PreviewPNG) == 0 {
 		t.Fatal("FitToPrinterWidth() returned empty preview")
+	}
+	fitted := result.Image.(*image.Gray)
+	foundLeftEdge := false
+	for y := fitted.Bounds().Min.Y; y < fitted.Bounds().Max.Y; y++ {
+		if fitted.GrayAt(0, y).Y == 0 {
+			foundLeftEdge = true
+			break
+		}
+	}
+	if !foundLeftEdge {
+		t.Fatal("left-edge source content was not preserved after fitting")
 	}
 }
 
