@@ -27,7 +27,7 @@
       <video src="https://github.com/user-attachments/assets/f5d55ace-b483-4972-8820-57423abd367e" width="400" controls></video>
     </td>
     <td>
-      <img src="https://github.com/user-attachments/assets/d8b9496a-8642-49e6-a01e-9e73e5661783" width="400" />
+      <img width="469" height="515" alt="actualPrint3" src="https://github.com/user-attachments/assets/a9fc0a1a-35db-465e-bb0f-a269b59b3b58" />
     </td>
   </tr>
 </table>
