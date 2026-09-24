@@ -1,41 +1,74 @@
-# niimtui (beta)
-<div align="center">
-  <img width="360" alt="d110clidemo" src="https://github.com/user-attachments/assets/3196c342-9ff2-4710-bc47-cdceb10ce2d3" />
-  <img width="244" height="400" alt="d110printingDemo2" src="https://github.com/user-attachments/assets/765fe6f6-bdcb-482d-b689-de1105338455" />
-</div>
+# niimtui
 
-`niimtui` is a local CLI and HTTP service written for printing QR-driven labels to Niimbot printers over Bluetooth Low Energy written in Go.
+<p align="center">
+  <strong>Terminal-first label design and printing for Niimbot printers.</strong>
+</p>
 
-Currently, it has only been verified using macOS BLE print paths for:
+<p align="center">
+  <a href="#quick-start">quick start</a> · <a href="#tui">tui</a> · <a href="#support">support</a> · <a href="#roadmap">roadmap</a> · <a href="#development">development</a>
+</p>
 
-- `D110_M` v4-class devices
-- `B1`
+<p align="center">
+  Logo placeholder: <code>assets/logo.svg</code> coming soon.
+</p>
 
-## Why
+---
 
-Printing to Niimbot printers from macOS can be awkward, especially when the practical options are tied to browser-specific BLE support or a web app workflow.
+Demo video placeholder: a short TUI design-and-print walkthrough will live here.
 
-`niimtui` provides a simpler path: a local CLI and HTTP service that can send PNG label images directly to Niimbot printers over BLE.
+---
 
-## Features
+`niimtui` is a Go TUI for designing labels in the terminal and printing them to Niimbot printers over Bluetooth Low Energy.
 
-- macOS BLE printing for Niimbot printers
-- local QR generation from `qr.text`
-- B1-first semantic label layouts for common stock sizes
-- local CLI for print, scan, and probe workflows
-- HTTP service mode for remote print requests
-- browser-facing loopback CORS support for Homebox-style integrations
-- JSON-configured printer profiles and label presets
-- device-type-aware print task selection
+It is built around the terminal workflow first: open the designer, compose a label, preview/export the rendered PNG, and print to a configured printer. The lower-level CLI and local HTTP service are still available for automation, debugging, and future Homebox integration.
 
-## Current Support
+- **terminal label designer** - mouse and keyboard editing for text, QR labels, sizing, positioning, grids, copy/paste, undo/redo, and saved design presets.
+- **print what you preview** - exported previews use the same render path that feeds the printer pipeline.
+- **local-first printing** - no vendor cloud or browser Bluetooth dependency; printing happens from your machine over BLE.
+- **printer-aware layouts** - JSON printer profiles and label presets keep model, stock, shape, offsets, and defaults outside the label content.
+- **Niimbot protocol work** - working macOS BLE paths for `D110_M` v4-class devices and `B1`, with model-specific print task selection.
+- **automation-ready** - CLI commands and a local service exist alongside the TUI for scripts, probes, scans, previews, and future Homebox workflows.
 
-| OS    | Transport | Printer         | Status   |
-| ----- | --------- | --------------- | -------- |
-| macOS | BLE       | D110_M v4-class | verified |
-| macOS | BLE       | B1              | verified |
+## quick start
 
-## Quick Start
+Run the default flow. If no default config exists, `niimtui` starts setup first; otherwise it opens the TUI.
+
+```bash
+go run ./cmd/niimtui
+```
+
+Run setup explicitly:
+
+```bash
+go run ./cmd/niimtui setup
+```
+
+Open the TUI with an existing config:
+
+```bash
+go run ./cmd/niimtui tui --config ./config.example.json
+```
+
+Open the TUI for an ad-hoc label size:
+
+```bash
+go run ./cmd/niimtui tui --width-mm 50 --height-mm 30
+```
+
+## tui
+
+The TUI is the primary interface for the project.
+
+- Design labels directly in a terminal canvas.
+- Use mouse interactions for selection, movement, resizing, and layout work.
+- Use keyboard shortcuts for fast editing, exporting, printing, copy/paste, undo/redo, and menu actions.
+- Export PNG previews before printing.
+- Print from the designer when a printer profile is configured.
+- Use terminal image preview in supported terminals such as Kitty and Ghostty.
+
+The designer works best in a large terminal window. Current minimum target size is roughly `140x30` cells.
+
+## cli examples
 
 Scan for nearby BLE devices:
 
@@ -49,21 +82,7 @@ Probe a configured printer:
 go run ./cmd/niimtui probe --config ./config.example.json --printer d110-desk
 ```
 
-Print a QR label:
-
-```bash
-go run ./cmd/niimtui print \
-  --config ./config.example.json \
-  --printer b1-round \
-  --preset b1-50x50-round \
-  --layout qr-title-subtitle \
-  --qr-text https://homebox.example/items/123 \
-  --title "Garage Bin 4" \
-  --subtitle "Top Shelf" \
-  --preview-out ./preview.png
-```
-
-Generate the exact rendered print-job preview without printing:
+Render a preview without printing:
 
 ```bash
 go run ./cmd/niimtui print \
@@ -78,29 +97,64 @@ go run ./cmd/niimtui print \
   --no-print
 ```
 
-## How It Works
+Print the same QR label:
 
-1. A caller provides QR text, optional human-readable label text, and a target printer profile.
-2. `niimtui` resolves the preset, composes the label locally, prepares raster data, and selects the correct model-specific print task.
-3. `niimtui` sends the print job over BLE and tracks printer status until completion.
+```bash
+go run ./cmd/niimtui print \
+  --config ./config.example.json \
+  --printer b1-round \
+  --preset b1-50x50-round \
+  --layout qr-title-subtitle \
+  --qr-text https://homebox.example/items/123 \
+  --title "Garage Bin 4" \
+  --subtitle "Top Shelf" \
+  --preview-out ./preview.png
+```
 
-When `--preview-out` is used, the saved PNG is the same rendered label image that would be sent into the printer path. Add `--no-print` to stop after writing the preview.
+## support
 
-## Current Input Mode
+`niimtui` is beta software. The working hardware path today is macOS BLE with the printers below.
 
-The validated path today is text-driven QR label printing:
+| OS | Transport | Printer | Status |
+| --- | --- | --- | --- |
+| macOS | BLE | `D110_M` v4-class | verified |
+| macOS | BLE | `B1` | verified |
+| Linux | BLE | pending | untested |
+| Windows | BLE | pending | untested |
+| SSH session | TUI | pending | untested |
 
-- input: `qr.text` plus optional title/subtitle
-- output: BLE print job to the configured Niimbot printer
+See [`docs/TESTED_SETUP.md`](./docs/TESTED_SETUP.md) for the currently verified hardware, commands, and printer notes.
 
-The current browser integration target is Homebox in a normal browser on the same Mac as `niimtui`, with the browser calling the local service directly.
+## homebox and service mode
 
-## Documentation
+The long-term integration target is a local `niimtui` service that can receive authenticated print requests from Homebox-style workflows while keeping rendering and printer-specific logic local.
 
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md): full technical overview and design details
-- [`docs/TESTED_SETUP.md`](./docs/TESTED_SETUP.md): verified hardware setup, working commands, and printer notes
-- [`docs/ROADMAP.md`](./docs/ROADMAP.md): implementation milestones and future work
+The current service/CLI path supports QR text plus optional title/subtitle, resolves a configured printer and label preset, renders locally, and prints over BLE.
 
-## Status
+## roadmap
 
-This project is in active development, but the direct macOS BLE image-print path is already working on real hardware.
+| Item | Status |
+| --- | --- |
+| Full HTTPS Homebox integration | pending |
+| Package manager publishing: Homebrew, Chocolatey, apt, etc. | pending |
+| Linux testing | pending |
+| Windows testing | pending |
+| SSH session testing | pending |
+| BLE connectivity refactor and reliability improvements | pending |
+
+More implementation detail lives in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
+
+## documentation
+
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) - technical overview and design notes
+- [`docs/TESTED_SETUP.md`](./docs/TESTED_SETUP.md) - verified setup and printer-specific commands
+- [`docs/ROADMAP.md`](./docs/ROADMAP.md) - milestones and future work
+
+## development
+
+```bash
+go build ./...
+go test ./...
+```
+
+The project is written in Go and uses Bubble Tea/Lip Gloss for the TUI.
