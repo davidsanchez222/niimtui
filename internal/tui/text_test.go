@@ -716,7 +716,7 @@ func TestMenuTogglesAutoInsert(t *testing.T) {
 	if !m.MenuOpen {
 		t.Fatal("menu did not open")
 	}
-	m.MenuIndex = 4
+	m.MenuIndex = 3
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if !m.AutoInsert {
 		t.Fatal("auto insert was not enabled")
@@ -741,8 +741,18 @@ func TestHelpAndMenuRenderAsModalViews(t *testing.T) {
 	m.HelpOpen = false
 	m.MenuOpen = true
 	menu := m.View()
-	if !strings.Contains(menu, "Auto Insert") || !strings.Contains(menu, "Printers installed") || !strings.Contains(menu, "Label rolls installed") {
+	if !strings.Contains(menu, "Auto Insert") || !strings.Contains(menu, "Label rolls installed") || !strings.Contains(menu, "Saved presets") {
 		t.Fatal("menu modal content missing")
+	}
+}
+
+func TestSSavesDesignPromptInsteadOfSwitchingPrinter(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}) {
+		t.Fatal("s key was not handled")
+	}
+	if m.Prompt.Mode != PromptSaveDesign {
+		t.Fatalf("prompt mode = %q, want save design", m.Prompt.Mode)
 	}
 }
 

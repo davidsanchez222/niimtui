@@ -88,8 +88,8 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.String() == "c" {
 			return m, m.reconnectPrinter()
 		}
-		if msg.String() == "s" {
-			return m, m.switchPrinter(1)
+		if handled, cmd := m.handlePrinterNumberKey(msg); handled {
+			return m, cmd
 		}
 		if msg.String() == "z" {
 			m.undo()
@@ -257,6 +257,9 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.toggleGrid()
 	case "I":
 		return m.toggleInvertedColors()
+	case "s":
+		m.beginSaveDesignPrompt()
+		return true
 	case "m":
 		return m.toggleMenu()
 	case "n":
@@ -309,6 +312,13 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	default:
 		return false
 	}
+}
+
+func (m *Model) handlePrinterNumberKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if len(msg.Runes) != 1 || msg.Runes[0] < '1' || msg.Runes[0] > '9' {
+		return false, nil
+	}
+	return true, m.switchPrinterIndex(int(msg.Runes[0] - '1'))
 }
 
 func (m *Model) switchPreset(delta int) bool {

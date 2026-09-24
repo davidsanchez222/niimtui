@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"niimtui/internal/api"
 	"niimtui/internal/config"
 	"niimtui/internal/render"
@@ -118,9 +120,9 @@ func TestSwitchPrinterFiltersPresetsAndSavesActivePrinter(t *testing.T) {
 		NewSession: func(string) (PrinterSession, error) { return noopPrinterSession{}, nil },
 	}, cfg.Presets, "b1-50x30")
 
-	cmd := m.switchPrinter(1)
+	cmd := m.switchPrinterIndex(1)
 	if cmd == nil {
-		t.Fatal("switchPrinter() returned nil command, want connect command")
+		t.Fatal("switchPrinterIndex() returned nil command, want connect command")
 	}
 	if m.Print.Printer != "d110-default" || m.Print.Model != "D110" {
 		t.Fatalf("active printer = %q %q, want d110-default D110", m.Print.Printer, m.Print.Model)
@@ -134,6 +136,51 @@ func TestSwitchPrinterFiltersPresetsAndSavesActivePrinter(t *testing.T) {
 	}
 	if loaded.ActivePrinter != "d110-default" {
 		t.Fatalf("active_printer = %q, want d110-default", loaded.ActivePrinter)
+	}
+}
+
+func TestNumberKeySwitchesPrinter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := config.Config{
+		Server:        config.ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "test-token"},
+		ActivePrinter: "b1-default",
+		Printers: []config.PrinterProfile{
+			{Name: "b1-default", Model: "B1", Transport: "ble", DeviceName: "B1-Test", DefaultPreset: "b1-50x30"},
+			{Name: "d110-default", Model: "D110", Transport: "ble", DeviceName: "D110-Test", DefaultPreset: "d110-12x40"},
+		},
+		Presets: []config.LabelPreset{
+			{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2},
+			{Name: "d110-12x40", WidthMM: 40, HeightMM: 12, Shape: "rect", Layout: "qr-only", MarginsMM: 1},
+		},
+	}
+	if err := config.Save(path, cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{ConfigPath: path, Printers: cfg.Printers, Printer: "b1-default", Model: "B1"}, cfg.Presets, "b1-50x30")
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	m = updated.(Model)
+	if m.Print.Printer != "d110-default" || m.Print.Model != "D110" {
+		t.Fatalf("active printer = %q %q, want d110-default D110", m.Print.Printer, m.Print.Model)
+	}
+}
+
+func TestPrinterPanelShowsNumberedPrintersWithoutProfile(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{
+		Printers: []config.PrinterProfile{
+			{Name: "b1-default", Model: "B1", DeviceName: "B1-Test"},
+			{Name: "d110-default", Model: "D110", DeviceName: "D110-Test"},
+		},
+		Printer:    "b1-default",
+		Model:      "B1",
+		DeviceName: "B1-Test",
+	})
+	panel := strings.Join(devicePanelLines(m, layoutLeftPanelWidth), "\n")
+	if strings.Contains(panel, "Profile") {
+		t.Fatalf("printer panel = %q, should not contain Profile", panel)
+	}
+	if !strings.Contains(panel, "B1-Test (B1)") || !strings.Contains(panel, "D110-Test (D110)") {
+		t.Fatalf("printer panel = %q, want numbered display names", panel)
 	}
 }
 

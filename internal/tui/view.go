@@ -370,20 +370,22 @@ func devicePanelLines(m Model, width int) []string {
 	}
 
 	lines = append(lines,
-		// "",
 		propertyTitleStyle.Render("Printer"),
 		propertyItem("Model", sidebarValue("Model", m.Print.Model, "none", width)),
-		"",
-		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
 		propertyItem("Device", sidebarValue("Device", m.Print.DeviceName, emptyFallback(m.Print.Identifier, "unknown"), width)),
 		"",
+		propertyLabel("Installed"),
 		propertyItem("Label", sidebarValue("Label", m.currentPresetLabel(), "custom", width)),
 		presetSwitchHelp(m),
-		printerSwitchHelp(m),
 		"",
 		connectionStatusLine(m),
 		connectHelp(m),
 	)
+	installed := installedPrinterLines(m, width)
+	if len(installed) > 0 {
+		insertAt := len(lines) - 5
+		lines = append(lines[:insertAt], append(installed, lines[insertAt:]...)...)
+	}
 	if matched := connectionMetaString(m.ConnectMeta, "matched_name"); matched != "" && matched != m.Print.DeviceName {
 		lines = append(lines, propertyItem("BLE", truncateText(matched, sidebarValueWidth("BLE", width))))
 	}
@@ -411,11 +413,26 @@ func presetSwitchHelp(m Model) string {
 	return helpItem("n/N", "cycle label size")
 }
 
-func printerSwitchHelp(m Model) string {
-	if len(m.Print.Printers) <= 1 {
-		return mutedStyle.Render("One printer installed")
+func installedPrinterLines(m Model, width int) []string {
+	if len(m.Print.Printers) == 0 {
+		return []string{mutedStyle.Render("No printers installed"), ""}
 	}
-	return helpItem("s", "switch printer")
+	limit := min(len(m.Print.Printers), 9)
+	lines := make([]string, 0, limit+1)
+	for i := 0; i < limit; i++ {
+		printer := m.Print.Printers[i]
+		marker := " "
+		style := helpLabelStyle
+		if printer.Name == m.Print.Printer {
+			marker = "*"
+			style = propertySelectedStyle
+		}
+		prefix := keyStyle.Render(fmt.Sprintf("%d", i+1)) + style.Render(" "+marker+" ")
+		name := truncateText(printerDisplayName(printer), max(width-lipgloss.Width(prefix), 1))
+		lines = append(lines, prefix+style.Render(name))
+	}
+	lines = append(lines, "")
+	return lines
 }
 
 func artLines(lines []string, width int) []string {
@@ -515,7 +532,8 @@ func helpModalContent() []string {
 		helpRow("e", "Export PNG to a chosen path"),
 		helpRow("g", "Toggle visual grid"),
 		helpRow("I", "Toggle inverted black/white colors"),
-		helpRow("s", "Switch active printer"),
+		helpRow("1-9", "Switch installed printer"),
+		helpRow("s", "Save current design preset"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
 		helpRow("K / J", "Shrink / grow selected height"),
@@ -535,7 +553,6 @@ func menuModalContent(m Model) []string {
 		autoInsert = "on"
 	}
 	items := []string{
-		"Printers installed: " + installedPrintersLabel(m),
 		"Label rolls installed: " + installedRollsLabel(m),
 		"Saved presets: " + m.currentDesignPresetLabel(),
 		"Save current design",
@@ -567,21 +584,6 @@ func onOff(enabled bool) string {
 		return "on"
 	}
 	return "off"
-}
-
-func installedPrintersLabel(m Model) string {
-	if len(m.Print.Printers) == 0 {
-		return "none"
-	}
-	names := make([]string, 0, len(m.Print.Printers))
-	for _, printer := range m.Print.Printers {
-		name := printer.Name
-		if printer.Name == m.Print.Printer {
-			name += " *"
-		}
-		names = append(names, name)
-	}
-	return strings.Join(names, ", ")
 }
 
 func installedRollsLabel(m Model) string {
@@ -627,6 +629,7 @@ func footerLines(m Model, width int) []string {
 		helpItem("B", "redo branch"),
 	}, "  ")
 	movement := strings.Join([]string{
+		helpItem("1-9", "printer"),
 		helpItem("arrows/hjkl", "move"),
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
@@ -637,6 +640,7 @@ func footerLines(m Model, width int) []string {
 		helpItem("?", "help"),
 	}, "  ")
 	preview := strings.Join([]string{
+		helpItem("s", "save design"),
 		helpItem("p", "open preview"),
 		helpItem("e", "export PNG"),
 		printHelp + helpItem("esc", "clear"),

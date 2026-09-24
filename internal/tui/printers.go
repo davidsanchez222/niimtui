@@ -9,35 +9,17 @@ import (
 	"niimtui/internal/config"
 )
 
-func (m *Model) switchPrinter(delta int) tea.Cmd {
-	if len(m.Print.Printers) == 0 || delta == 0 {
-		m.setStatus("No installed printers available.")
+func (m *Model) switchPrinterIndex(index int) tea.Cmd {
+	if index < 0 || index >= len(m.Print.Printers) {
+		m.setStatus("No printer assigned to %d.", index+1)
 		return nil
 	}
-	if len(m.Print.Printers) == 1 {
-		m.setStatus("Only one printer is installed: %s.", m.Print.Printers[0].Name)
+	printer := m.Print.Printers[index]
+	if printer.Name == m.Print.Printer {
+		m.setStatus("Printer already active: %s.", printerDisplayName(printer))
 		return nil
 	}
-	index := activePrinterIndex(m.Print.Printers, m.Print.Printer)
-	if index < 0 {
-		index = 0
-	} else {
-		index = (index + delta) % len(m.Print.Printers)
-		if index < 0 {
-			index += len(m.Print.Printers)
-		}
-	}
-	return m.applyPrinter(m.Print.Printers[index])
-}
-
-func activePrinterIndex(printers []config.PrinterProfile, name string) int {
-	name = strings.TrimSpace(name)
-	for i, printer := range printers {
-		if printer.Name == name {
-			return i
-		}
-	}
-	return -1
+	return m.applyPrinter(printer)
 }
 
 func (m *Model) applyPrinter(printer config.PrinterProfile) tea.Cmd {
@@ -61,7 +43,7 @@ func (m *Model) applyPrinter(printer config.PrinterProfile) tea.Cmd {
 	m.ConnectErr = ""
 	m.ConnectMeta = nil
 
-	status := fmt.Sprintf("Switched to printer %s (%s).", printer.Name, printer.Model)
+	status := fmt.Sprintf("Switched to %s.", printerDisplayName(printer))
 	if len(m.Presets) == 0 {
 		status += " No installed label rolls match this printer."
 	}
@@ -83,6 +65,27 @@ func (m *Model) applyPrinter(printer config.PrinterProfile) tea.Cmd {
 	m.Connection = ConnectionConnecting
 	m.setStatus("%s Connecting...", status)
 	return connectPrinterCmd(session)
+}
+
+func printerDisplayName(printer config.PrinterProfile) string {
+	name := strings.TrimSpace(printer.DeviceName)
+	if name == "" {
+		name = strings.TrimSpace(printer.Identifier)
+	}
+	if name == "" {
+		name = strings.TrimSpace(printer.Address)
+	}
+	if name == "" {
+		name = strings.TrimSpace(printer.Name)
+	}
+	model := strings.TrimSpace(printer.Model)
+	if model == "" {
+		return name
+	}
+	if name == "" {
+		return model
+	}
+	return fmt.Sprintf("%s (%s)", name, model)
 }
 
 func saveActivePrinter(path, printerName string) error {
