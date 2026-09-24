@@ -70,6 +70,33 @@ func TestReflowCentersWideCanvasVertically(t *testing.T) {
 	}
 }
 
+func TestViewHeightStaysWithinTerminalAfterRotatingCanvasWithSelection(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{Model: "B1"})
+	m.Ready = true
+	m.Width = 200
+	m.Height = 32
+	m.reflow()
+	m.addTextElement()
+	if !m.beginEditingSelected() {
+		t.Fatal("beginEditingSelected() = false, want true")
+	}
+	m.TextBuffer = "hello"
+	_ = m.applyTextBuffer(m.TextBuffer)
+	m.finishTextEdit()
+	if !m.rotateCanvas() {
+		t.Fatal("rotateCanvas() = false, want true")
+	}
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	if len(lines) > m.Height {
+		t.Fatalf("view height = %d, want <= terminal height %d", len(lines), m.Height)
+	}
+	if !strings.Contains(view, "┌") {
+		t.Fatal("rotated canvas top border missing from view")
+	}
+}
+
 func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 	presets := []config.LabelPreset{
 		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"},

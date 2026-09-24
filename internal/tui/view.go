@@ -99,20 +99,10 @@ func (m Model) View() string {
 	}
 
 	canvasPanelWidth := m.canvasPanelWidth()
-	canvasLines := centerCanvasLines(strings.Split(renderCanvas(m), "\n"), canvasPanelWidth, m.canvasPanelHeight())
-	leftLines := devicePanelLines(m, layoutLeftPanelWidth)
-	propertyLines := propertyPanelLines(m, layoutPropertiesWidth)
-	bodyHeight := max(max(len(leftLines), len(canvasLines)), len(propertyLines))
-
-	for len(leftLines) < bodyHeight {
-		leftLines = append(leftLines, strings.Repeat(" ", layoutLeftPanelWidth))
-	}
-	for len(canvasLines) < bodyHeight {
-		canvasLines = append(canvasLines, strings.Repeat(" ", canvasPanelWidth))
-	}
-	for len(propertyLines) < bodyHeight {
-		propertyLines = append(propertyLines, strings.Repeat(" ", layoutPropertiesWidth))
-	}
+	bodyHeight := m.canvasPanelHeight()
+	canvasLines := fitPanelLines(centerCanvasLines(strings.Split(renderCanvas(m), "\n"), canvasPanelWidth, bodyHeight), bodyHeight, canvasPanelWidth)
+	leftLines := fitPanelLines(devicePanelLines(m, layoutLeftPanelWidth), bodyHeight, layoutLeftPanelWidth)
+	propertyLines := fitPanelLines(propertyPanelLines(m, layoutPropertiesWidth), bodyHeight, layoutPropertiesWidth)
 
 	viewWidth := max(m.Width, layoutLeftPanelWidth+layoutPanelGap+canvasPanelWidth+layoutPanelGap+layoutPropertiesWidth)
 	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, logoHeader())
@@ -152,9 +142,6 @@ func (m Model) canvasPanelLeft() int {
 }
 
 func centerCanvasLines(lines []string, width, height int) []string {
-	if height < len(lines) {
-		height = len(lines)
-	}
 	centered := make([]string, 0, height)
 	topPadding := max((height-len(lines))/2, 0)
 	for range topPadding {
@@ -167,6 +154,17 @@ func centerCanvasLines(lines []string, width, height int) []string {
 		centered = append(centered, strings.Repeat(" ", width))
 	}
 	return centered
+}
+
+func fitPanelLines(lines []string, height, width int) []string {
+	fitted := make([]string, 0, height)
+	for i := 0; i < height && i < len(lines); i++ {
+		fitted = append(fitted, fitStyledLine(lines[i], width))
+	}
+	for len(fitted) < height {
+		fitted = append(fitted, strings.Repeat(" ", width))
+	}
+	return fitted
 }
 
 func smallTerminalView(width, height int) string {
