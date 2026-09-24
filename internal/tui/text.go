@@ -346,6 +346,61 @@ func (m *Model) nudgeSelectedCells(dxCells, dyCells int) bool {
 	return true
 }
 
+func (m *Model) rotateSelectedElement() bool {
+	element, ok := m.selectedElement()
+	if !ok {
+		return false
+	}
+	cx := element.XMM + element.WidthMM/2
+	cy := element.YMM + element.HeightMM/2
+	element.WidthMM, element.HeightMM = element.HeightMM, element.WidthMM
+	element.XMM = cx - element.WidthMM/2
+	element.YMM = cy - element.HeightMM/2
+	element.Rotation = normalizedTUIRotation(element.Rotation + 90)
+	clampElementToDocument(&element, m.Document)
+	if !m.Document.UpdateElement(element) {
+		return false
+	}
+	m.setStatus("Rotated %s to %d deg.", element.ID, element.Rotation)
+	return true
+}
+
+func (m *Model) rotateCanvas() bool {
+	if m.Document.WidthMM <= 0 || m.Document.HeightMM <= 0 {
+		return false
+	}
+	oldWidth := m.Document.WidthMM
+	oldHeight := m.Document.HeightMM
+	for i := range m.Document.Elements {
+		element := m.Document.Elements[i]
+		element.XMM, element.YMM = oldHeight-(element.YMM+element.HeightMM), element.XMM
+		element.WidthMM, element.HeightMM = element.HeightMM, element.WidthMM
+		element.Rotation = normalizedTUIRotation(element.Rotation + 90)
+		clampElementToDocument(&element, label.Document{WidthMM: oldHeight, HeightMM: oldWidth, Shape: m.Document.Shape})
+		m.Document.Elements[i] = element
+	}
+	m.Document.WidthMM = oldHeight
+	m.Document.HeightMM = oldWidth
+	m.Document.Rotation = normalizedTUIRotation(m.Document.Rotation + 90)
+	m.Preset = -1
+	m.reflow()
+	m.setStatus("Rotated canvas to %d deg (%.1f x %.1fmm).", m.Document.Rotation, m.Document.WidthMM, m.Document.HeightMM)
+	return true
+}
+
+func normalizedTUIRotation(rotation int) int {
+	rotation %= 360
+	if rotation < 0 {
+		rotation += 360
+	}
+	switch rotation {
+	case 0, 90, 180, 270:
+		return rotation
+	default:
+		return 0
+	}
+}
+
 func (m *Model) resizeSelected(handle ResizeHandle, dxMM, dyMM float64) bool {
 	element, ok := m.selectedElement()
 	if !ok {

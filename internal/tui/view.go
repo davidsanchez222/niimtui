@@ -23,6 +23,10 @@ var (
 	printableGuideStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("196"))
 
+	printDirectionStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("45")).
+				Bold(true)
+
 	propertyTitleStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("111"))
@@ -258,6 +262,7 @@ func renderCanvas(m Model) string {
 	if m.FocusPickerOpen {
 		focusCells = drawFocusHints(grid, canvas, m)
 	}
+	drawPrintDirectionGuide(grid, canvas, m)
 
 	lines := make([]string, 0, canvas.Height)
 	for y := 0; y < canvas.Height; y++ {
@@ -296,20 +301,21 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 			b.WriteString(printableGuideStyle.Render(string(r)))
 			continue
 		}
+		if isPrintDirectionRune(r) {
+			b.WriteString(printDirectionStyle.Render(string(r)))
+			continue
+		}
 		b.WriteString(canvasStyle.Render(string(r)))
 	}
 	return b.String()
 }
 
-func devicePanelLines(m Model, width int) []string {
-	// lines := []string{
-	// 	centerStyledLine(propertyTitleStyle.Render("Printer"), width),
-	// }
-	lines := []string{
-		// propertyTitleStyle.Render("Printer"),
-		// "",
-	}
+func isPrintDirectionRune(r rune) bool {
+	return r == '▲' || r == '▶' || r == '▼' || r == '◀'
+}
 
+func devicePanelLines(m Model, width int) []string {
+	lines := []string{}
 	art := printerArt(m.Print.Model)
 	if len(art) > 0 {
 		lines = append(lines, artLines(art, width)...)
@@ -383,6 +389,7 @@ func propertyPanelLines(m Model, width int) []string {
 		propertyItem("Label W", fmt.Sprintf("%.1f mm", m.Document.WidthMM)),
 		propertyItem("Label H", fmt.Sprintf("%.1f mm", m.Document.HeightMM)),
 		propertyItem("Shape", m.Document.Shape),
+		propertyItem("Canvas Rot", fmt.Sprintf("%d deg", m.Document.Rotation)),
 		propertyItem("Print", printDirectionLabel(m.Print.Model)),
 		"",
 	)
@@ -402,6 +409,7 @@ func propertyPanelLines(m Model, width int) []string {
 		propertyItem("Y", fmt.Sprintf("%.1f mm", element.YMM)),
 		propertyItem("W", fmt.Sprintf("%.1f mm", element.WidthMM)),
 		propertyItem("H", fmt.Sprintf("%.1f mm", element.HeightMM)),
+		propertyItem("Rot", fmt.Sprintf("%d deg", element.Rotation)),
 	)
 	if element.Text != nil {
 		lines = append(lines,
@@ -440,6 +448,8 @@ func helpModalContent() []string {
 		helpRow("f", "Show focus hints for keyboard-only element selection"),
 		helpRow("t", "Add a text box and select it"),
 		helpRow("q", "Add a QR code and select it"),
+		helpRow("r", "Rotate selected element"),
+		helpRow("R", "Rotate the canvas"),
 		helpRow("i", "Edit selected text or QR contents"),
 		helpRow("F", "Search fonts for the selected text box"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
@@ -461,7 +471,7 @@ func menuModalContent(m Model) []string {
 		autoInsert = "on"
 	}
 	items := []string{
-		"Auto Insert: " + autoInsert,
+		"Auto Insert: " + autoInsert, // "(automatic insert mode when new component created)"
 		"Edit Config: coming soon",
 		"Close",
 	}
@@ -498,8 +508,9 @@ func footerLines(m Model, width int) []string {
 		helpItem("f", "focus"),
 		helpItem("t", "text"),
 		helpItem("q", "QR"),
+		helpItem("r/R", "rotate"),
 		helpItem("i", "edit"),
-		helpItem("del", "remove"),
+		helpItem("bksp/del", "remove"),
 		helpItem("arrows/hjkl", "move"),
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
@@ -810,6 +821,20 @@ func brailleBit(x, y int) int {
 		return 0x80
 	default:
 		return 0
+	}
+}
+
+func drawPrintDirectionGuide(grid [][]rune, canvas Canvas, m Model) {
+	if canvas.Width < 3 || canvas.Height < 3 {
+		return
+	}
+	midX := canvas.Width / 2
+	midY := canvas.Height / 2
+	switch printDirectionLabel(m.Print.Model) {
+	case "bottom to top":
+		grid[0][midX] = '▲'
+	case "left to right":
+		grid[midY][canvas.Width-1] = '▶'
 	}
 }
 

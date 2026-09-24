@@ -516,6 +516,57 @@ func TestQAddsQRElementInCanvasMode(t *testing.T) {
 	}
 }
 
+func TestRRotatesSelectedElementWithoutAddingQR(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addTextElement()
+	initialCount := len(m.Document.Elements)
+	initial, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("expected selected element")
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")}) {
+		t.Fatal("r was not handled")
+	}
+	rotated, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("selected element missing")
+	}
+	if len(m.Document.Elements) != initialCount {
+		t.Fatalf("element count = %d, want %d", len(m.Document.Elements), initialCount)
+	}
+	if rotated.Rotation != 90 {
+		t.Fatalf("rotation = %d, want 90", rotated.Rotation)
+	}
+	if rotated.WidthMM != initial.HeightMM || rotated.HeightMM != initial.WidthMM {
+		t.Fatalf("size = %.1fx%.1f, want %.1fx%.1f", rotated.WidthMM, rotated.HeightMM, initial.HeightMM, initial.WidthMM)
+	}
+}
+
+func TestCapitalRRotatesCanvasAndElements(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	element := label.NewTextElement("title", "Box", 5, 4, 20, 8, 18)
+	m.Document.Elements = []label.Element{element}
+	m.SelectedID = element.ID
+	m.Width = 160
+	m.Height = 30
+	m.reflow()
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")}) {
+		t.Fatal("R was not handled")
+	}
+	if m.Document.WidthMM != 30 || m.Document.HeightMM != 50 || m.Document.Rotation != 90 {
+		t.Fatalf("document = %.1fx%.1f rot %d, want 30x50 rot 90", m.Document.WidthMM, m.Document.HeightMM, m.Document.Rotation)
+	}
+	rotated, ok := m.selectedElement()
+	if !ok {
+		t.Fatal("selected element missing")
+	}
+	if rotated.XMM != 18 || rotated.YMM != 5 || rotated.WidthMM != 8 || rotated.HeightMM != 20 || rotated.Rotation != 90 {
+		t.Fatalf("rotated element = x %.1f y %.1f size %.1fx%.1f rot %d, want x 18 y 5 size 8x20 rot 90", rotated.XMM, rotated.YMM, rotated.WidthMM, rotated.HeightMM, rotated.Rotation)
+	}
+}
+
 func TestQQuitsFromMenu(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.MenuOpen = true

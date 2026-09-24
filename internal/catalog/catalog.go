@@ -105,16 +105,24 @@ func LabelPresetsForModel(model string) ([]config.LabelPreset, error) {
 	}
 	presets := make([]config.LabelPreset, 0, len(sizes))
 	for _, size := range sizes {
+		widthMM, heightMM := presetDimensions(model, size)
 		presets = append(presets, config.LabelPreset{
 			Name:      PresetName(model, size),
-			WidthMM:   size.WidthMM,
-			HeightMM:  size.HeightMM,
+			WidthMM:   widthMM,
+			HeightMM:  heightMM,
 			Shape:     normalizedShape(size.Shape),
 			Layout:    "qr-title-subtitle",
 			MarginsMM: defaultMargins(size),
 		})
 	}
 	return presets, nil
+}
+
+func presetDimensions(model string, size LabelSize) (float64, float64) {
+	if strings.EqualFold(strings.TrimSpace(model), "D110") && normalizedShape(size.Shape) == "rect" && size.HeightMM > size.WidthMM {
+		return size.HeightMM, size.WidthMM
+	}
+	return size.WidthMM, size.HeightMM
 }
 
 func PresetName(model string, size LabelSize) string {

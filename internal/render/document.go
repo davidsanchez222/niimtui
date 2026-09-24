@@ -92,6 +92,10 @@ func renderDocumentWithOptions(doc label.Document, opts documentRenderOptions) (
 }
 
 func drawDocumentElement(dst draw.Image, element label.Element) error {
+	rotation := normalizedRotation(element.Rotation)
+	if rotation != 0 {
+		return drawRotatedDocumentElement(dst, element, rotation)
+	}
 	switch element.Type {
 	case label.ElementText:
 		return drawTextElement(dst, element)
@@ -102,16 +106,59 @@ func drawDocumentElement(dst draw.Image, element label.Element) error {
 	}
 }
 
-func drawQRElement(dst draw.Image, element label.Element) error {
-	if element.QR == nil || strings.TrimSpace(element.QR.Value) == "" {
+func drawRotatedDocumentElement(dst draw.Image, element label.Element, rotation int) error {
+	rect := elementRectPx(element)
+	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return nil
 	}
-	rect := image.Rect(
+	localWidth := rect.Dx()
+	localHeight := rect.Dy()
+	localElement := element
+	localElement.XMM = 0
+	localElement.YMM = 0
+	localElement.Rotation = 0
+	if rotation == 90 || rotation == 270 {
+		localWidth, localHeight = rect.Dy(), rect.Dx()
+		localElement.WidthMM, localElement.HeightMM = element.HeightMM, element.WidthMM
+	}
+	local := image.NewGray(image.Rect(0, 0, localWidth, localHeight))
+	draw.Draw(local, local.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+	if err := drawDocumentElement(local, localElement); err != nil {
+		return err
+	}
+	rotated := rotateGray(local, rotation)
+	left := rect.Min.X + (rect.Dx()-rotated.Bounds().Dx())/2
+	top := rect.Min.Y + (rect.Dy()-rotated.Bounds().Dy())/2
+	for y := rotated.Bounds().Min.Y; y < rotated.Bounds().Max.Y; y++ {
+		for x := rotated.Bounds().Min.X; x < rotated.Bounds().Max.X; x++ {
+			v := rotated.GrayAt(x, y)
+			if v.Y == 255 {
+				continue
+			}
+			dx := left + x - rotated.Bounds().Min.X
+			dy := top + y - rotated.Bounds().Min.Y
+			if image.Pt(dx, dy).In(rect) && image.Pt(dx, dy).In(dst.Bounds()) {
+				dst.Set(dx, dy, v)
+			}
+		}
+	}
+	return nil
+}
+
+func elementRectPx(element label.Element) image.Rectangle {
+	return image.Rect(
 		mmToPx(element.XMM),
 		mmToPx(element.YMM),
 		mmToPx(element.XMM+element.WidthMM),
 		mmToPx(element.YMM+element.HeightMM),
 	)
+}
+
+func drawQRElement(dst draw.Image, element label.Element) error {
+	if element.QR == nil || strings.TrimSpace(element.QR.Value) == "" {
+		return nil
+	}
+	rect := elementRectPx(element)
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return nil
 	}
@@ -139,12 +186,7 @@ func drawTextElement(dst draw.Image, element label.Element) error {
 	if element.Text == nil {
 		return nil
 	}
-	rect := image.Rect(
-		mmToPx(element.XMM),
-		mmToPx(element.YMM),
-		mmToPx(element.XMM+element.WidthMM),
-		mmToPx(element.YMM+element.HeightMM),
-	)
+	rect := elementRectPx(element)
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return nil
 	}

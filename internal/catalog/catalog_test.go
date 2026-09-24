@@ -62,3 +62,20 @@ func TestLabelPresetsForModelUsesStableNames(t *testing.T) {
 		t.Fatalf("missing preset %q", name)
 	}
 }
+
+func TestD110PresetsKeepNamesButUseHorizontalDimensions(t *testing.T) {
+	presets, err := LabelPresetsForModel("D110")
+	if err != nil {
+		t.Fatalf("LabelPresetsForModel(D110) error = %v", err)
+	}
+	for _, preset := range presets {
+		if preset.Name != "d110-12x40" {
+			continue
+		}
+		if preset.WidthMM != 40 || preset.HeightMM != 12 {
+			t.Fatalf("d110-12x40 dimensions = %.1fx%.1f, want 40x12", preset.WidthMM, preset.HeightMM)
+		}
+		return
+	}
+	t.Fatal("missing d110-12x40 preset")
+}

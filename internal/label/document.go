@@ -4,6 +4,7 @@ type Document struct {
 	WidthMM  float64
 	HeightMM float64
 	Shape    string
+	Rotation int
 
 	Elements []Element
 }

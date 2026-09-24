@@ -16,6 +16,7 @@ type Element struct {
 	YMM      float64
 	WidthMM  float64
 	HeightMM float64
+	Rotation int
 
 	Text *TextElement
 	QR   *QRElement

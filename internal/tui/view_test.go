@@ -28,6 +28,21 @@ func TestDrawPrintableAreaGuideSkipsRoundLabels(t *testing.T) {
 	}
 }
 
+func TestDrawPrintDirectionGuideShowsModelDirection(t *testing.T) {
+	canvas := Canvas{Width: 12, Height: 8}
+	grid := newTestGrid(canvas)
+	drawPrintDirectionGuide(grid, canvas, NewModel(50, 30, "rect", "", PrintConfig{Model: "D110"}))
+	if grid[canvas.Height/2][canvas.Width-1] != '▶' {
+		t.Fatalf("D110 print direction marker = %q, want ▶", grid[canvas.Height/2][canvas.Width-1])
+	}
+
+	grid = newTestGrid(canvas)
+	drawPrintDirectionGuide(grid, canvas, NewModel(50, 30, "rect", "", PrintConfig{Model: "B1"}))
+	if grid[0][canvas.Width/2] != '▲' {
+		t.Fatalf("B1 print direction marker = %q, want ▲", grid[0][canvas.Width/2])
+	}
+}
+
 func TestReflowCentersCanvasInPanel(t *testing.T) {
 	m := NewModel(50, 50, "round", "", PrintConfig{})
 	m.Width = 160

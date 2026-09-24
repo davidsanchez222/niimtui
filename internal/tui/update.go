@@ -189,9 +189,13 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "t":
 		m.addTextElement()
 		return true
-	case "q", "r":
+	case "q":
 		m.addQRElement()
 		return true
+	case "r":
+		return m.rotateSelectedElement()
+	case "R":
+		return m.rotateCanvas()
 	case "i":
 		return m.beginEditingSelected()
 	case "f":

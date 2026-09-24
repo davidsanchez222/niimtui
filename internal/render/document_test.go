@@ -95,6 +95,40 @@ func TestRenderDocumentDrawsQR(t *testing.T) {
 	}
 }
 
+func TestRenderDocumentDrawsRotatedElements(t *testing.T) {
+	doc := label.NewDocument(50, 30)
+	text := label.NewTextElement("title", "Rotated", 4, 4, 20, 8, 18)
+	text.Rotation = 90
+	qr := label.NewQRElement("qr", "https://example.com", 30, 6, 16)
+	qr.Rotation = 90
+	if err := doc.AddElement(text); err != nil {
+		t.Fatalf("AddElement(text) error = %v", err)
+	}
+	if err := doc.AddElement(qr); err != nil {
+		t.Fatalf("AddElement(qr) error = %v", err)
+	}
+
+	result, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatalf("RenderDocument() error = %v", err)
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		t.Fatalf("render image type = %T, want *image.Gray", result.Image)
+	}
+	blackPixels := 0
+	for y := gray.Bounds().Min.Y; y < gray.Bounds().Max.Y; y++ {
+		for x := gray.Bounds().Min.X; x < gray.Bounds().Max.X; x++ {
+			if gray.GrayAt(x, y).Y == 0 {
+				blackPixels++
+			}
+		}
+	}
+	if blackPixels == 0 {
+		t.Fatal("expected rotated elements to produce black pixels")
+	}
+}
+
 func TestRenderDocumentLeavesQRElementInset(t *testing.T) {
 	element := label.NewQRElement("qr", "https://example.com", 8, 8, 24)
 	doc := label.NewDocument(40, 40)
