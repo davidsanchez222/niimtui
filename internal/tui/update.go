@@ -17,6 +17,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.closePrinterSession()
 		return m, tea.Quit
 	}
+	if m.Prompt.Mode != PromptNone {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			m.handlePromptKey(key)
+		}
+		return m, nil
+	}
 	if m.EditingText {
 		switch msg := msg.(type) {
 		case tea.WindowSizeMsg:
@@ -245,6 +251,12 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.openFocusPicker()
 	case "F":
 		return m.toggleFontPicker()
+	case "e":
+		return m.beginExportPNGPrompt()
+	case "g":
+		return m.toggleGrid()
+	case "I":
+		return m.toggleInvertedColors()
 	case "m":
 		return m.toggleMenu()
 	case "n":

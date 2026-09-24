@@ -457,6 +457,9 @@ func TestFontPickerSearchFiltersAndAppliesMatch(t *testing.T) {
 	if len(indices) != 1 || indices[0] != 2 {
 		t.Fatalf("filtered indices = %v, want [2]", indices)
 	}
+	if lines := strings.Join(fontPickerLines(m, 28), "\n"); !strings.ContainsRune(lines, promptCursorRune) {
+		t.Fatalf("font picker lines = %q, want cursor %q", lines, promptCursorRune)
+	}
 	if !m.applySelectedFont() {
 		t.Fatal("applySelectedFont() = false, want true")
 	}
@@ -713,7 +716,7 @@ func TestMenuTogglesAutoInsert(t *testing.T) {
 	if !m.MenuOpen {
 		t.Fatal("menu did not open")
 	}
-	m.MenuIndex = 2
+	m.MenuIndex = 4
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if !m.AutoInsert {
 		t.Fatal("auto insert was not enabled")

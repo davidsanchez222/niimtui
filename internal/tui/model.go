@@ -24,17 +24,18 @@ type PrinterSession interface {
 type PrinterSessionFactory func(selector string) (PrinterSession, error)
 
 type PrintConfig struct {
-	Session    PrinterSession
-	NewSession PrinterSessionFactory
-	ConfigPath string
-	Printers   []config.PrinterProfile
-	Printer    string
-	Model      string
-	DeviceName string
-	Identifier string
-	OffsetXMM  float64
-	OffsetYMM  float64
-	Copies     int
+	Session       PrinterSession
+	NewSession    PrinterSessionFactory
+	ConfigPath    string
+	Printers      []config.PrinterProfile
+	DesignPresets []config.DesignPreset
+	Printer       string
+	Model         string
+	DeviceName    string
+	Identifier    string
+	OffsetXMM     float64
+	OffsetYMM     float64
+	Copies        int
 }
 
 type ConnectionInfo struct {
@@ -111,15 +112,31 @@ type HistoryNode struct {
 	Snapshot HistorySnapshot
 }
 
+type PromptMode string
+
+const (
+	PromptNone       PromptMode = ""
+	PromptExportPNG  PromptMode = "export-png"
+	PromptSaveDesign PromptMode = "save-design"
+)
+
+type PromptState struct {
+	Mode  PromptMode
+	Value string
+}
+
 type Model struct {
 	Width  int
 	Height int
 
-	Document   label.Document
-	Canvas     Canvas
-	AllPresets []config.LabelPreset
-	Presets    []config.LabelPreset
-	Preset     int
+	Document      label.Document
+	Canvas        Canvas
+	AllPresets    []config.LabelPreset
+	Presets       []config.LabelPreset
+	Preset        int
+	DesignPresets []config.DesignPreset
+	DesignPreset  int
+	Grid          bool
 
 	SelectedID string
 	Drag       DragState
@@ -149,6 +166,7 @@ type Model struct {
 
 	EditingText bool
 	TextBuffer  string
+	Prompt      PromptState
 	StatusBase  string
 
 	Status string
@@ -205,6 +223,8 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		AllPresets:      presets,
 		Presets:         visiblePresets,
 		Preset:          activePresetIndex(visiblePresets, presetName, doc),
+		DesignPresets:   cloneDesignPresets(printConfig.DesignPresets),
+		DesignPreset:    -1,
 		NextID:          1,
 		FontPath:        fontPath,
 		Fonts:           fonts,

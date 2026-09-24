@@ -71,6 +71,9 @@ func renderDocumentWithOptions(doc label.Document, opts documentRenderOptions) (
 	}
 
 	thresholdToMonochromeWithThreshold(canvas, opts.threshold)
+	if doc.Inverted {
+		invertGray(canvas)
+	}
 	if strings.EqualFold(doc.Shape, "round") {
 		maskRound(canvas)
 	}
@@ -89,6 +92,15 @@ func renderDocumentWithOptions(doc label.Document, opts documentRenderOptions) (
 		PreviewPNG:   preview.Bytes(),
 		PreviewBytes: preview.Len(),
 	}, nil
+}
+
+func invertGray(img *image.Gray) {
+	if img == nil {
+		return
+	}
+	for i := range img.Pix {
+		img.Pix[i] = 255 - img.Pix[i]
+	}
 }
 
 func drawDocumentElement(dst draw.Image, element label.Element) error {

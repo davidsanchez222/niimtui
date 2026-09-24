@@ -27,6 +27,9 @@ var (
 				Foreground(lipgloss.Color("45")).
 				Bold(true)
 
+	gridStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("238"))
+
 	propertyTitleStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("111"))
@@ -81,6 +84,10 @@ const (
 	layoutFramePadding    = 8
 	layoutBodyTop         = 3
 	printableGuideRune    = '┊'
+	gridHorizontalRune    = '┄'
+	gridVerticalRune      = '┊'
+	gridIntersectionRune  = '┼'
+	promptCursorRune      = '█'
 )
 
 func (m Model) View() string {
@@ -178,11 +185,13 @@ func modalBodyLines(m Model, width, height int) []string {
 	if m.MenuOpen {
 		content = menuModalContent(m)
 	}
+	modalWidth := min(max(width-16, 72), 96)
+	modalWidth = min(modalWidth, max(width-4, 40))
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("111")).
 		Padding(1, 3).
-		Width(58).
+		Width(modalWidth).
 		Render(strings.Join(content, "\n"))
 	body := lipgloss.Place(width, max(height, 8), lipgloss.Center, lipgloss.Center, box)
 	return strings.Split(body, "\n")
@@ -216,6 +225,9 @@ func renderCanvas(m Model) string {
 		grid[y][canvas.Width-1] = '│'
 	}
 
+	if m.Grid {
+		drawGridGuide(grid, canvas)
+	}
 	drawDocumentPreview(grid, canvas, m.Document)
 	if !isRound {
 		drawPrintableAreaGuide(grid, canvas, m)
@@ -301,6 +313,10 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 			b.WriteString(printableGuideStyle.Render(string(r)))
 			continue
 		}
+		if isGridRune(r) {
+			b.WriteString(gridStyle.Render(string(r)))
+			continue
+		}
 		if isPrintDirectionRune(r) {
 			b.WriteString(printDirectionStyle.Render(string(r)))
 			continue
@@ -308,6 +324,38 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 		b.WriteString(canvasStyle.Render(string(r)))
 	}
 	return b.String()
+}
+
+func drawGridGuide(grid [][]rune, canvas Canvas) {
+	if canvas.Width < 6 || canvas.Height < 6 {
+		return
+	}
+	for y := 3; y < canvas.Height-1; y += 3 {
+		for x := 1; x < canvas.Width-1; x++ {
+			if grid[y][x] == gridVerticalRune {
+				grid[y][x] = gridIntersectionRune
+				continue
+			}
+			if grid[y][x] == ' ' {
+				grid[y][x] = gridHorizontalRune
+			}
+		}
+	}
+	for x := 6; x < canvas.Width-1; x += 6 {
+		for y := 1; y < canvas.Height-1; y++ {
+			if grid[y][x] == gridHorizontalRune {
+				grid[y][x] = gridIntersectionRune
+				continue
+			}
+			if grid[y][x] == ' ' {
+				grid[y][x] = gridVerticalRune
+			}
+		}
+	}
+}
+
+func isGridRune(r rune) bool {
+	return r == gridHorizontalRune || r == gridVerticalRune || r == gridIntersectionRune
 }
 
 func isPrintDirectionRune(r rune) bool {
@@ -329,7 +377,7 @@ func devicePanelLines(m Model, width int) []string {
 		propertyItem("Profile", sidebarValue("Profile", m.Print.Printer, "default", width)),
 		propertyItem("Device", sidebarValue("Device", m.Print.DeviceName, emptyFallback(m.Print.Identifier, "unknown"), width)),
 		"",
-		propertyItem("Preset", sidebarValue("Preset", m.currentPresetLabel(), "custom", width)),
+		propertyItem("Label", sidebarValue("Label", m.currentPresetLabel(), "custom", width)),
 		presetSwitchHelp(m),
 		printerSwitchHelp(m),
 		"",
@@ -360,7 +408,7 @@ func presetSwitchHelp(m Model) string {
 	if len(m.Presets) == 0 {
 		return mutedStyle.Render("No installed rolls for printer")
 	}
-	return helpItem("n", "next preset") + "  " + helpItem("N", "prev")
+	return helpItem("n/N", "cycle label size")
 }
 
 func printerSwitchHelp(m Model) string {
@@ -398,6 +446,8 @@ func propertyPanelLines(m Model, width int) []string {
 		propertyItem("Label H", fmt.Sprintf("%.1f mm", m.Document.HeightMM)),
 		propertyItem("Shape", m.Document.Shape),
 		propertyItem("Canvas Rot", fmt.Sprintf("%d deg", m.Document.Rotation)),
+		propertyItem("Invert", onOff(m.Document.Inverted)),
+		propertyItem("Grid", onOff(m.Grid)),
 		propertyItem("Print", printDirectionLabel(m.Print.Model)),
 		"",
 	)
@@ -462,6 +512,9 @@ func helpModalContent() []string {
 		helpRow("y / x / v / d", "Copy / cut / paste / duplicate selected component"),
 		helpRow("z / Z / B", "Undo / redo / cycle redo branch"),
 		helpRow("F", "Search fonts for the selected text box"),
+		helpRow("e", "Export PNG to a chosen path"),
+		helpRow("g", "Toggle visual grid"),
+		helpRow("I", "Toggle inverted black/white colors"),
 		helpRow("s", "Switch active printer"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
@@ -484,6 +537,8 @@ func menuModalContent(m Model) []string {
 	items := []string{
 		"Printers installed: " + installedPrintersLabel(m),
 		"Label rolls installed: " + installedRollsLabel(m),
+		"Saved presets: " + m.currentDesignPresetLabel(),
+		"Save current design",
 		"Auto Insert: " + autoInsert,
 		"Close",
 	}
@@ -505,6 +560,13 @@ func menuModalContent(m Model) []string {
 		mutedStyle.Render("j/k or arrows move, enter selects, esc closes"),
 	)
 	return lines
+}
+
+func onOff(enabled bool) string {
+	if enabled {
+		return "on"
+	}
+	return "off"
 }
 
 func installedPrintersLabel(m Model) string {
@@ -569,11 +631,14 @@ func footerLines(m Model, width int) []string {
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
 		helpItem("+/-", "font size"),
+		helpItem("g", "grid"),
+		helpItem("I", "invert colors"),
 		helpItem("m", "menu"),
 		helpItem("?", "help"),
 	}, "  ")
 	preview := strings.Join([]string{
 		helpItem("p", "open preview"),
+		helpItem("e", "export PNG"),
 		printHelp + helpItem("esc", "clear"),
 		helpItem("ctrl+c", "quit"),
 	}, "  ")
@@ -603,7 +668,7 @@ func fontPickerLines(m Model, width int) []string {
 	query := truncateText(m.FontPickerQuery, max(width-len("Search: ")-1, 1))
 	searchValue := query
 	if m.FontPickerSearch {
-		searchValue += "|"
+		searchValue += string(promptCursorRune)
 	}
 	help := "browse: / search j/k ctrl+d/u"
 	if m.FontPickerSearch {

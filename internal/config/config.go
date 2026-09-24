@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"niimtui/internal/label"
 )
 
 type Config struct {
@@ -15,6 +17,7 @@ type Config struct {
 	ActivePrinter string           `json:"active_printer,omitempty"`
 	Printers      []PrinterProfile `json:"printers"`
 	Presets       []LabelPreset    `json:"presets"`
+	DesignPresets []DesignPreset   `json:"design_presets,omitempty"`
 }
 
 const appName = "niimtui"
@@ -57,6 +60,11 @@ type LabelPreset struct {
 	Shape     string  `json:"shape"`
 	Layout    string  `json:"layout"`
 	MarginsMM float64 `json:"margins_mm"`
+}
+
+type DesignPreset struct {
+	Name     string         `json:"name"`
+	Document label.Document `json:"document"`
 }
 
 func Load(path string) (Config, error) {
@@ -220,6 +228,20 @@ func (c Config) Validate() error {
 	for _, printer := range c.Printers {
 		if _, ok := presetNames[printer.DefaultPreset]; !ok {
 			return fmt.Errorf("config.printers[%q] references unknown default preset %q", printer.Name, printer.DefaultPreset)
+		}
+	}
+
+	designPresetNames := make(map[string]struct{}, len(c.DesignPresets))
+	for _, preset := range c.DesignPresets {
+		if preset.Name == "" {
+			return errors.New("config.design_presets[].name is required")
+		}
+		if _, exists := designPresetNames[preset.Name]; exists {
+			return fmt.Errorf("duplicate design preset %q", preset.Name)
+		}
+		designPresetNames[preset.Name] = struct{}{}
+		if preset.Document.WidthMM <= 0 || preset.Document.HeightMM <= 0 {
+			return fmt.Errorf("config.design_presets[%q].document must have positive dimensions", preset.Name)
 		}
 	}
 

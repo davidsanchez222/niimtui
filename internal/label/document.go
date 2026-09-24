@@ -5,6 +5,7 @@ type Document struct {
 	HeightMM float64
 	Shape    string
 	Rotation int
+	Inverted bool
 
 	Elements []Element
 }

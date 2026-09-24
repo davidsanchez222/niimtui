@@ -349,6 +349,7 @@ func runTUI(args []string) error {
 	var svc *service.Service
 	var session *service.Session
 	var printers []config.PrinterProfile
+	var designPresets []config.DesignPreset
 	resolvedConfigPath := *configPath
 	printerSelector := *printer
 	printerProfileName := printerSelector
@@ -385,6 +386,7 @@ func runTUI(args []string) error {
 		}
 		presets = cfg.Presets
 		printers = cfg.Printers
+		designPresets = cfg.DesignPresets
 		printerProfile, ok, err := printerForSelector(cfg, printerSelector)
 		if err != nil && (*printer != "" || *widthMM <= 0 || *heightMM <= 0) {
 			return err
@@ -436,7 +438,7 @@ func runTUI(args []string) error {
 			return svc.NewSession(selector)
 		}
 	}
-	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, NewSession: newSession, ConfigPath: resolvedConfigPath, Printers: printers, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
+	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, NewSession: newSession, ConfigPath: resolvedConfigPath, Printers: printers, DesignPresets: designPresets, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {
