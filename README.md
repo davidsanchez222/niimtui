@@ -13,10 +13,26 @@
 </p>
 
 ---
-
-Demo video placeholder: a short TUI design-and-print walkthrough will live here.
-
+<table>
+  <tr>
+    <td align="center">
+      <strong>Demo</strong>
+    </td>
+    <td align="center">
+      <strong>Result</strong>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <video src="https://github.com/user-attachments/assets/f5d55ace-b483-4972-8820-57423abd367e" width="400" controls></video>
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/d8b9496a-8642-49e6-a01e-9e73e5661783" width="400" />
+    </td>
+  </tr>
+</table>
 ---
+
 
 `niimtui` is a Go TUI for designing labels in the terminal and printing them to Niimbot printers over Bluetooth Low Energy.
 
