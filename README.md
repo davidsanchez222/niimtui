@@ -119,6 +119,7 @@ go run ./cmd/niimtui print \
 | --- | --- | --- | --- |
 | macOS | BLE | `D110_M` v4-class | verified |
 | macOS | BLE | `B1` | verified |
+| macOS | Serial/USB | `all` | untested |
 | Linux | BLE | pending | untested |
 | Windows | BLE | pending | untested |
 | SSH session | TUI | pending | untested |
@@ -135,6 +136,7 @@ The current service/CLI path supports QR text plus optional title/subtitle, reso
 
 | Item | Status |
 | --- | --- |
+| Serial/USB support | pending |
 | Full HTTPS Homebox integration | pending |
 | Package manager publishing: Homebrew, Chocolatey, apt, etc. | pending |
 | Linux testing | pending |
