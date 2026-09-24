@@ -1,36 +1,31 @@
-# niimtui
+<h1>
+<p align="center">
+  <!-- <img src="assets/logo.svg" alt="niimtui logo" width="128"> LOGO HERE-->
+  <br>niimtui
+</h1>
 
 <p align="center">
-  <strong>Terminal-first label design and printing for Niimbot printers.</strong>
-</p>
-
-<p align="center">
-  <a href="#quick-start">quick start</a> · <a href="#tui">tui</a> · <a href="#support">support</a> · <a href="#roadmap">roadmap</a> · <a href="#development">development</a>
-</p>
-
-<p align="center">
-  Logo placeholder: <code>assets/logo.svg</code> coming soon.
+  Terminal-first label design and printing for Niimbot printers.
+  <br />
+  Design labels in a TUI, preview them, and print directly to supported devices.
+  <br />
+  <a href="#quick-start">Quick Start</a>
+  ·
+  <a href="#tui">TUI</a>
+  ·
+  <a href="#support">Support</a>
+  ·
+  <a href="#roadmap">Roadmap</a>
+  ·
+  <a href="#development">Development</a>
 </p>
 
 ---
-<table>
-  <tr>
-    <td align="center">
-      <strong>Demo</strong>
-    </td>
-    <td align="center">
-      <strong>Result</strong>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <video src="https://github.com/user-attachments/assets/f5d55ace-b483-4972-8820-57423abd367e" width="400" controls></video>
-    </td>
-    <td>
-      <img width="469" height="515" alt="actualPrint3" src="https://github.com/user-attachments/assets/a9fc0a1a-35db-465e-bb0f-a269b59b3b58" />
-    </td>
-  </tr>
-</table>
+
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/205564aa-506e-4792-ae7e-b0abf91e681b" width="500" controls></video>
+</div>
+
 ---
 
 
