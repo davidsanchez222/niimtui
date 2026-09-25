@@ -314,10 +314,18 @@ func (m *Model) setStatus(format string, args ...any) {
 
 func (m *Model) refreshStatus() {
 	if m.EditingText {
-		m.Status = fmt.Sprintf("Editing: %s", m.TextBuffer)
+		m.Status = fmt.Sprintf("Editing %s.", m.editingTargetLabel())
 		return
 	}
 	m.Status = m.StatusBase
+}
+
+func (m Model) editingTargetLabel() string {
+	element, ok := m.selectedElement()
+	if ok && element.QR != nil {
+		return "QR"
+	}
+	return "text"
 }
 
 func connectPrinterCmd(session PrinterSession) tea.Cmd {

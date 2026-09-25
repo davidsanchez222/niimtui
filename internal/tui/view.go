@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -73,6 +74,11 @@ var (
 
 	footerRuleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("238"))
+
+	editInputStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("111")).
+			Padding(0, 1)
 )
 
 const (
@@ -101,6 +107,9 @@ func (m Model) View() string {
 	canvasPanelWidth := m.canvasPanelWidth()
 	bodyHeight := m.canvasPanelHeight()
 	canvasLines := fitPanelLines(centerCanvasLines(strings.Split(renderCanvas(m), "\n"), canvasPanelWidth, bodyHeight), bodyHeight, canvasPanelWidth)
+	if m.EditingText {
+		canvasLines = overlayCenteredBox(canvasLines, editingPopup(m, canvasPanelWidth, bodyHeight), canvasPanelWidth, bodyHeight)
+	}
 	leftLines := fitPanelLines(devicePanelLines(m, layoutLeftPanelWidth), bodyHeight, layoutLeftPanelWidth)
 	propertyLines := fitPanelLines(propertyPanelLines(m, layoutPropertiesWidth), bodyHeight, layoutPropertiesWidth)
 
@@ -195,6 +204,151 @@ func modalBodyLines(m Model, width, height int) []string {
 	return strings.Split(body, "\n")
 }
 
+func editingPopup(m Model, width, height int) string {
+	inputWidth := min(max(width-18, 20), 72)
+	inputWidth = min(inputWidth, max(width-6, 8))
+	inputHeight := min(max(height-12, 1), 8)
+
+	inputLines := editingTextLines(m.TextBuffer, inputWidth, inputHeight)
+	for i, line := range inputLines {
+		inputLines[i] = fitLine(line, inputWidth)
+	}
+
+	return editInputStyle.Width(inputWidth).Render(strings.Join(inputLines, "\n"))
+}
+
+func editingTextLines(value string, width, maxLines int) []string {
+	width = max(width, 1)
+	maxLines = max(maxLines, 1)
+
+	parts := strings.Split(value+string(promptCursorRune), "\n")
+	lines := make([]string, 0, len(parts))
+	for _, part := range parts {
+		runes := []rune(part)
+		if len(runes) == 0 {
+			lines = append(lines, "")
+			continue
+		}
+		for len(runes) > 0 {
+			take := min(width, len(runes))
+			lines = append(lines, string(runes[:take]))
+			runes = runes[take:]
+		}
+	}
+	if len(lines) == 0 {
+		lines = append(lines, string(promptCursorRune))
+	}
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return lines
+}
+
+func overlayCenteredBox(background []string, overlay string, width, height int) []string {
+	result := append([]string(nil), background...)
+	overlayLines := strings.Split(overlay, "\n")
+	if len(overlayLines) == 0 || height <= 0 || width <= 0 {
+		return result
+	}
+	overlayWidth := 0
+	for _, line := range overlayLines {
+		overlayWidth = max(overlayWidth, lipgloss.Width(line))
+	}
+	left := max((width-overlayWidth)/2, 0)
+	top := max((height-len(overlayLines))/2, 0)
+
+	for i, overlayLine := range overlayLines {
+		row := top + i
+		if row < 0 || row >= len(result) {
+			continue
+		}
+		result[row] = overlayStyledLine(result[row], overlayLine, left, width)
+	}
+	return result
+}
+
+func overlayStyledLine(background, overlay string, left, width int) string {
+	backgroundCells := styledCells(background)
+	for len(backgroundCells) < width {
+		backgroundCells = append(backgroundCells, " ")
+	}
+	overlayCells := styledCells(overlay)
+	for i, cell := range overlayCells {
+		column := left + i
+		if column < 0 || column >= width || column >= len(backgroundCells) {
+			continue
+		}
+		backgroundCells[column] = cell
+	}
+	return strings.Join(backgroundCells, "")
+}
+
+func styledCells(s string) []string {
+	cells := []string{}
+	for i := 0; i < len(s); {
+		prefix := ""
+		for i < len(s) && isANSIStart(s, i) {
+			seq, next := readANSISequence(s, i)
+			prefix += seq
+			i = next
+		}
+		if i >= len(s) {
+			if len(cells) > 0 {
+				cells[len(cells)-1] += prefix
+			}
+			break
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		i += size
+		cell := prefix + string(r)
+		for i < len(s) && isANSIStart(s, i) {
+			seq, next := readANSISequence(s, i)
+			cell += seq
+			i = next
+		}
+		cells = append(cells, cell)
+	}
+	return cells
+}
+
+func isANSIStart(s string, index int) bool {
+	return index < len(s) && s[index] == '\x1b'
+}
+
+func readANSISequence(s string, start int) (string, int) {
+	if start >= len(s) || s[start] != '\x1b' {
+		return "", start
+	}
+	if start+1 < len(s) && s[start+1] == '[' {
+		for i := start + 2; i < len(s); i++ {
+			if s[i] >= 0x40 && s[i] <= 0x7e {
+				return s[start : i+1], i + 1
+			}
+		}
+		return s[start:], len(s)
+	}
+	if start+1 < len(s) && s[start+1] == ']' {
+		for i := start + 2; i < len(s); i++ {
+			if s[i] == '\a' {
+				return s[start : i+1], i + 1
+			}
+			if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '\\' {
+				return s[start : i+2], i + 2
+			}
+		}
+		return s[start:], len(s)
+	}
+	for i := start + 1; i < len(s); i++ {
+		if s[i] >= 0x40 && s[i] <= 0x7e {
+			return s[start : i+1], i + 1
+		}
+	}
+	return s[start:], len(s)
+}
+
 func renderCanvas(m Model) string {
 	canvas := m.Canvas
 	if canvas.Width < 2 || canvas.Height < 2 {
@@ -252,10 +406,6 @@ func renderCanvas(m Model) string {
 		for y := top + 1; y < bottom; y++ {
 			grid[y][left] = '│'
 			grid[y][right] = '│'
-		}
-
-		if m.SelectedID == element.ID && m.EditingText {
-			drawEditingCursor(grid, left, top, right, bottom, element, m.TextBuffer)
 		}
 
 		if m.SelectedID == element.ID {
@@ -999,56 +1149,4 @@ func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
 		grid[y][left] = printableGuideRune
 		grid[y][right] = printableGuideRune
 	}
-}
-
-func drawEditingCursor(grid [][]rune, left, top, right, bottom int, element label.Element, text string) {
-	if bottom <= top || right <= left {
-		return
-	}
-	contentWidth := max(right-left-1, 1)
-	if element.QR != nil {
-		grid[top+1][left+1] = '>'
-		for i, r := range []rune(truncateText(text+"|", max(contentWidth-1, 1))) {
-			cellX := left + 2 + i
-			if cellX >= right {
-				break
-			}
-			grid[top+1][cellX] = r
-		}
-		return
-	}
-	previewLines := wrapCanvasText(element, text+"|", contentWidth)
-	if len(previewLines) == 0 {
-		previewLines = []string{"|"}
-	}
-	y := top + 1 + min(len(previewLines)-1, max(bottom-top-1, 0))
-	if y >= bottom {
-		y = bottom - 1
-	}
-	x := left + 1
-	for i, r := range []rune(previewLines[len(previewLines)-1]) {
-		cellX := x + i
-		if cellX >= right {
-			break
-		}
-		grid[y][cellX] = r
-	}
-}
-
-func wrapCanvasText(element label.Element, text string, contentWidth int) []string {
-	if contentWidth <= 0 || element.Text == nil {
-		return nil
-	}
-	layout, err := render.LayoutTextWithFontPath(text, element.Text.FontSize, element.Text.FontPath, max(int(element.WidthMM*8), 1))
-	if err != nil || len(layout.Lines) == 0 {
-		if text == "" {
-			return nil
-		}
-		return []string{truncateText(text, contentWidth)}
-	}
-	lines := make([]string, 0, len(layout.Lines))
-	for _, line := range layout.Lines {
-		lines = append(lines, truncateText(line, contentWidth))
-	}
-	return lines
 }

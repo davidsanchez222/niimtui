@@ -122,6 +122,53 @@ func TestFontPickerSearchVisibleInShortSidebar(t *testing.T) {
 	}
 }
 
+func TestEditingTextRendersPopupWithBlockCursor(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Ready = true
+	m.Width = minTerminalWidth
+	m.Height = minTerminalHeight
+	m.reflow()
+	m.addTextElement()
+	m.TextBuffer = "hello"
+	_ = m.applyTextBuffer(m.TextBuffer)
+	m.EditingText = true
+	m.refreshStatus()
+
+	view := m.View()
+	if !strings.Contains(view, "hello"+string(promptCursorRune)) {
+		t.Fatalf("view = %q, want text followed by block cursor %q", view, promptCursorRune)
+	}
+	if strings.Contains(view, "Edit Text") || strings.Contains(view, "type to edit") {
+		t.Fatalf("view = %q, should not render extra edit popup copy", view)
+	}
+	if strings.Contains(view, "hello|") {
+		t.Fatalf("view = %q, should not render pipe cursor", view)
+	}
+	if !strings.Contains(view, "Properties") || !strings.Contains(view, "Printer") {
+		t.Fatalf("view = %q, want side panels visible while editing", view)
+	}
+
+	canvas := renderCanvas(m)
+	if strings.Contains(canvas, "|") {
+		t.Fatalf("canvas = %q, should not render in-component pipe cursor", canvas)
+	}
+}
+
+func TestOverlayStyledLineKeepsBackgroundAroundTextbox(t *testing.T) {
+	line := overlayStyledLine("abcdef", "XY", 2, 6)
+	if line != "abXYef" {
+		t.Fatalf("overlay line = %q, want abXYef", line)
+	}
+}
+
+func TestEditingTextLinesKeepCursorVisibleForLongText(t *testing.T) {
+	lines := editingTextLines(strings.Repeat("a", 80), 12, 2)
+	joined := strings.Join(lines, "\n")
+	if !strings.ContainsRune(joined, promptCursorRune) {
+		t.Fatalf("editing lines = %q, want visible block cursor %q", joined, promptCursorRune)
+	}
+}
+
 func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 	presets := []config.LabelPreset{
 		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"},
