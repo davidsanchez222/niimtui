@@ -48,15 +48,15 @@
     Design labels in a TUI, preview them, and print directly to supported devices.
   </p>
   <p>
-    <a href="#quick-start">Quick Start</a>
+    <a href="#quick-start">quick start</a>
     ·
-    <a href="#tui">TUI</a>
+    <a href="#tui">tui</a>
     ·
-    <a href="#support">Support</a>
+    <a href="#support">support</a>
     ·
-    <a href="#roadmap">Roadmap</a>
+    <a href="#roadmap">roadmap</a>
     ·
-    <a href="#development">Development</a>
+    <a href="#development">development</a>
   </p>
 </div>
 
@@ -67,7 +67,6 @@
 </div>
 
 ---
-
 
 `niimtui` is a Go TUI for designing labels in the terminal and printing them to Niimbot printers over Bluetooth Low Energy.
 
@@ -166,14 +165,14 @@ go run ./cmd/niimtui print \
 
 `niimtui` is beta software. The working hardware path today is macOS BLE with the printers below.
 
-| OS | Transport | Printer | Status |
-| --- | --- | --- | --- |
-| macOS | BLE | `D110_M` v4-class | verified |
-| macOS | BLE | `B1` | verified |
-| macOS | Serial/USB | `all` | untested |
-| Linux | BLE | pending | untested |
-| Windows | BLE | pending | untested |
-| SSH session | TUI | pending | untested |
+| OS          | Transport  | Printer           | Status   |
+| ----------- | ---------- | ----------------- | -------- |
+| macOS       | BLE        | `D110_M` v4-class | verified |
+| macOS       | BLE        | `B1`              | verified |
+| macOS       | Serial/USB | `all`             | untested |
+| Linux       | BLE        | pending           | untested |
+| Windows     | BLE        | pending           | untested |
+| SSH session | TUI        | pending           | untested |
 
 See [`docs/TESTED_SETUP.md`](./docs/TESTED_SETUP.md) for the currently verified hardware, commands, and printer notes.
 
@@ -185,17 +184,17 @@ The current service/CLI path supports QR text plus optional title/subtitle, reso
 
 ## roadmap
 
-| Item | Status |
-| --- | --- |
-| Serial/USB support | ❌ |
-| Full HTTPS Homebox integration | ❌ |
-| Homebrew tap release (`brew install davidsanchez222/tap/niimtui`) | ❌ |
-| Homebrew Core submission (`brew install niimtui`) | ❌ |
-| Windows package manager publishing: winget, Scoop, Chocolatey | ❌ |
-| Linux testing | ❌ |
-| Windows testing | ❌ |
-| SSH session testing | ❌ |
-| BLE connectivity refactor and reliability improvements | ❌ |
+| Item                                                              | Status |
+| ----------------------------------------------------------------- | ------ |
+| Serial/USB support                                                | ❌     |
+| Full HTTPS Homebox integration                                    | ❌     |
+| Homebrew tap release (`brew install davidsanchez222/tap/niimtui`) | ❌     |
+| Homebrew Core submission (`brew install niimtui`)                 | ❌     |
+| Windows package manager publishing: winget, Scoop, Chocolatey     | ❌     |
+| Linux testing                                                     | ❌     |
+| Windows testing                                                   | ❌     |
+| SSH session testing                                               | ❌     |
+| BLE connectivity refactor and reliability improvements            | ❌     |
 
 More implementation detail lives in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
 
