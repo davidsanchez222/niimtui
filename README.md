@@ -63,7 +63,13 @@
 ---
 
 <div align="center">
-  <video src="https://github.com/user-attachments/assets/205564aa-506e-4792-ae7e-b0abf91e681b" width="500" controls></video>
+  <video
+    src="https://github.com/user-attachments/assets/205564aa-506e-4792-ae7e-b0abf91e681b"
+    width="500"
+    loop
+    muted
+    >
+  </video>
 </div>
 
 ---
