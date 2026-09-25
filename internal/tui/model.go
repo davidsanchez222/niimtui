@@ -125,6 +125,14 @@ type PromptState struct {
 	Value string
 }
 
+type MenuListMode string
+
+const (
+	MenuListNone          MenuListMode = ""
+	MenuListLabelRolls    MenuListMode = "label-rolls"
+	MenuListDesignPresets MenuListMode = "design-presets"
+)
+
 type Model struct {
 	Width  int
 	Height int
@@ -157,6 +165,8 @@ type Model struct {
 	HelpOpen        bool
 	MenuOpen        bool
 	MenuIndex       int
+	MenuListMode    MenuListMode
+	MenuListIndex   int
 	AutoInsert      bool
 
 	Print       PrintConfig

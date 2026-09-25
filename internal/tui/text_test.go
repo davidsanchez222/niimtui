@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/image/font/gofont/goregular"
 
+	"niimtui/internal/config"
 	"niimtui/internal/label"
 )
 
@@ -42,6 +43,37 @@ func TestResizeQRElementKeepsSquareAspectFromVerticalHandle(t *testing.T) {
 	}
 	if updated.HeightMM <= original.HeightMM {
 		t.Fatalf("QR height = %.2f, want greater than %.2f", updated.HeightMM, original.HeightMM)
+	}
+}
+
+func TestPlusMinusResizeSelectedQRElement(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.addQRElement()
+	initial, ok := m.selectedElement()
+	if !ok || initial.QR == nil {
+		t.Fatal("expected selected QR element")
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")}) {
+		t.Fatal("+ was not handled for QR")
+	}
+	grown, ok := m.selectedElement()
+	if !ok || grown.QR == nil {
+		t.Fatal("expected selected QR element after grow")
+	}
+	if grown.WidthMM != initial.WidthMM+1 || grown.HeightMM != initial.HeightMM+1 {
+		t.Fatalf("grown QR size = %.1fx%.1f, want %.1fx%.1f", grown.WidthMM, grown.HeightMM, initial.WidthMM+1, initial.HeightMM+1)
+	}
+
+	if !m.handleCommandKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("-")}) {
+		t.Fatal("- was not handled for QR")
+	}
+	shrunk, ok := m.selectedElement()
+	if !ok || shrunk.QR == nil {
+		t.Fatal("expected selected QR element after shrink")
+	}
+	if shrunk.WidthMM != initial.WidthMM || shrunk.HeightMM != initial.HeightMM {
+		t.Fatalf("shrunk QR size = %.1fx%.1f, want %.1fx%.1f", shrunk.WidthMM, shrunk.HeightMM, initial.WidthMM, initial.HeightMM)
 	}
 }
 
@@ -727,6 +759,58 @@ func TestMenuTogglesAutoInsert(t *testing.T) {
 	}
 }
 
+func TestMenuSelectsLabelRollAndCloses(t *testing.T) {
+	presets := []config.LabelPreset{
+		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "blank"},
+		{Name: "b1-50x50", WidthMM: 50, HeightMM: 50, Shape: "rect", Layout: "blank"},
+	}
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{}, presets, "b1-50x30")
+	if !m.toggleMenu() {
+		t.Fatal("toggleMenu() = false, want true")
+	}
+	m.MenuIndex = 0
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.MenuListMode != MenuListLabelRolls || m.MenuListIndex != 0 {
+		t.Fatalf("menu list = %q index %d, want label rolls index 0", m.MenuListMode, m.MenuListIndex)
+	}
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.MenuOpen || m.MenuListMode != MenuListNone {
+		t.Fatalf("menu state = open %t list %q, want closed", m.MenuOpen, m.MenuListMode)
+	}
+	if m.Preset != 1 || m.Document.HeightMM != 50 {
+		t.Fatalf("selected preset = %d height %.1f, want preset 1 height 50", m.Preset, m.Document.HeightMM)
+	}
+}
+
+func TestMenuSelectsSavedPresetAndCloses(t *testing.T) {
+	first := label.NewDocument(50, 30)
+	second := label.NewDocument(40, 12)
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.DesignPresets = []config.DesignPreset{
+		{Name: "large", Document: first},
+		{Name: "small", Document: second},
+	}
+	if !m.toggleMenu() {
+		t.Fatal("toggleMenu() = false, want true")
+	}
+	m.MenuIndex = 1
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.MenuListMode != MenuListDesignPresets || m.MenuListIndex != 0 {
+		t.Fatalf("menu list = %q index %d, want saved presets index 0", m.MenuListMode, m.MenuListIndex)
+	}
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.MenuOpen || m.MenuListMode != MenuListNone {
+		t.Fatalf("menu state = open %t list %q, want closed", m.MenuOpen, m.MenuListMode)
+	}
+	if m.DesignPreset != 1 || m.Document.WidthMM != 40 || m.Document.HeightMM != 12 {
+		t.Fatalf("loaded design = index %d %.1fx%.1f, want index 1 40x12", m.DesignPreset, m.Document.WidthMM, m.Document.HeightMM)
+	}
+}
+
 func TestHelpAndMenuRenderAsModalViews(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.Ready = true
@@ -741,7 +825,7 @@ func TestHelpAndMenuRenderAsModalViews(t *testing.T) {
 	m.HelpOpen = false
 	m.MenuOpen = true
 	menu := m.View()
-	if !strings.Contains(menu, "Auto Insert") || !strings.Contains(menu, "Label rolls installed") || !strings.Contains(menu, "Saved presets") {
+	if !strings.Contains(menu, "Auto Insert on Text/QR Creation") || !strings.Contains(menu, "Label roll") || !strings.Contains(menu, "Saved preset") {
 		t.Fatal("menu modal content missing")
 	}
 }

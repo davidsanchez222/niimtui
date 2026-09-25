@@ -694,7 +694,7 @@ func helpModalContent() []string {
 		helpRow("H / L", "Shrink / grow selected width"),
 		helpRow("K / J", "Shrink / grow selected height"),
 		helpRow("[ ] / { }", "Resize diagonally from the bottom-right"),
-		helpRow("+ / -", "Increase / decrease selected text font size"),
+		helpRow("+ / -", "Increase / decrease selected text font size or QR size"),
 		helpRow("p", "Open the native OS preview image"),
 		helpRow("m", "Open the options menu"),
 		helpRow("?", "Toggle this help popup"),
@@ -704,15 +704,18 @@ func helpModalContent() []string {
 }
 
 func menuModalContent(m Model) []string {
+	if m.MenuListMode != MenuListNone {
+		return menuListModalContent(m)
+	}
 	autoInsert := "off"
 	if m.AutoInsert {
 		autoInsert = "on"
 	}
 	items := []string{
-		"Label rolls installed: " + installedRollsLabel(m),
-		"Saved presets: " + m.currentDesignPresetLabel(),
+		"Label roll: " + m.currentPresetLabel(),
+		"Saved preset: " + m.currentDesignPresetLabel(),
 		"Save current design",
-		"Auto Insert: " + autoInsert,
+		"Auto Insert on Text/QR Creation: " + autoInsert,
 		"Close",
 	}
 	lines := []string{
@@ -730,6 +733,53 @@ func menuModalContent(m Model) []string {
 	}
 	lines = append(lines,
 		"",
+		mutedStyle.Render("j/k or arrows move, enter opens/selects, esc closes"),
+	)
+	return lines
+}
+
+func menuListModalContent(m Model) []string {
+	title := "Select"
+	items := []string{}
+	activeIndex := -1
+	switch m.MenuListMode {
+	case MenuListLabelRolls:
+		title = "Label Rolls"
+		activeIndex = m.Preset
+		for _, preset := range m.Presets {
+			items = append(items, preset.Name)
+		}
+	case MenuListDesignPresets:
+		title = "Saved Presets"
+		activeIndex = m.DesignPreset
+		for _, preset := range m.DesignPresets {
+			items = append(items, preset.Name)
+		}
+	}
+
+	lines := []string{
+		propertyTitleStyle.Render(title),
+		"",
+	}
+	if len(items) == 0 {
+		lines = append(lines, mutedStyle.Render("No items available"))
+	} else {
+		for i, item := range items {
+			prefix := "  "
+			style := helpLabelStyle
+			if i == m.MenuListIndex {
+				prefix = "> "
+				style = propertySelectedStyle
+			}
+			marker := ""
+			if i == activeIndex {
+				marker = " *"
+			}
+			lines = append(lines, style.Render(prefix+item+marker))
+		}
+	}
+	lines = append(lines,
+		"",
 		mutedStyle.Render("j/k or arrows move, enter selects, esc closes"),
 	)
 	return lines
@@ -740,21 +790,6 @@ func onOff(enabled bool) string {
 		return "on"
 	}
 	return "off"
-}
-
-func installedRollsLabel(m Model) string {
-	if len(m.Presets) == 0 {
-		return "none for " + emptyFallback(m.Print.Model, "active printer")
-	}
-	names := make([]string, 0, len(m.Presets))
-	for i, preset := range m.Presets {
-		name := preset.Name
-		if i == m.Preset {
-			name += " *"
-		}
-		names = append(names, name)
-	}
-	return strings.Join(names, ", ")
 }
 
 func helpRow(key, description string) string {
@@ -789,7 +824,7 @@ func footerLines(m Model, width int) []string {
 		helpItem("arrows/hjkl", "move"),
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
-		helpItem("+/-", "font size"),
+		helpItem("+/-", "font/QR size"),
 		helpItem("g", "grid"),
 		helpItem("I", "invert colors"),
 		helpItem("m", "menu"),

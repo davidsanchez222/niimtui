@@ -451,7 +451,27 @@ func (m *Model) resizeSelectedDimensions(dwMM, dhMM float64) bool {
 
 func (m *Model) adjustSelectedFont(delta float64) bool {
 	element, ok := m.selectedElement()
-	if !ok || element.Text == nil {
+	if !ok {
+		return false
+	}
+	if element.QR != nil {
+		original := element
+		size := element.WidthMM + delta
+		element.WidthMM = size
+		element.HeightMM = size
+		clampElementToDocument(&element, m.Document)
+		if element.WidthMM == original.WidthMM && element.HeightMM == original.HeightMM && element.XMM == original.XMM && element.YMM == original.YMM {
+			m.setStatus("QR size %.1fmm", element.WidthMM)
+			return true
+		}
+		if !m.Document.UpdateElement(element) {
+			return false
+		}
+		m.commitHistory("resize QR")
+		m.setStatus("QR size %.1fmm", element.WidthMM)
+		return true
+	}
+	if element.Text == nil {
 		return false
 	}
 	fontSize := math.Max(minFontSize, math.Min(maxFontSize, element.Text.FontSize+delta))
