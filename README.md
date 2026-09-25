@@ -42,10 +42,10 @@
     />
   </p>
   <p>
-    <strong>Terminal-first label design and printing for Niimbot printers.</strong>
+    <strong>terminal-first label design and printing for Niimbot printers</strong>
   </p>
   <p>
-    Design labels in a TUI, preview them, and print directly to supported devices.
+    design labels in a TUI, preview them, and print directly to supported devices.
   </p>
   <p>
     <a href="#quick-start">quick start</a>
