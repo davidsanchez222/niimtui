@@ -1,24 +1,64 @@
-<h1>
-<p align="center">
+<div align="center">
   <!-- <img src="assets/logo.svg" alt="niimtui logo" width="128"> LOGO HERE-->
-  <br>niimtui
-</h1>
-
-<p align="center">
-  Terminal-first label design and printing for Niimbot printers.
-  <br />
-  Design labels in a TUI, preview them, and print directly to supported devices.
-  <br />
-  <a href="#quick-start">Quick Start</a>
-  ·
-  <a href="#tui">TUI</a>
-  ·
-  <a href="#support">Support</a>
-  ·
-  <a href="#roadmap">Roadmap</a>
-  ·
-  <a href="#development">Development</a>
-</p>
+  <h1>niimtui</h1>
+  <p>
+    <a href="https://github.com/davidsanchez222/niimtui/releases/latest">
+      <img
+        alt="Latest release"
+        src="https://img.shields.io/github/v/release/davidsanchez222/niimtui?style=for-the-badge&logo=starship&color=C9CBFF&logoColor=D9E0EE&labelColor=302D41&include_prerelease&sort=semver"
+      />
+    </a>
+    <a href="https://github.com/davidsanchez222/niimtui/stargazers">
+      <img
+        alt="Stars"
+        src="https://img.shields.io/github/stars/davidsanchez222/niimtui?style=for-the-badge&logo=starship&color=c69ff5&logoColor=D9E0EE&labelColor=302D41"
+      />
+    </a>
+    <a href="https://github.com/davidsanchez222/niimtui/issues">
+      <img
+        alt="Issues"
+        src="https://img.shields.io/github/issues/davidsanchez222/niimtui?style=for-the-badge&logo=bilibili&color=F5E0DC&logoColor=D9E0EE&labelColor=302D41"
+      />
+    </a>
+    <a href="https://github.com/davidsanchez222/niimtui">
+      <img
+        alt="Repo Size"
+        src="https://img.shields.io/github/repo-size/davidsanchez222/niimtui?color=%23DDB6F2&label=SIZE&logo=codesandbox&style=for-the-badge&logoColor=D9E0EE&labelColor=302D41"
+      />
+    </a>
+    <a href="https://github.com/davidsanchez222/niimtui/blob/main/LICENSE">
+      <img
+        alt="License"
+        src="https://img.shields.io/badge/License-MIT-ee999f?style=for-the-badge&logo=starship&logoColor=D9E0EE&labelColor=302D41"
+      />
+    </a>
+    <img
+      alt="Go 1.25 Required"
+      src="https://img.shields.io/badge/Go-1.25%2B-8bd5ca?style=for-the-badge&logo=go&logoColor=D9E0EE&labelColor=302D41"
+    />
+    <img
+      alt="macOS BLE verified"
+      src="https://img.shields.io/badge/macOS-BLE%20verified-8aadf3?style=for-the-badge&logo=apple&logoColor=D9E0EE&labelColor=302D41"
+    />
+  </p>
+  <p>
+    <strong>Terminal-first label design and printing for Niimbot printers.</strong>
+  </p>
+  <p>
+    Design labels in a TUI, preview them, and print directly to supported devices.
+  </p>
+  <p>
+    <a href="#quick-start">Quick Start</a>
+    ·
+    <a href="#tui">TUI</a>
+    ·
+    <a href="#support">Support</a>
+    ·
+    <a href="#roadmap">Roadmap</a>
+    ·
+    <a href="#development">Development</a>
+  </p>
+</div>
 
 ---
 
