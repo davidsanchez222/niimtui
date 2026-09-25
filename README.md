@@ -147,13 +147,15 @@ The current service/CLI path supports QR text plus optional title/subtitle, reso
 
 | Item | Status |
 | --- | --- |
-| Serial/USB support | pending |
-| Full HTTPS Homebox integration | pending |
-| Package manager publishing: Homebrew, Chocolatey, apt, etc. | pending |
-| Linux testing | pending |
-| Windows testing | pending |
-| SSH session testing | pending |
-| BLE connectivity refactor and reliability improvements | pending |
+| Serial/USB support | ❌ |
+| Full HTTPS Homebox integration | ❌ |
+| Homebrew tap release (`brew install davidsanchez222/tap/niimtui`) | ❌ |
+| Homebrew Core submission (`brew install niimtui`) | ❌ |
+| Windows package manager publishing: winget, Scoop, Chocolatey | ❌ |
+| Linux testing | ❌ |
+| Windows testing | ❌ |
+| SSH session testing | ❌ |
+| BLE connectivity refactor and reliability improvements | ❌ |
 
 More implementation detail lives in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
 
