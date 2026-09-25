@@ -442,6 +442,8 @@ func artLines(lines []string, width int) []string {
 }
 
 func propertyPanelLines(m Model, width int) []string {
+	fontPickerElement, showFontPicker := m.selectedElement()
+	showFontPicker = showFontPicker && fontPickerElement.Text != nil && m.FontPickerOpen
 	lines := []string{
 		propertyTitleStyle.Render("Live Preview"),
 		"",
@@ -453,6 +455,15 @@ func propertyPanelLines(m Model, width int) []string {
 		}
 	} else {
 		lines = append(lines, mutedStyle.Render("Press p to open preview"))
+	}
+	if showFontPicker {
+		available := max(m.canvasPanelHeight()-len(lines)-2, 3)
+		itemLimit := max(1, available-3)
+		lines = append(lines,
+			"",
+			propertyTitleStyle.Render("Fonts"),
+		)
+		lines = append(lines, fontPickerLinesWithLimit(m, width, min(fontPickerPageSize, itemLimit))...)
 	}
 	lines = append(lines,
 		"",
@@ -492,9 +503,6 @@ func propertyPanelLines(m Model, width int) []string {
 			propertyItem("Font", truncateText(m.selectedFontName(element.Text.FontPath), sidebarValueWidth("Font", width))),
 			helpItem("F", "search fonts"),
 		)
-		if m.FontPickerOpen {
-			lines = append(lines, fontPickerLines(m, width)...)
-		}
 	}
 	if element.QR != nil {
 		lines = append(lines,
@@ -663,9 +671,14 @@ func propertyLabel(label string) string {
 }
 
 func fontPickerLines(m Model, width int) []string {
+	return fontPickerLinesWithLimit(m, width, fontPickerPageSize)
+}
+
+func fontPickerLinesWithLimit(m Model, width, itemLimit int) []string {
 	if len(m.Fonts) == 0 {
 		return []string{mutedStyle.Render("No fonts found")}
 	}
+	itemLimit = max(itemLimit, 1)
 	indices := m.filteredFontIndices()
 	query := truncateText(m.FontPickerQuery, max(width-len("Search: ")-1, 1))
 	searchValue := query
@@ -690,14 +703,14 @@ func fontPickerLines(m Model, width int) []string {
 			break
 		}
 	}
-	start := selectedPosition - fontPickerPageSize/2
+	start := selectedPosition - itemLimit/2
 	if start < 0 {
 		start = 0
 	}
-	if start+fontPickerPageSize > len(indices) {
-		start = max(len(indices)-fontPickerPageSize, 0)
+	if start+itemLimit > len(indices) {
+		start = max(len(indices)-itemLimit, 0)
 	}
-	end := min(start+fontPickerPageSize, len(indices))
+	end := min(start+itemLimit, len(indices))
 	for i := start; i < end; i++ {
 		fontIndex := indices[i]
 		prefix := "  "

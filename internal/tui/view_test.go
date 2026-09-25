@@ -97,6 +97,31 @@ func TestViewHeightStaysWithinTerminalAfterRotatingCanvasWithSelection(t *testin
 	}
 }
 
+func TestFontPickerSearchVisibleInShortSidebar(t *testing.T) {
+	m := NewModel(50, 50, "round", "", PrintConfig{})
+	m.Ready = true
+	m.Width = 200
+	m.Height = minTerminalHeight
+	m.reflow()
+	m.addTextElement()
+	m.Fonts = []FontOption{
+		{Name: "Default", Path: ""},
+		{Name: "Go-Regular", Path: "/tmp/Go-Regular.ttf"},
+		{Name: "JetBrainsMonoNerdFont-Regular", Path: "/tmp/JetBrainsMonoNerdFont-Regular.ttf"},
+	}
+	m.FontPickerOpen = true
+	m.FontPickerSearch = true
+	m.FontPickerQuery = "jet"
+	m.Preview.Protocol = LivePreviewKitty
+	m.Preview.PNG = []byte{1, 2, 3}
+
+	lines := fitPanelLines(propertyPanelLines(m, layoutPropertiesWidth), m.canvasPanelHeight(), layoutPropertiesWidth)
+	panel := strings.Join(lines, "\n")
+	if !strings.Contains(panel, "Search") || !strings.Contains(panel, "jet") {
+		t.Fatalf("short property panel = %q, want visible font search", panel)
+	}
+}
+
 func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 	presets := []config.LabelPreset{
 		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"},
