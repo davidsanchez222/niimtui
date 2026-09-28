@@ -3,8 +3,6 @@ package niimbot
 import (
 	"fmt"
 	"image"
-	"image/color"
-	"math"
 
 	"niimtui/internal/render"
 )
@@ -15,14 +13,29 @@ type RasterJob struct {
 	HeightPx int
 }
 
-func PrepareRasterJob(result render.Result) (RasterJob, error) {
+// RasterOrientation selects how a rendered image is laid out on the printhead.
+type RasterOrientation uint8
+
+const (
+	RasterAsRendered RasterOrientation = iota
+	// RasterRotateLandscape leaves already-portrait images unchanged.
+	RasterRotateLandscape
+)
+
+func PrepareRasterJob(result render.Result, orientation RasterOrientation) (RasterJob, error) {
 	gray, ok := result.Image.(*image.Gray)
 	if !ok {
 		return RasterJob{}, fmt.Errorf("expected grayscale rendered image")
 	}
+	if orientation == RasterRotateLandscape && gray.Bounds().Dx() > gray.Bounds().Dy() {
+		gray = rotateGray90CW(gray)
+	}
 	widthPx := gray.Bounds().Dx()
 	heightPx := gray.Bounds().Dy()
-	bytesPerRow := int(math.Ceil(float64(widthPx) / 8.0))
+	if orientation == RasterRotateLandscape && widthPx%8 != 0 {
+		return RasterJob{}, fmt.Errorf("oriented image width must be a multiple of 8 pixels")
+	}
+	bytesPerRow := (widthPx + 7) / 8
 	rows := make([][]byte, 0, heightPx)
 	for y := 0; y < heightPx; y++ {
 		row := make([]byte, bytesPerRow)
@@ -36,6 +49,15 @@ func PrepareRasterJob(result render.Result) (RasterJob, error) {
 	return RasterJob{Rows: rows, WidthPx: widthPx, HeightPx: heightPx}, nil
 }
 
-func isBlack(c color.Gray) bool {
-	return c.Y < 128
+func rotateGray90CW(src *image.Gray) *image.Gray {
+	sb := src.Bounds()
+	dst := image.NewGray(image.Rect(0, 0, sb.Dy(), sb.Dx()))
+	for y := sb.Min.Y; y < sb.Max.Y; y++ {
+		for x := sb.Min.X; x < sb.Max.X; x++ {
+			sx := x - sb.Min.X
+			sy := y - sb.Min.Y
+			dst.SetGray(sb.Dy()-1-sy, sx, src.GrayAt(x, y))
+		}
+	}
+	return dst
 }
