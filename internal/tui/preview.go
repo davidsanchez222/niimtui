@@ -9,19 +9,20 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"niimtui/internal/printtrace"
 	"niimtui/internal/render"
 )
 
 const previewOutputPath = "testlabels/preview.png"
 
 type printResultMsg struct {
-	OK       bool
-	Printer  string
-	Copies   int
-	Err      error
-	WidthPx  int
-	HeightPx int
-	Closed   bool
+	OK           bool
+	Printer      string
+	Copies       int
+	Err          error
+	Disconnected bool
+	WidthPx      int
+	HeightPx     int
 }
 
 func (m *Model) exportPreview() bool {
@@ -83,6 +84,8 @@ func (m *Model) printCurrentDocument() tea.Cmd {
 		return nil
 	}
 	m.setStatus("Printing current label...")
+	ctx := printtrace.Start(context.Background())
+	printtrace.Mark(ctx, "TUI print requested")
 	doc := m.Document
 	copies := m.Print.Copies
 	session := m.Print.Session
@@ -91,32 +94,26 @@ func (m *Model) printCurrentDocument() tea.Cmd {
 		if err != nil {
 			return printResultMsg{Err: fmt.Errorf("render label: %w", err)}
 		}
-		resp := session.PrintImage(context.Background(), result, copies)
+		printtrace.Mark(ctx, "render complete")
+		resp := session.PrintImage(ctx, result, copies)
 		if !resp.OK {
 			if resp.Error != nil {
-				return printResultMsg{Err: fmt.Errorf("%s: %s", resp.Error.Code, resp.Error.Message), WidthPx: result.WidthPx, HeightPx: result.HeightPx}
+				return printResultMsg{Err: fmt.Errorf("%s: %s", resp.Error.Code, resp.Error.Message), Disconnected: session.Metadata() == nil, WidthPx: result.WidthPx, HeightPx: result.HeightPx}
 			}
-			return printResultMsg{Err: fmt.Errorf("print failed"), WidthPx: result.WidthPx, HeightPx: result.HeightPx}
+			return printResultMsg{Err: fmt.Errorf("print failed"), Disconnected: session.Metadata() == nil, WidthPx: result.WidthPx, HeightPx: result.HeightPx}
 		}
-		return printResultMsg{OK: true, Printer: resp.Printer, Copies: resp.Copies, WidthPx: result.WidthPx, HeightPx: result.HeightPx, Closed: true}
+		return printResultMsg{OK: true, Printer: resp.Printer, Copies: resp.Copies, WidthPx: result.WidthPx, HeightPx: result.HeightPx}
 	}
 }
 
 func (m *Model) handlePrintResult(msg printResultMsg) tea.Cmd {
 	if msg.Err != nil {
+		if msg.Disconnected {
+			m.Connection = ConnectionDisconnected
+			m.ConnectMeta = nil
+		}
 		m.setStatus("Print failed: %v", msg.Err)
 		return nil
-	}
-	if msg.Closed {
-		m.Connection = ConnectionDisconnected
-		m.ConnectMeta = nil
-		m.setStatus("Printed %d copy to %s (%dx%d). Reconnecting...", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)
-		if m.Print.Session == nil {
-			return nil
-		}
-		m.Connection = ConnectionConnecting
-		m.ConnectErr = ""
-		return connectPrinterCmd(m.Print.Session)
 	}
 	m.setStatus("Printed %d copy to %s (%dx%d).", msg.Copies, msg.Printer, msg.WidthPx, msg.HeightPx)
 	return nil

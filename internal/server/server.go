@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"slices"
@@ -11,6 +12,7 @@ import (
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
+	"niimtui/internal/printtrace"
 	"niimtui/internal/service"
 )
 
@@ -46,7 +48,8 @@ func New(cfg config.Config, svc *service.Service) *Server {
 	return s
 }
 
-func (s *Server) Run(ctx context.Context) error {
+func (s *Server) Run(ctx context.Context) (runErr error) {
+	defer func() { runErr = errors.Join(runErr, s.svc.Close()) }()
 	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("niimtui listening on %s", s.cfg.Server.Listen)
@@ -118,6 +121,8 @@ func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
+	ctx := printtrace.Start(r.Context())
+	printtrace.Mark(ctx, "HTTP print requested")
 	if !s.authorizeOrigin(w, r) {
 		return
 	}
@@ -135,7 +140,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := s.svc.Print(r.Context(), req)
+	resp := s.svc.Print(ctx, req)
 	status := http.StatusOK
 	if !resp.OK {
 		status = http.StatusBadRequest

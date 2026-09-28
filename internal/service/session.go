@@ -9,6 +9,7 @@ import (
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
+	"niimtui/internal/printtrace"
 	"niimtui/internal/render"
 	"niimtui/internal/transport"
 )
@@ -54,7 +55,12 @@ func (s *Session) connectLocked(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect printer: %w", err)
 	}
+	if err := conn.Prepare(connectCtx, s.printer); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("prepare printer: %w", err)
+	}
 	s.conn = conn
+	printtrace.Mark(ctx, "BLE connected and ready")
 	return conn.Metadata(), nil
 }
 
@@ -68,8 +74,10 @@ func (s *Session) closeLocked() error {
 }
 
 func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies int) api.PrintResponse {
+	ctx = printtrace.Start(ctx)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	printtrace.Mark(ctx, "printer session ready")
 
 	if normalizedCopies(copies) <= 0 {
 		return *errorResponse(ErrInvalidRequest, "options.copies must be greater than zero")
@@ -87,10 +95,13 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 	if err != nil {
 		return *errorResponse(ErrInvalidImage, fmt.Sprintf("offset image for printer: %v", err))
 	}
+	printtrace.Mark(ctx, "image fitting complete")
 
 	job := transport.Job{Rendered: rendered, Copies: normalizedCopies(copies)}
 	err = s.printLocked(ctx, job)
+	printtrace.Mark(ctx, "print attempt complete")
 	if err != nil {
+		printtrace.Mark(ctx, "print failed; reconnecting and retrying")
 		firstErr := err
 		_ = s.closeLocked()
 		if _, reconnectErr := s.connectLocked(ctx); reconnectErr != nil {
@@ -105,6 +116,7 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 			}
 		}
 		err = s.printLocked(ctx, job)
+		printtrace.Mark(ctx, "retry complete")
 	}
 	connectionMeta := map[string]any(nil)
 	if s.conn != nil {
@@ -124,6 +136,7 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 		"connection": connectionMeta,
 	}
 	if err != nil {
+		_ = s.closeLocked()
 		return api.PrintResponse{
 			OK:      false,
 			Printer: s.printer.Name,
@@ -135,8 +148,6 @@ func (s *Session) PrintImage(ctx context.Context, rendered render.Result, copies
 			Meta: meta,
 		}
 	}
-	_ = s.closeLocked()
-
 	return api.PrintResponse{
 		OK:      true,
 		Printer: s.printer.Name,

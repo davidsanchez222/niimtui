@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
+	"niimtui/internal/printtrace"
 	"niimtui/internal/render"
 	"niimtui/internal/transport"
 	bletransport "niimtui/internal/transport/ble"
@@ -30,6 +32,9 @@ type Service struct {
 	printersByName map[string]config.PrinterProfile
 	presetsByName  map[string]config.LabelPreset
 	transport      *transport.Manager
+	connectionsMu  sync.Mutex
+	connections    map[string]*printerConnection
+	closed         bool
 }
 
 func New(cfg config.Config) (*Service, error) {
@@ -38,6 +43,7 @@ func New(cfg config.Config) (*Service, error) {
 		printersByName: make(map[string]config.PrinterProfile, len(cfg.Printers)),
 		presetsByName:  make(map[string]config.LabelPreset, len(cfg.Presets)),
 		transport:      transport.NewManager(bletransport.New()),
+		connections:    make(map[string]*printerConnection),
 	}
 	for _, printer := range cfg.Printers {
 		s.printersByName[printer.Name] = printer
@@ -69,19 +75,24 @@ func (s *Service) Probe(ctx context.Context, selector string) (map[string]any, *
 	if errResp != nil {
 		return nil, errResp
 	}
-
-	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	conn, err := s.transport.Connect(connectCtx, printer)
+	slot, err := s.connectionFor(printer)
 	if err != nil {
-		return nil, errorResponse(ErrBLEConnectFailed, fmt.Sprintf("connect printer: %v", err))
+		return nil, errorResponse(ErrBLEConnectFailed, err.Error())
 	}
-	defer conn.Close()
+	slot.mu.Lock()
+	defer slot.mu.Unlock()
+	if slot.closed {
+		return nil, errorResponse(ErrBLEConnectFailed, "print service is closed")
+	}
+	if err := s.connectLocked(ctx, slot, printer); err != nil {
+		return nil, errorResponse(ErrBLEConnectFailed, err.Error())
+	}
 
 	probeCtx, probeCancel := context.WithTimeout(ctx, 20*time.Second)
 	defer probeCancel()
-	if err := conn.Probe(probeCtx); err != nil {
+	if err := slot.conn.Probe(probeCtx); err != nil {
+		_ = slot.conn.Close()
+		slot.conn = nil
 		return nil, errorResponse(ErrPrintFailed, fmt.Sprintf("probe printer: %v", err))
 	}
 
@@ -93,26 +104,23 @@ func (s *Service) Probe(ctx context.Context, selector string) (map[string]any, *
 			"device_name": printer.DeviceName,
 			"identifier":  printer.Identifier,
 		},
-		"connection": conn.Metadata(),
+		"connection": slot.conn.Metadata(),
 	}, nil
 }
 
 func (s *Service) Print(ctx context.Context, req api.PrintRequest) api.PrintResponse {
+	ctx = printtrace.Start(ctx)
+	printtrace.Mark(ctx, "service print requested")
 	printer, preset, rendered, errResp := s.preparePrint(req)
 	if errResp != nil {
 		return *errResp
 	}
+	printtrace.Mark(ctx, "render and request preparation complete")
 
-	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	conn, err := s.transport.Connect(connectCtx, printer)
-	if err != nil {
-		return *errorResponse(ErrBLEConnectFailed, fmt.Sprintf("connect printer: %v", err))
+	connectionMeta, errorCode, err := s.send(ctx, printer, transport.Job{Rendered: rendered, Copies: normalizedCopies(req.Options.Copies)})
+	if errorCode == ErrBLEConnectFailed {
+		return *errorResponse(errorCode, err.Error())
 	}
-	defer conn.Close()
-
-	err = conn.Print(ctx, printer, transport.Job{Rendered: rendered, Copies: normalizedCopies(req.Options.Copies)})
 	meta := map[string]any{
 		"model":       printer.Model,
 		"transport":   printer.Transport,
@@ -128,7 +136,7 @@ func (s *Service) Print(ctx context.Context, req api.PrintRequest) api.PrintResp
 			"rotation":         rendered.Rotation,
 			"preview_bytes":    rendered.PreviewBytes,
 		},
-		"connection": conn.Metadata(),
+		"connection": connectionMeta,
 	}
 	if err != nil {
 		return api.PrintResponse{
@@ -137,7 +145,7 @@ func (s *Service) Print(ctx context.Context, req api.PrintRequest) api.PrintResp
 			Preset:  preset.Name,
 			Copies:  normalizedCopies(req.Options.Copies),
 			Error: &api.ErrorBody{
-				Code:    ErrPrintFailed,
+				Code:    errorCode,
 				Message: err.Error(),
 			},
 			Meta: meta,
@@ -154,6 +162,8 @@ func (s *Service) Print(ctx context.Context, req api.PrintRequest) api.PrintResp
 }
 
 func (s *Service) PrintImage(ctx context.Context, selector string, rendered render.Result, copies int) api.PrintResponse {
+	ctx = printtrace.Start(ctx)
+	printtrace.Mark(ctx, "service image print requested")
 	printer, errResp := s.resolvePrinter(selector)
 	if errResp != nil {
 		return *errResp
@@ -171,17 +181,12 @@ func (s *Service) PrintImage(ctx context.Context, selector string, rendered rend
 	if err != nil {
 		return *errorResponse(ErrInvalidImage, fmt.Sprintf("offset image for printer: %v", err))
 	}
+	printtrace.Mark(ctx, "image fitting complete")
 
-	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	conn, err := s.transport.Connect(connectCtx, printer)
-	if err != nil {
-		return *errorResponse(ErrBLEConnectFailed, fmt.Sprintf("connect printer: %v", err))
+	connectionMeta, errorCode, err := s.send(ctx, printer, transport.Job{Rendered: rendered, Copies: normalizedCopies(copies)})
+	if errorCode == ErrBLEConnectFailed {
+		return *errorResponse(errorCode, err.Error())
 	}
-	defer conn.Close()
-
-	err = conn.Print(ctx, printer, transport.Job{Rendered: rendered, Copies: normalizedCopies(copies)})
 	meta := map[string]any{
 		"model":       printer.Model,
 		"transport":   printer.Transport,
@@ -193,7 +198,7 @@ func (s *Service) PrintImage(ctx context.Context, selector string, rendered rend
 			"height_px":     rendered.HeightPx,
 			"preview_bytes": rendered.PreviewBytes,
 		},
-		"connection": conn.Metadata(),
+		"connection": connectionMeta,
 	}
 	if err != nil {
 		return api.PrintResponse{
@@ -201,7 +206,7 @@ func (s *Service) PrintImage(ctx context.Context, selector string, rendered rend
 			Printer: printer.Name,
 			Copies:  normalizedCopies(copies),
 			Error: &api.ErrorBody{
-				Code:    ErrPrintFailed,
+				Code:    errorCode,
 				Message: err.Error(),
 			},
 			Meta: meta,

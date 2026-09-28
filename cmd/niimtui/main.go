@@ -127,6 +127,7 @@ func runCalibrate(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer svc.Close()
 	resp := svc.PrintImage(context.Background(), printerProfile.Name, rendered, *copies)
 	return printJSON(resp)
 }
@@ -201,6 +202,7 @@ func runPrint(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer svc.Close()
 
 	if *imagePath != "" {
 		rendered, err := render.PNGFile(*imagePath)
@@ -283,6 +285,7 @@ func runProbe(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer svc.Close()
 
 	meta, errResp := svc.Probe(context.Background(), *printer)
 	if errResp != nil {

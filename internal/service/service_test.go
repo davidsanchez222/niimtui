@@ -3,12 +3,17 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/png"
+	"sync"
 	"testing"
+	"time"
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
+	"niimtui/internal/render"
+	"niimtui/internal/transport"
 )
 
 func TestValidateRequestUsesDefaultPresetAndQROnlyDefaultLayout(t *testing.T) {
@@ -175,6 +180,229 @@ func TestResolvePrinterUsesActivePrinterByDefault(t *testing.T) {
 	if printer.Name != "b1-round" {
 		t.Fatalf("printer = %q, want b1-round", printer.Name)
 	}
+}
+
+func TestServiceReusesPrinterConnectionAndClosesOnShutdown(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{}
+	svc.transport = transport.NewManager(backend)
+
+	for _, selector := range []string{"b1-round", "b1-50x80"} {
+		resp := svc.Print(context.Background(), api.PrintRequest{
+			Printer: api.PrinterSelector{Selector: selector},
+			QR:      api.QRRequest{Text: "https://example.test/item"},
+		})
+		if !resp.OK {
+			t.Fatalf("Print(%q) = %#v", selector, resp.Error)
+		}
+	}
+	if backend.connections() != 1 {
+		t.Fatalf("connections = %d, want one for two profiles of the same device", backend.connections())
+	}
+	if err := svc.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+	if backend.closed() != 1 {
+		t.Fatalf("closed connections = %d, want 1", backend.closed())
+	}
+}
+
+func TestProbeSharesConnectionWithPrinting(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{}
+	svc.transport = transport.NewManager(backend)
+	t.Cleanup(func() { _ = svc.Close() })
+	req := api.PrintRequest{Printer: api.PrinterSelector{Selector: "b1-round"}, QR: api.QRRequest{Text: "https://example.test/item"}}
+	if resp := svc.Print(context.Background(), req); !resp.OK {
+		t.Fatalf("Print() = %#v", resp)
+	}
+	if _, errResp := svc.Probe(context.Background(), "b1-round"); errResp != nil {
+		t.Fatalf("Probe() = %#v", errResp)
+	}
+	if backend.connections() != 1 || backend.probes() != 1 {
+		t.Fatalf("connections = %d, probes = %d; want 1 and 1", backend.connections(), backend.probes())
+	}
+}
+
+func TestServiceDropsFailedConnectionAndReconnectsOnNextPrint(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{failNextPrint: true}
+	svc.transport = transport.NewManager(backend)
+	t.Cleanup(func() { _ = svc.Close() })
+	req := api.PrintRequest{Printer: api.PrinterSelector{Selector: "b1-round"}, QR: api.QRRequest{Text: "https://example.test/item"}}
+	if resp := svc.Print(context.Background(), req); resp.OK || resp.Error.Code != ErrPrintFailed {
+		t.Fatalf("first Print() = %#v, want print failure", resp)
+	}
+	if resp := svc.Print(context.Background(), req); !resp.OK {
+		t.Fatalf("second Print() = %#v, want recovery", resp)
+	}
+	if backend.connections() != 2 || backend.closed() != 1 {
+		t.Fatalf("connections = %d, closed = %d; want 2 and 1", backend.connections(), backend.closed())
+	}
+}
+
+func TestSessionConnectPreparesAndKeepsSuccessfulConnection(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{}
+	svc.transport = transport.NewManager(backend)
+	session, err := svc.NewSession("b1-round")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if _, err := session.Connect(context.Background()); err != nil {
+		t.Fatalf("Connect() = %v", err)
+	}
+	if _, err := session.Connect(context.Background()); err != nil {
+		t.Fatalf("second Connect() = %v", err)
+	}
+	if got := backend.prepared(); got != 1 {
+		t.Fatalf("prepare calls = %d, want 1", got)
+	}
+	rendered := render.Result{Image: image.NewGray(image.Rect(0, 0, 8, 8)), WidthPx: 8, HeightPx: 8, PrintablePx: image.Rect(0, 0, 8, 8)}
+	for range 2 {
+		if resp := session.PrintImage(context.Background(), rendered, 1); !resp.OK {
+			t.Fatalf("PrintImage() = %#v", resp)
+		}
+	}
+	if backend.connections() != 1 || backend.closed() != 0 {
+		t.Fatalf("connections = %d, closed = %d before session exit; want 1 and 0", backend.connections(), backend.closed())
+	}
+}
+
+func TestSessionClosesConnectionAfterFailedRetry(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{failEveryPrint: true}
+	svc.transport = transport.NewManager(backend)
+	session, err := svc.NewSession("b1-round")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	rendered := render.Result{Image: image.NewGray(image.Rect(0, 0, 8, 8)), WidthPx: 8, HeightPx: 8, PrintablePx: image.Rect(0, 0, 8, 8)}
+	if resp := session.PrintImage(context.Background(), rendered, 1); resp.OK || resp.Error.Code != ErrPrintFailed {
+		t.Fatalf("PrintImage() = %#v, want failure", resp)
+	}
+	if meta := session.Metadata(); meta != nil {
+		t.Fatalf("Metadata() = %#v, want disconnected session", meta)
+	}
+	if backend.connections() != 2 || backend.closed() != 2 {
+		t.Fatalf("connections = %d, closed = %d; want 2 and 2", backend.connections(), backend.closed())
+	}
+}
+
+func TestServiceSerializesPrintsToSamePrinter(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{slowPrint: true}
+	svc.transport = transport.NewManager(backend)
+	t.Cleanup(func() { _ = svc.Close() })
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := api.PrintRequest{Printer: api.PrinterSelector{Selector: "b1-round"}, QR: api.QRRequest{Text: "https://example.test/item"}}
+			if resp := svc.Print(context.Background(), req); !resp.OK {
+				t.Errorf("Print() = %#v", resp)
+			}
+		}()
+	}
+	wg.Wait()
+	backend.mu.Lock()
+	overlapped := backend.overlapped
+	backend.mu.Unlock()
+	if overlapped {
+		t.Fatal("concurrent print jobs overlapped on one physical connection")
+	}
+}
+
+type testBackend struct {
+	mu             sync.Mutex
+	connectCount   int
+	closeCount     int
+	prepareCount   int
+	probeCount     int
+	failNextPrint  bool
+	failEveryPrint bool
+	slowPrint      bool
+	inFlight       int
+	overlapped     bool
+}
+
+func (b *testBackend) Connect(context.Context, config.PrinterProfile) (transport.Connection, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.connectCount++
+	return &testConnection{backend: b}, nil
+}
+
+func (b *testBackend) connections() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.connectCount
+}
+
+func (b *testBackend) closed() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.closeCount
+}
+
+func (b *testBackend) prepared() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.prepareCount
+}
+
+func (b *testBackend) probes() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.probeCount
+}
+
+type testConnection struct{ backend *testBackend }
+
+func (c *testConnection) Print(context.Context, config.PrinterProfile, transport.Job) error {
+	b := c.backend
+	b.mu.Lock()
+	if b.failEveryPrint || b.failNextPrint {
+		b.failNextPrint = false
+		b.mu.Unlock()
+		return errors.New("device disconnected")
+	}
+	b.inFlight++
+	if b.inFlight > 1 {
+		b.overlapped = true
+	}
+	b.mu.Unlock()
+	if b.slowPrint {
+		time.Sleep(10 * time.Millisecond)
+	}
+	b.mu.Lock()
+	b.inFlight--
+	b.mu.Unlock()
+	return nil
+}
+func (c *testConnection) Prepare(context.Context, config.PrinterProfile) error {
+	c.backend.mu.Lock()
+	defer c.backend.mu.Unlock()
+	c.backend.prepareCount++
+	return nil
+}
+func (c *testConnection) Probe(context.Context) error {
+	c.backend.mu.Lock()
+	defer c.backend.mu.Unlock()
+	c.backend.probeCount++
+	return nil
+}
+func (*testConnection) Metadata() map[string]any { return map[string]any{"connected": true} }
+func (c *testConnection) Close() error {
+	c.backend.mu.Lock()
+	defer c.backend.mu.Unlock()
+	c.backend.closeCount++
+	return nil
 }
 
 func mustService(t *testing.T) *Service {

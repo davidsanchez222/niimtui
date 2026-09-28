@@ -1,6 +1,7 @@
 package ble
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"niimtui/internal/config"
+	"niimtui/internal/printtrace"
 	"niimtui/internal/protocol/niimbot"
 	"niimtui/internal/transport"
 
@@ -34,6 +36,7 @@ func New() *Backend {
 }
 
 func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (transport.Connection, error) {
+	printtrace.Mark(ctx, "BLE connect started")
 	if err := b.enable(); err != nil {
 		return nil, fmt.Errorf("enable ble adapter: %w", err)
 	}
@@ -50,6 +53,10 @@ func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (t
 	// a configured device name, then connect to the discovered peripheral.
 	if printer.DeviceName != "" {
 		address, name, err = b.scanForDevice(ctx, printer)
+		printtrace.Mark(ctx, "BLE scan by name complete")
+		if err != nil && ctx.Err() != nil {
+			return nil, err
+		}
 		if err != nil && printer.Identifier == "" && printer.Address == "" {
 			return nil, err
 		}
@@ -76,6 +83,7 @@ func (b *Backend) Connect(ctx context.Context, printer config.PrinterProfile) (t
 
 	if connectMode == "" {
 		address, name, err = b.scanForDevice(ctx, printer)
+		printtrace.Mark(ctx, "BLE fallback scan complete")
 		if err != nil {
 			return nil, err
 		}
@@ -226,41 +234,59 @@ func (b *Backend) scanForDevice(ctx context.Context, printer config.PrinterProfi
 }
 
 type connection struct {
-	device         bluetooth.Device
-	meta           map[string]any
-	metaMu         sync.Mutex
-	niimbotService bluetooth.DeviceService
-	niimbotChar    bluetooth.DeviceCharacteristic
-	notifyMu       sync.Mutex
-	notifications  []notificationEntry
-	notifyEnabled  bool
-	deviceType     *int
+	device          bluetooth.Device
+	meta            map[string]any
+	metaMu          sync.Mutex
+	niimbotService  bluetooth.DeviceService
+	niimbotChar     bluetooth.DeviceCharacteristic
+	notifyMu        sync.Mutex
+	notifications   []notificationEntry
+	notificationSeq uint64
+	notifyEnabled   bool
+	deviceType      *int
 }
 
 type notificationEntry struct {
+	seq    uint64
 	Raw    []byte         `json:"raw"`
 	Parsed map[string]any `json:"parsed,omitempty"`
 }
 
+func (c *connection) Prepare(ctx context.Context, _ config.PrinterProfile) error {
+	printtrace.Mark(ctx, "BLE print preparation started")
+	if !c.notifyEnabled {
+		if err := c.ensureNiimbotCharacteristic(ctx); err != nil {
+			return err
+		}
+		printtrace.Mark(ctx, "GATT discovery complete")
+		if err := c.ensureNotifications(); err != nil {
+			return err
+		}
+		printtrace.Mark(ctx, "BLE notifications enabled")
+	}
+	if c.deviceType == nil {
+		printtrace.Mark(ctx, "first BLE print write starting (device type request)")
+		deviceType, err := c.deviceTypeID()
+		printtrace.Mark(ctx, "device type lookup complete")
+		if err == nil {
+			c.setMeta("device_type", deviceType)
+		}
+	}
+	return nil
+}
+
 func (c *connection) Print(ctx context.Context, printer config.PrinterProfile, job transport.Job) error {
-	if err := c.ensureNiimbotCharacteristic(ctx); err != nil {
+	if err := c.Prepare(ctx, printer); err != nil {
 		return err
-	}
-	if err := c.ensureNotifications(); err != nil {
-		return err
-	}
-	deviceType, err := c.deviceTypeID()
-	if err == nil {
-		c.setMeta("device_type", deviceType)
 	}
 	switch strings.ToUpper(printer.Model) {
 	case "D110":
-		if err == nil && deviceType == 2320 {
-			return c.printD110MV4(printer, job)
+		if c.deviceType != nil && *c.deviceType == 2320 {
+			return c.printD110MV4(ctx, printer, job)
 		}
-		return c.printD110(printer, job)
+		return c.printD110(ctx, printer, job)
 	case "B1":
-		return c.printB1(printer, job)
+		return c.printB1(ctx, printer, job)
 	default:
 		return fmt.Errorf("niimbot packet session started but print task is not implemented yet for model %s", printer.Model)
 	}
@@ -372,44 +398,49 @@ func (c *connection) ensureNotifications() error {
 	if c.notifyEnabled {
 		return nil
 	}
-	notificationCount := 0
 	if err := c.niimbotChar.EnableNotifications(func(buf []byte) {
-		entry := notificationEntry{Raw: append([]byte(nil), buf...)}
-		if packet, err := niimbot.ParseFramedPacket(buf); err == nil {
-			entry.Parsed = map[string]any{
-				"command": packet.Command,
-				"length":  packet.Length,
-				"payload": append([]byte(nil), packet.Payload...),
-			}
-			if packet.Command == niimbot.CmdPrintStatus+16 && len(packet.Payload) >= 4 {
-				entry.Parsed["status"] = map[string]any{
-					"page":           int(packet.Payload[0])<<8 | int(packet.Payload[1]),
-					"print_progress": int(packet.Payload[2]),
-					"feed_progress":  int(packet.Payload[3]),
-				}
-			}
-		}
-
-		c.notifyMu.Lock()
-		c.notifications = append(c.notifications, entry)
-		if len(c.notifications) > 50 {
-			c.notifications = c.notifications[len(c.notifications)-50:]
-		}
-		recent := append([]notificationEntry(nil), c.notifications...)
-		c.notifyMu.Unlock()
-
-		notificationCount++
-		c.setMeta("niimbot_notifications", map[string]any{
-			"count":       notificationCount,
-			"last_packet": append([]byte(nil), buf...),
-			"recent":      recent,
-		})
+		c.recordNotification(buf)
 	}); err != nil {
 		return err
 	}
 	c.notifyEnabled = true
 	c.setMeta("niimbot_notify_enabled", true)
 	return nil
+}
+
+func (c *connection) recordNotification(buf []byte) {
+	entry := notificationEntry{Raw: append([]byte(nil), buf...)}
+	if packet, err := niimbot.ParseFramedPacket(buf); err == nil {
+		entry.Parsed = map[string]any{
+			"command": packet.Command,
+			"length":  packet.Length,
+			"payload": append([]byte(nil), packet.Payload...),
+		}
+		if packet.Command == niimbot.CmdPrintStatus+16 && len(packet.Payload) >= 4 {
+			entry.Parsed["status"] = map[string]any{
+				"page":           int(packet.Payload[0])<<8 | int(packet.Payload[1]),
+				"print_progress": int(packet.Payload[2]),
+				"feed_progress":  int(packet.Payload[3]),
+			}
+		}
+	}
+
+	c.notifyMu.Lock()
+	c.notificationSeq++
+	entry.seq = c.notificationSeq
+	c.notifications = append(c.notifications, entry)
+	if len(c.notifications) > 50 {
+		c.notifications = c.notifications[len(c.notifications)-50:]
+	}
+	recent := append([]notificationEntry(nil), c.notifications...)
+	count := c.notificationSeq
+	c.notifyMu.Unlock()
+
+	c.setMeta("niimbot_notifications", map[string]any{
+		"count":       count,
+		"last_packet": append([]byte(nil), buf...),
+		"recent":      recent,
+	})
 }
 
 func (c *connection) selectKnownNiimbotCharacteristic(services []bluetooth.DeviceService) error {
@@ -433,7 +464,7 @@ func (c *connection) selectKnownNiimbotCharacteristic(services []bluetooth.Devic
 	return fmt.Errorf("niimbot service %s not found", niimbot.ServiceUUID)
 }
 
-func (c *connection) printD110(printer config.PrinterProfile, job transport.Job) error {
+func (c *connection) printD110(ctx context.Context, printer config.PrinterProfile, job transport.Job) error {
 	d110job, err := niimbot.PrepareD110Job(job.Rendered, printer.Defaults.Density)
 	if err != nil {
 		return err
@@ -456,33 +487,23 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 		if _, err := c.transceive(packet.name, packet.data, packet.resp, 10*time.Second); err != nil {
 			return err
 		}
+		printtrace.Mark(ctx, packet.name+" acknowledged")
+	}
+	printtrace.Mark(ctx, "classic D110 setup complete; sending rows")
+
+	if err := c.writeRows(ctx, d110job.Rows); err != nil {
+		return err
 	}
 
-	for pos, row := range d110job.Rows {
-		if isEmptyRow(row) {
-			if err := c.writePacket("empty_row", niimbot.EmptyRowPacket(pos, 1)); err != nil {
-				return err
-			}
-			continue
-		}
-		blackPixels := niimbot.CountBlackPixelsForDebug(row)
-		packetName := "bitmap_row"
-		packet := niimbot.BitmapRowPacket(pos, row)
-		if blackPixels <= 6 {
-			packetName = "bitmap_row_indexed"
-			packet = niimbot.BitmapRowIndexedPacket(pos, row)
-		}
-		if err := c.writePacket(packetName, packet); err != nil {
-			return err
-		}
-	}
-
+	printtrace.Mark(ctx, "image rows sent")
 	if _, err := c.transceive("page_end", niimbot.PageEndPacket(), niimbot.CmdPageEnd+1, 10*time.Second); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "page end acknowledged")
 	if err := c.waitForPrintStatus(); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "print completion status reached")
 	for i := 0; i < 6; i++ {
 		payload, err := c.transceive("print_end", niimbot.PrintEndPacket(), niimbot.CmdPrintEnd+1, 2*time.Second)
 		if err != nil {
@@ -499,7 +520,7 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 		"row_bytes":       d110job.WidthPx / 8,
 		"density":         d110job.Density,
 		"label_type":      d110job.LabelType,
-		"empty_row_runs":  false,
+		"empty_row_runs":  true,
 		"oriented_width":  d110job.WidthPx,
 		"oriented_height": d110job.HeightPx,
 	})
@@ -507,7 +528,7 @@ func (c *connection) printD110(printer config.PrinterProfile, job transport.Job)
 	return nil
 }
 
-func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.Job) error {
+func (c *connection) printD110MV4(ctx context.Context, printer config.PrinterProfile, job transport.Job) error {
 	d110job, err := niimbot.PrepareD110Job(job.Rendered, printer.Defaults.Density)
 	if err != nil {
 		return err
@@ -526,6 +547,7 @@ func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.J
 		if _, err := c.transceive(packet.name, packet.data, packet.resp, 2*time.Second); err != nil {
 			return err
 		}
+		printtrace.Mark(ctx, packet.name+" acknowledged")
 	}
 	if err := c.writePacket("print_status_one_way", niimbot.PrintStatusPacket()); err != nil {
 		return err
@@ -533,32 +555,22 @@ func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.J
 	if _, err := c.transceive("page_size_v4", niimbot.SetPageSizeV4Packet(d110job.HeightPx, d110job.WidthPx, job.Copies), niimbot.CmdSetPageSize+1, 2*time.Second); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "page_size_v4 acknowledged")
+	printtrace.Mark(ctx, "D110_M v4 setup complete; sending rows")
 
-	for pos, row := range d110job.Rows {
-		if isEmptyRow(row) {
-			if err := c.writePacket("empty_row", niimbot.EmptyRowPacket(pos, 1)); err != nil {
-				return err
-			}
-			continue
-		}
-		blackPixels := niimbot.CountBlackPixelsForDebug(row)
-		packetName := "bitmap_row"
-		packet := niimbot.BitmapRowPacket(pos, row)
-		if blackPixels <= 6 {
-			packetName = "bitmap_row_indexed"
-			packet = niimbot.BitmapRowIndexedPacket(pos, row)
-		}
-		if err := c.writePacket(packetName, packet); err != nil {
-			return err
-		}
+	if err := c.writeRows(ctx, d110job.Rows); err != nil {
+		return err
 	}
 
+	printtrace.Mark(ctx, "image rows sent")
 	if _, err := c.transceive("page_end", niimbot.PageEndPacket(), niimbot.CmdPageEnd+1, 2*time.Second); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "page end acknowledged")
 	if err := c.waitForPrintStatus(); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "print completion status reached")
 	for i := 0; i < 6; i++ {
 		payload, err := c.transceive("print_end", niimbot.PrintEndPacket(), niimbot.CmdPrintEnd+1, 2*time.Second)
 		if err != nil {
@@ -576,7 +588,7 @@ func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.J
 		"row_bytes":       d110job.WidthPx / 8,
 		"density":         d110job.Density,
 		"label_type":      d110job.LabelType,
-		"empty_row_runs":  false,
+		"empty_row_runs":  true,
 		"oriented_width":  d110job.WidthPx,
 		"oriented_height": d110job.HeightPx,
 		"variant":         "d110_m_v4",
@@ -584,7 +596,7 @@ func (c *connection) printD110MV4(printer config.PrinterProfile, job transport.J
 	return nil
 }
 
-func (c *connection) printB1(printer config.PrinterProfile, job transport.Job) error {
+func (c *connection) printB1(ctx context.Context, printer config.PrinterProfile, job transport.Job) error {
 	rasterJob, err := niimbot.PrepareRasterJob(job.Rendered)
 	if err != nil {
 		return err
@@ -608,31 +620,21 @@ func (c *connection) printB1(printer config.PrinterProfile, job transport.Job) e
 		if _, err := c.transceive(packet.name, packet.data, packet.resp, 2*time.Second); err != nil {
 			return err
 		}
+		printtrace.Mark(ctx, packet.name+" acknowledged")
 	}
-	for pos, row := range rasterJob.Rows {
-		if isEmptyRow(row) {
-			if err := c.writePacket("empty_row", niimbot.EmptyRowPacket(pos, 1)); err != nil {
-				return err
-			}
-			continue
-		}
-		blackPixels := niimbot.CountBlackPixelsForDebug(row)
-		packetName := "bitmap_row"
-		packet := niimbot.BitmapRowPacket(pos, row)
-		if blackPixels <= 6 {
-			packetName = "bitmap_row_indexed"
-			packet = niimbot.BitmapRowIndexedPacket(pos, row)
-		}
-		if err := c.writePacket(packetName, packet); err != nil {
-			return err
-		}
+	printtrace.Mark(ctx, "B1 setup complete; sending rows")
+	if err := c.writeRows(ctx, rasterJob.Rows); err != nil {
+		return err
 	}
+	printtrace.Mark(ctx, "image rows sent")
 	if _, err := c.transceive("page_end", niimbot.PageEndPacket(), niimbot.CmdPageEnd+1, 2*time.Second); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "page end acknowledged")
 	if err := c.waitForPrintStatus(); err != nil {
 		return err
 	}
+	printtrace.Mark(ctx, "print completion status reached")
 	for i := 0; i < 6; i++ {
 		payload, err := c.transceive("print_end", niimbot.PrintEndPacket(), niimbot.CmdPrintEnd+1, 2*time.Second)
 		if err != nil {
@@ -710,23 +712,20 @@ func (c *connection) deviceTypeID() (int, error) {
 	return v, nil
 }
 
-func (c *connection) notificationCount() int {
+func (c *connection) notificationCount() uint64 {
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
-	return len(c.notifications)
+	return c.notificationSeq
 }
 
-func (c *connection) findResponseSince(start int, cmd byte) ([]byte, bool) {
+func (c *connection) findResponseSince(start uint64, cmd byte) ([]byte, bool) {
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
-	if start < 0 {
-		start = 0
-	}
-	if start > len(c.notifications) {
-		start = len(c.notifications)
-	}
-	for i := start; i < len(c.notifications); i++ {
-		parsed := c.notifications[i].Parsed
+	for _, entry := range c.notifications {
+		if entry.seq <= start {
+			continue
+		}
+		parsed := entry.Parsed
 		if parsed == nil {
 			continue
 		}
@@ -760,6 +759,45 @@ func (c *connection) writePacket(name string, packet []byte) error {
 		"bytes": append([]byte(nil), packet...),
 	})
 	time.Sleep(writeInterval)
+	return nil
+}
+
+func (c *connection) writeRows(ctx context.Context, rows [][]byte) error {
+	packets := 0
+	err := sendRows(rows, func(name string, data []byte) error {
+		packets++
+		return c.writePacket(name, data)
+	})
+	printtrace.Mark(ctx, fmt.Sprintf("raster sent: %d rows in %d packets", len(rows), packets))
+	return err
+}
+
+// sendRows preserves the first row position while encoding runs of equal
+// rows. The repeat field is a single byte, so longer runs must be split.
+func sendRows(rows [][]byte, write func(string, []byte) error) error {
+	for pos := 0; pos < len(rows); {
+		row := rows[pos]
+		repeat := 1
+		for repeat < 255 && pos+repeat < len(rows) && bytes.Equal(row, rows[pos+repeat]) {
+			repeat++
+		}
+		var name string
+		var packet []byte
+		if isEmptyRow(row) {
+			name = "empty_row"
+			packet = niimbot.EmptyRowPacket(pos, repeat)
+		} else if niimbot.CountBlackPixelsForDebug(row) <= 6 {
+			name = "bitmap_row_indexed"
+			packet = niimbot.BitmapRowIndexedPacketRepeated(pos, repeat, row)
+		} else {
+			name = "bitmap_row"
+			packet = niimbot.BitmapRowPacketRepeated(pos, repeat, row)
+		}
+		if err := write(name, packet); err != nil {
+			return err
+		}
+		pos += repeat
+	}
 	return nil
 }
 

@@ -112,20 +112,28 @@ func EmptyRowPacket(pos, repeat int) []byte {
 }
 
 func BitmapRowPacket(pos int, rowBytes []byte) []byte {
+	return BitmapRowPacketRepeated(pos, 1, rowBytes)
+}
+
+func BitmapRowPacketRepeated(pos, repeat int, rowBytes []byte) []byte {
 	counts := splitBlackCounts(rowBytes)
 	payload := make([]byte, 0, 6+len(rowBytes))
 	payload = append(payload, byte(pos>>8), byte(pos))
-	payload = append(payload, counts[0], counts[1], counts[2], 0x01)
+	payload = append(payload, counts[0], counts[1], counts[2], byte(repeat))
 	payload = append(payload, rowBytes...)
 	return framedPacket(CmdBitmapRow, payload, false)
 }
 
 func BitmapRowIndexedPacket(pos int, rowBytes []byte) []byte {
+	return BitmapRowIndexedPacketRepeated(pos, 1, rowBytes)
+}
+
+func BitmapRowIndexedPacketRepeated(pos, repeat int, rowBytes []byte) []byte {
 	counts := splitBlackCounts(rowBytes)
 	indexes := indexPixels(rowBytes)
 	payload := make([]byte, 0, 6+len(indexes))
 	payload = append(payload, byte(pos>>8), byte(pos))
-	payload = append(payload, counts[0], counts[1], counts[2], 0x01)
+	payload = append(payload, counts[0], counts[1], counts[2], byte(repeat))
 	payload = append(payload, indexes...)
 	return framedPacket(CmdBitmapRowIndexed, payload, false)
 }

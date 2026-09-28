@@ -12,12 +12,14 @@ import (
 	"niimtui/internal/api"
 	"niimtui/internal/config"
 	"niimtui/internal/label"
+	"niimtui/internal/printtrace"
 	"niimtui/internal/render"
 )
 
 type PrinterSession interface {
 	Connect(ctx context.Context) (map[string]any, error)
 	PrintImage(ctx context.Context, rendered render.Result, copies int) api.PrintResponse
+	Metadata() map[string]any
 	Close() error
 }
 
@@ -340,7 +342,10 @@ func (m Model) editingTargetLabel() string {
 
 func connectPrinterCmd(session PrinterSession) tea.Cmd {
 	return func() tea.Msg {
-		meta, err := session.Connect(context.Background())
+		ctx := printtrace.Start(context.Background())
+		printtrace.Mark(ctx, "TUI connect requested")
+		meta, err := session.Connect(ctx)
+		printtrace.Mark(ctx, "TUI connect completed")
 		if err != nil {
 			return printerConnectionFailedMsg{Err: err}
 		}
