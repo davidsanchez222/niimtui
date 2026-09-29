@@ -11,7 +11,6 @@ import (
 	"strings"
 	"syscall"
 
-	"niimtui/internal/api"
 	"niimtui/internal/config"
 	"niimtui/internal/render"
 	"niimtui/internal/server"
@@ -21,6 +20,13 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
+		var exit *commandExit
+		if errors.As(err, &exit) {
+			if exit.message != "" {
+				fmt.Fprintln(os.Stderr, exit.message)
+			}
+			os.Exit(exit.code)
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -36,6 +42,10 @@ func run(args []string) error {
 		return runServe(args[1:])
 	case "print":
 		return runPrint(args[1:])
+	case "preview":
+		return runPreview(args[1:])
+	case "designs":
+		return runDesigns(args[1:])
 	case "calibrate":
 		return runCalibrate(args[1:])
 	case "probe":
@@ -129,7 +139,13 @@ func runCalibrate(args []string) error {
 	}
 	defer svc.Close()
 	resp := svc.PrintImage(context.Background(), printerProfile.Name, rendered, *copies)
-	return printJSON(resp)
+	if err := printJSON(resp); err != nil {
+		return err
+	}
+	if !resp.OK {
+		return &commandExit{code: 1}
+	}
+	return nil
 }
 
 func calibrationPreset(cfg config.Config, printer config.PrinterProfile, presetName string) (config.LabelPreset, error) {
@@ -169,90 +185,6 @@ func runServe(args []string) error {
 	return srv.Run(ctx)
 }
 
-func runPrint(args []string) error {
-	fs := flag.NewFlagSet("print", flag.ContinueOnError)
-	configPath := fs.String("config", "", "path to config JSON")
-	printer := fs.String("printer", "", "printer profile selector")
-	preset := fs.String("preset", "", "label preset")
-	layout := fs.String("layout", string(api.LayoutQROnly), "label layout: qr-only, qr-title, qr-title-subtitle")
-	qrText := fs.String("qr-text", "", "text to encode into the QR code")
-	imagePath := fs.String("image", "", "PNG image to print directly")
-	title := fs.String("title", "", "optional label title")
-	subtitle := fs.String("subtitle", "", "optional label subtitle")
-	copies := fs.Int("copies", 1, "number of copies")
-	previewOut := fs.String("preview-out", "", "write rendered preview PNG to this path")
-	noPrint := fs.Bool("no-print", false, "render preview only and skip printing; requires --preview-out")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	if *imagePath == "" && *qrText == "" {
-		return errors.New("-qr-text is required")
-	}
-	if *noPrint && *previewOut == "" {
-		return errors.New("-no-print requires -preview-out")
-	}
-
-	cfg, err := config.LoadOptional(*configPath)
-	if err != nil {
-		return err
-	}
-
-	svc, err := service.New(cfg)
-	if err != nil {
-		return err
-	}
-	defer svc.Close()
-
-	if *imagePath != "" {
-		rendered, err := render.PNGFile(*imagePath)
-		if err != nil {
-			return err
-		}
-		if *previewOut != "" {
-			if err := os.WriteFile(*previewOut, rendered.PreviewPNG, 0o644); err != nil {
-				return fmt.Errorf("write preview: %w", err)
-			}
-			if *noPrint {
-				return nil
-			}
-		}
-		resp := svc.PrintImage(context.Background(), *printer, rendered, *copies)
-		return printJSON(resp)
-	}
-
-	req := api.PrintRequest{
-		Printer: api.PrinterSelector{Selector: *printer},
-		Label: api.LabelRequest{
-			Preset: *preset,
-			Layout: api.Layout(*layout),
-		},
-		QR: api.QRRequest{Text: *qrText},
-		Content: api.ContentRequest{
-			Title:    *title,
-			Subtitle: *subtitle,
-		},
-		Options: api.PrintOptions{Copies: *copies},
-	}
-
-	if *previewOut != "" {
-		preview, err := svc.RenderPreview(context.Background(), req)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(*previewOut, preview, 0o644); err != nil {
-			return fmt.Errorf("write preview: %w", err)
-		}
-		if *noPrint {
-			return nil
-		}
-	}
-
-	resp := svc.Print(context.Background(), req)
-
-	return printJSON(resp)
-}
-
 func runPrinters(args []string) error {
 	fs := flag.NewFlagSet("printers", flag.ContinueOnError)
 	configPath := fs.String("config", "", "path to config JSON")
@@ -289,7 +221,10 @@ func runProbe(args []string) error {
 
 	meta, errResp := svc.Probe(context.Background(), *printer)
 	if errResp != nil {
-		return printJSON(errResp)
+		if err := printJSON(errResp); err != nil {
+			return err
+		}
+		return &commandExit{code: 1}
 	}
 
 	return printJSON(map[string]any{
@@ -500,6 +435,10 @@ Usage:
   niimtui setup
   niimtui calibrate --config ./config.example.json --printer b1-round --preset b1-50x30 --preview-out ./calibration.png
   niimtui print --config ./config.example.json --printer d110-desk --image ./testlabels/preview.png
+  niimtui print --qr https://example.com --title "Garage Bin 4"
+  niimtui print --design garage-bin --set url=https://example.com
+  niimtui preview --design garage-bin --set url=https://example.com --out ./preview.png
+  niimtui designs
   niimtui probe --config ./config.example.json --printer d110-desk
   niimtui scan --config ./config.example.json --transport ble
   niimtui printers --config ./config.example.json

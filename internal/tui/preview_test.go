@@ -1,6 +1,11 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"niimtui/internal/config"
+)
 
 func TestPrintCurrentDocumentKeepsSessionOpen(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{Session: noopPrinterSession{}, Copies: 1})
@@ -16,5 +21,13 @@ func TestPrintCurrentDocumentKeepsSessionOpen(t *testing.T) {
 	cmd = m.handlePrintResult(msg)
 	if cmd != nil || m.Connection != ConnectionConnected {
 		t.Fatalf("print result scheduled reconnect: command %v, connection %s", cmd, m.Connection)
+	}
+}
+
+func TestPrintRejectsMismatchedInstalledRoll(t *testing.T) {
+	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{Session: noopPrinterSession{}, Model: "B1", Copies: 1}, []config.LabelPreset{{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"}}, "b1-50x30")
+	m.Connection = ConnectionConnected
+	if cmd := m.printCurrentDocument(); cmd != nil || !strings.Contains(m.Status, "does not match") {
+		t.Fatalf("print command = %v, status = %q", cmd, m.Status)
 	}
 }

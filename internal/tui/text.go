@@ -95,6 +95,7 @@ func (m *Model) deleteSelected() bool {
 	if !m.Document.DeleteElement(deletedID) {
 		return false
 	}
+	m.removeBinding(deletedID)
 	m.SelectedID = ""
 	m.Drag = DragState{}
 	m.EditingText = false

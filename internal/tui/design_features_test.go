@@ -86,6 +86,13 @@ func TestSaveAndLoadDesignPreset(t *testing.T) {
 	}
 	element.Text.Value = "Saved"
 	m.Document.UpdateElement(element)
+	m.beginBindingPrompt()
+	if m.Prompt.Mode != PromptBinding {
+		t.Fatalf("prompt mode = %q", m.Prompt.Mode)
+	}
+	m.Prompt = PromptState{}
+	m.setSelectedBinding("title")
+	m.toggleSelectedBindingRequired()
 	m.Document.Inverted = true
 
 	if !m.saveDesignPreset("saved-layout") {
@@ -98,11 +105,17 @@ func TestSaveAndLoadDesignPreset(t *testing.T) {
 	if len(loaded.DesignPresets) != 1 || loaded.DesignPresets[0].Name != "saved-layout" {
 		t.Fatalf("design presets = %#v", loaded.DesignPresets)
 	}
+	if len(loaded.DesignPresets[0].Bindings) != 1 || !loaded.DesignPresets[0].Bindings[0].Required {
+		t.Fatalf("saved bindings = %#v", loaded.DesignPresets[0].Bindings)
+	}
 	m.Document = label.NewDocument(10, 10)
 	m.DesignPresets = loaded.DesignPresets
 	m.loadNextDesignPreset()
 	if !m.Document.Inverted || len(m.Document.Elements) != 1 || m.Document.Elements[0].Text.Value != "Saved" {
 		t.Fatalf("loaded document = %#v", m.Document)
+	}
+	if len(m.Bindings) != 1 || m.Bindings[0].Name != "title" {
+		t.Fatalf("loaded bindings = %#v", m.Bindings)
 	}
 }
 

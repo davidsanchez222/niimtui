@@ -117,7 +117,7 @@ func openPreviewCmd(path string) tea.Cmd {
 }
 
 func terminalLivePreviewCmd(m Model) tea.Cmd {
-	if m.isTerminalTooSmall() || m.HelpOpen || m.MenuOpen {
+	if m.isTerminalTooSmall() || m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
 		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}
 	protocol := m.Preview.Protocol
@@ -256,7 +256,7 @@ func (m *Model) livePreviewModalCmd(wasOpen bool) tea.Cmd {
 	if !m.hasTerminalLivePreview() {
 		return nil
 	}
-	isOpen := m.HelpOpen || m.MenuOpen
+	isOpen := m.HelpOpen || m.MenuOpen || m.confirmPromptOpen()
 	if !wasOpen && isOpen {
 		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}

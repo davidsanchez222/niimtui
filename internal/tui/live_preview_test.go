@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"niimtui/internal/config"
 )
 
 func TestDetectLivePreviewProtocolPrefersKitty(t *testing.T) {
@@ -111,6 +113,24 @@ func TestLivePreviewModalClearsTerminalImage(t *testing.T) {
 	cmd := m.livePreviewModalCmd(false)
 	if cmd == nil {
 		t.Fatal("expected clear command when modal opens")
+	}
+}
+
+func TestOverwriteConfirmationClearsAndRestoresLivePreview(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Preview.Protocol = LivePreviewKitty
+	m.Preview.PNG = []byte{1, 2, 3}
+	m.Width, m.Height = minTerminalWidth, minTerminalHeight
+	m.DesignPresets = []config.DesignPreset{{Name: "existing", Document: m.Document}}
+	m.Prompt = PromptState{Mode: PromptSaveDesign, Value: "existing"}
+
+	m, cmd := m.update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.Prompt.Mode != PromptOverwriteDesign || cmd == nil {
+		t.Fatalf("confirmation did not clear preview: mode=%q command=%v", m.Prompt.Mode, cmd)
+	}
+	m, cmd = m.update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.Prompt.Mode != PromptNone || cmd == nil || m.Preview.RedrawSeq == 0 {
+		t.Fatalf("cancel did not restore preview: mode=%q command=%v redraw=%d", m.Prompt.Mode, cmd, m.Preview.RedrawSeq)
 	}
 }
 

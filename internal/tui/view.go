@@ -121,7 +121,7 @@ func (m Model) View() string {
 		"",
 		status,
 	}
-	if m.HelpOpen || m.MenuOpen {
+	if m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
 		lines = append(lines, modalBodyLines(m, viewWidth, bodyHeight)...)
 		lines = append(lines, footerLines(m, viewWidth)...)
 		return strings.Join(lines, "\n")
@@ -189,7 +189,19 @@ func smallTerminalView(width, height int) string {
 
 func modalBodyLines(m Model, width, height int) []string {
 	content := helpModalContent()
-	if m.MenuOpen {
+	if m.confirmPromptOpen() {
+		verb := "Overwrite"
+		if m.Prompt.Mode == PromptDeleteDesign {
+			verb = "Delete"
+		}
+		content = []string{
+			propertyTitleStyle.Render(verb + " saved preset?"),
+			"",
+			fmt.Sprintf("%s %q?", verb, m.Prompt.Value),
+			"",
+			mutedStyle.Render("y confirms · n or esc cancels"),
+		}
+	} else if m.MenuOpen {
 		content = menuModalContent(m)
 	}
 	modalWidth := min(max(width-16, 72), 96)
@@ -645,6 +657,15 @@ func propertyPanelLines(m Model, width int) []string {
 		propertyItem("H", fmt.Sprintf("%.1f mm", element.HeightMM)),
 		propertyItem("Rot", fmt.Sprintf("%d deg", element.Rotation)),
 	)
+	if element.Text != nil || element.QR != nil {
+		lines = append(lines, helpItem("b", "name binding"), helpItem("!", "toggle required"))
+	}
+	for _, binding := range m.Bindings {
+		if binding.ElementID == element.ID {
+			lines = append(lines, propertyItem("Binding", binding.Name), propertyItem("Required", onOff(binding.Required)))
+			break
+		}
+	}
 	if element.Text != nil {
 		lines = append(lines,
 			"",
@@ -681,14 +702,14 @@ func helpModalContent() []string {
 		helpRow("q", "Add a QR code and select it"),
 		helpRow("r", "Rotate selected element"),
 		helpRow("R", "Rotate the canvas"),
-		helpRow("i", "Edit selected text or QR contents"),
+		helpRow("i / b / !", "Edit contents / name binding / toggle required"),
 		helpRow("y / x / v / d", "Copy / cut / paste / duplicate selected component"),
 		helpRow("z / Z / B", "Undo / redo / cycle redo branch"),
 		helpRow("F", "Search fonts for the selected text box"),
 		helpRow("e", "Export PNG to a chosen path"),
 		helpRow("g", "Toggle visual grid"),
 		helpRow("I", "Toggle inverted black/white colors"),
-		helpRow("1-9", "Switch installed printer"),
+		helpRow("1-9 / c / D", "Switch / connect / disconnect printer"),
 		helpRow("s", "Save current design preset"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
@@ -778,10 +799,11 @@ func menuListModalContent(m Model) []string {
 			lines = append(lines, style.Render(prefix+item+marker))
 		}
 	}
-	lines = append(lines,
-		"",
-		mutedStyle.Render("j/k or arrows move, enter selects, esc closes"),
-	)
+	help := "j/k or arrows move, enter selects, esc closes"
+	if m.MenuListMode == MenuListDesignPresets {
+		help = "j/k or arrows move, enter loads, d deletes, esc closes"
+	}
+	lines = append(lines, "", mutedStyle.Render(help))
 	return lines
 }
 
@@ -830,13 +852,19 @@ func footerLines(m Model, width int) []string {
 		helpItem("m", "menu"),
 		helpItem("?", "help"),
 	}, "  ")
-	preview := strings.Join([]string{
+	previewItems := []string{
 		helpItem("s", "save design"),
 		helpItem("p", "open preview"),
 		helpItem("e", "export PNG"),
-		printHelp + helpItem("esc", "clear"),
+	}
+	if element, ok := m.selectedElement(); ok && (element.Text != nil || element.QR != nil) {
+		previewItems = append(previewItems, helpItem("b", "binding"), helpItem("!", "required"))
+	}
+	previewItems = append(previewItems,
+		printHelp+helpItem("esc", "clear"),
 		helpItem("ctrl+c", "quit"),
-	}, "  ")
+	)
+	preview := strings.Join(previewItems, "  ")
 
 	return []string{
 		footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
@@ -924,11 +952,16 @@ func connectHelp(m Model) string {
 	if m.Print.Session == nil {
 		return ""
 	}
-	label := "connect"
-	if m.Connection == ConnectionConnected || m.Connection == ConnectionDisconnected {
-		label = "reconnect"
+	switch m.Connection {
+	case ConnectionConnected:
+		return helpItem("D", "disconnect")
+	case ConnectionDisconnected:
+		return helpItem("c", "reconnect")
+	case ConnectionConnecting:
+		return mutedStyle.Render("Connecting...")
+	default:
+		return helpItem("c", "connect")
 	}
-	return helpItem("c", label)
 }
 
 func emptyFallback(value, fallback string) string {

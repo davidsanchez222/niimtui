@@ -3,6 +3,7 @@ package tui
 import (
 	"reflect"
 
+	"niimtui/internal/config"
 	"niimtui/internal/label"
 )
 
@@ -14,6 +15,7 @@ func (m *Model) initHistory() {
 func (m Model) snapshot() HistorySnapshot {
 	return HistorySnapshot{
 		Document:   cloneDocument(m.Document),
+		Bindings:   append([]config.DesignBinding(nil), m.Bindings...),
 		SelectedID: m.SelectedID,
 		NextID:     m.NextID,
 		Preset:     m.Preset,
@@ -22,6 +24,7 @@ func (m Model) snapshot() HistorySnapshot {
 
 func (m *Model) restoreSnapshot(snapshot HistorySnapshot) {
 	m.Document = cloneDocument(snapshot.Document)
+	m.Bindings = append([]config.DesignBinding(nil), snapshot.Bindings...)
 	m.SelectedID = snapshot.SelectedID
 	m.NextID = snapshot.NextID
 	m.Preset = snapshot.Preset

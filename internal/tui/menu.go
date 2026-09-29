@@ -56,6 +56,11 @@ func (m *Model) handleMenuListKey(msg tea.KeyMsg) tea.Cmd {
 		m.moveMenuList(1)
 	case "enter":
 		m.activateMenuListSelection()
+	case "d":
+		if m.MenuListMode == MenuListDesignPresets && m.MenuListIndex >= 0 && m.MenuListIndex < len(m.DesignPresets) {
+			m.Prompt = PromptState{Mode: PromptDeleteDesign, Value: m.DesignPresets[m.MenuListIndex].Name}
+			m.refreshPromptStatus()
+		}
 	}
 	return nil
 }

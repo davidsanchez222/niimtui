@@ -18,10 +18,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	if m.Prompt.Mode != PromptNone {
+		wasOpen := m.HelpOpen || m.MenuOpen || m.confirmPromptOpen()
 		if key, ok := msg.(tea.KeyMsg); ok {
 			m.handlePromptKey(key)
 		}
-		return m, nil
+		return m, m.livePreviewModalCmd(wasOpen)
 	}
 	if m.EditingText {
 		switch msg := msg.(type) {
@@ -88,6 +89,10 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.String() == "c" {
 			return m, m.reconnectPrinter()
 		}
+		if msg.String() == "D" {
+			m.disconnectPrinter()
+			return m, nil
+		}
 		if handled, cmd := m.handlePrinterNumberKey(msg); handled {
 			return m, cmd
 		}
@@ -147,7 +152,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, nil
 	case livePreviewRedrawMsg:
-		if m.hasTerminalLivePreview() && !m.HelpOpen && !m.MenuOpen && msg.Seq == m.Preview.RedrawSeq {
+		if m.hasTerminalLivePreview() && !m.HelpOpen && !m.MenuOpen && !m.confirmPromptOpen() && msg.Seq == m.Preview.RedrawSeq {
 			return m, terminalLivePreviewCmd(m)
 		}
 		return m, nil
@@ -210,6 +215,23 @@ func (m *Model) reconnectPrinter() tea.Cmd {
 	return connectPrinterCmd(m.Print.Session)
 }
 
+func (m *Model) disconnectPrinter() {
+	if m.Print.Session == nil || m.Connection != ConnectionConnected {
+		m.setStatus("Printer is not connected.")
+		return
+	}
+	err := m.Print.Session.Close()
+	m.Connection = ConnectionDisconnected
+	m.ConnectMeta = nil
+	m.ConnectErr = ""
+	if err != nil {
+		m.ConnectErr = err.Error()
+		m.setStatus("Printer disconnected with error: %v", err)
+		return
+	}
+	m.setStatus("Printer disconnected. Press c to reconnect.")
+}
+
 func (m *Model) closePrinterSession() {
 	if m.Print.Session == nil {
 		return
@@ -239,6 +261,10 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return m.rotateCanvas()
 	case "i":
 		return m.beginEditingSelected()
+	case "b":
+		return m.beginBindingPrompt()
+	case "!":
+		return m.toggleSelectedBindingRequired()
 	case "y":
 		return m.copySelected()
 	case "x":

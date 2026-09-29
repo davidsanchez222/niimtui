@@ -28,6 +28,7 @@ func (m *Model) cutSelected() bool {
 	if !m.Document.DeleteElement(element.ID) {
 		return false
 	}
+	m.removeBinding(element.ID)
 	m.SelectedID = ""
 	m.Drag = DragState{}
 	m.EditingText = false

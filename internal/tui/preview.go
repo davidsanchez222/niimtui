@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"niimtui/internal/config"
 	"niimtui/internal/printtrace"
 	"niimtui/internal/render"
 )
@@ -73,6 +74,10 @@ func openPreviewFile(path string) (bool, error) {
 func (m *Model) printCurrentDocument() tea.Cmd {
 	if m.Print.Session == nil {
 		m.setStatus("Printing unavailable. Run setup or pass --config/--printer.")
+		return nil
+	}
+	if m.Print.Model != "" && (m.Preset < 0 || m.Preset >= len(m.Presets) || !config.MatchesStock(m.Document, m.Presets[m.Preset])) {
+		m.setStatus("Design size/shape does not match the selected label roll. Select a matching roll before printing.")
 		return nil
 	}
 	if m.Connection == ConnectionConnecting {

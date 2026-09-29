@@ -102,6 +102,7 @@ type ClickState struct {
 
 type HistorySnapshot struct {
 	Document   label.Document
+	Bindings   []config.DesignBinding
 	SelectedID string
 	NextID     int
 	Preset     int
@@ -117,9 +118,12 @@ type HistoryNode struct {
 type PromptMode string
 
 const (
-	PromptNone       PromptMode = ""
-	PromptExportPNG  PromptMode = "export-png"
-	PromptSaveDesign PromptMode = "save-design"
+	PromptNone            PromptMode = ""
+	PromptExportPNG       PromptMode = "export-png"
+	PromptSaveDesign      PromptMode = "save-design"
+	PromptBinding         PromptMode = "binding"
+	PromptOverwriteDesign PromptMode = "overwrite-design"
+	PromptDeleteDesign    PromptMode = "delete-design"
 )
 
 type PromptState struct {
@@ -146,6 +150,7 @@ type Model struct {
 	Preset        int
 	DesignPresets []config.DesignPreset
 	DesignPreset  int
+	Bindings      []config.DesignBinding
 	Grid          bool
 
 	SelectedID string

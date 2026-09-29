@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"niimtui/internal/label"
 )
@@ -63,9 +64,20 @@ type LabelPreset struct {
 }
 
 type DesignPreset struct {
-	Name     string         `json:"name"`
-	Document label.Document `json:"document"`
+	Name     string          `json:"name"`
+	Document label.Document  `json:"document"`
+	Bindings []DesignBinding `json:"bindings,omitempty"`
 }
+
+type DesignBinding struct {
+	Name      string `json:"name"`
+	ElementID string `json:"element_id"`
+	Required  bool   `json:"required,omitempty"`
+}
+
+var bindingNamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
+
+func ValidBindingName(name string) bool { return bindingNamePattern.MatchString(name) }
 
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
@@ -242,6 +254,28 @@ func (c Config) Validate() error {
 		designPresetNames[preset.Name] = struct{}{}
 		if preset.Document.WidthMM <= 0 || preset.Document.HeightMM <= 0 {
 			return fmt.Errorf("config.design_presets[%q].document must have positive dimensions", preset.Name)
+		}
+		elements := make(map[string]label.Element, len(preset.Document.Elements))
+		for _, element := range preset.Document.Elements {
+			if element.ID != "" {
+				if _, exists := elements[element.ID]; exists {
+					return fmt.Errorf("config.design_presets[%q] has duplicate element ID %q", preset.Name, element.ID)
+				}
+				elements[element.ID] = element
+			}
+		}
+		bindings := make(map[string]bool, len(preset.Bindings))
+		boundElements := make(map[string]bool, len(preset.Bindings))
+		for _, binding := range preset.Bindings {
+			if !ValidBindingName(binding.Name) || bindings[binding.Name] {
+				return fmt.Errorf("config.design_presets[%q] has invalid or duplicate binding name %q", preset.Name, binding.Name)
+			}
+			bindings[binding.Name] = true
+			element, ok := elements[binding.ElementID]
+			if !ok || boundElements[binding.ElementID] || (element.Text == nil && element.QR == nil) {
+				return fmt.Errorf("config.design_presets[%q] has invalid binding target %q", preset.Name, binding.ElementID)
+			}
+			boundElements[binding.ElementID] = true
 		}
 	}
 

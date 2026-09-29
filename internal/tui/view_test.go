@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
@@ -297,6 +298,73 @@ func TestConnectHelpRendersInPrinterPanel(t *testing.T) {
 		t.Fatalf("footer = %q, want reconnect help moved out", footer)
 	}
 }
+
+func TestFocusedBindingLegend(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	legend := strings.Join(footerLines(m, minTerminalWidth), "\n")
+	if strings.Contains(legend, "binding") || strings.Contains(legend, "required") {
+		t.Fatalf("binding hints shown without selection: %q", legend)
+	}
+	m.addTextElement()
+	m.Print.Session = noopPrinterSession{}
+	legend = strings.Join(footerLines(m, minTerminalWidth), "\n")
+	for _, line := range footerLines(m, minTerminalWidth) {
+		if width := lipgloss.Width(line); width > minTerminalWidth {
+			t.Fatalf("focused legend is %d cells, exceeds minimum width %d", width, minTerminalWidth)
+		}
+	}
+	properties := strings.Join(propertyPanelLines(m, layoutPropertiesWidth), "\n")
+	if !strings.Contains(legend, "binding") || !strings.Contains(legend, "required") || !strings.Contains(properties, "name binding") || !strings.Contains(properties, "search fonts") {
+		t.Fatalf("text hints missing: legend=%q properties=%q", legend, properties)
+	}
+	m.addQRElement()
+	properties = strings.Join(propertyPanelLines(m, layoutPropertiesWidth), "\n")
+	if !strings.Contains(properties, "name binding") || strings.Contains(properties, "search fonts") {
+		t.Fatalf("QR hints incorrect: %q", properties)
+	}
+	m.SelectedID = ""
+	legend = strings.Join(footerLines(m, minTerminalWidth), "\n")
+	if strings.Contains(legend, "binding") || strings.Contains(legend, "required") {
+		t.Fatalf("binding hints still shown after clearing selection: %q", legend)
+	}
+}
+
+func TestDisconnectShortcutClosesSessionAndAllowsReconnect(t *testing.T) {
+	session := &trackingPrinterSession{}
+	m := NewModel(50, 30, "rect", "", PrintConfig{Session: session})
+	m.Connection = ConnectionConnected
+	m.ConnectMeta = map[string]any{"connected": true}
+	panel := strings.Join(devicePanelLines(m, layoutLeftPanelWidth), "\n")
+	if !strings.Contains(panel, "disconnect") || !strings.Contains(panel, "D") {
+		t.Fatalf("disconnect shortcut missing in printer panel: %q", panel)
+	}
+	updated, cmd := m.update(testKey("D"))
+	if cmd != nil || session.closes != 1 || updated.Connection != ConnectionDisconnected || updated.ConnectMeta != nil {
+		t.Fatalf("disconnect state: cmd=%v closes=%d state=%s meta=%v", cmd, session.closes, updated.Connection, updated.ConnectMeta)
+	}
+	if panel = strings.Join(devicePanelLines(updated, layoutLeftPanelWidth), "\n"); !strings.Contains(panel, "c reconnect") || strings.Contains(panel, "D disconnect") {
+		t.Fatalf("reconnect shortcut missing after disconnect: %q", panel)
+	}
+	updated, cmd = updated.update(testKey("c"))
+	if cmd == nil || updated.Connection != ConnectionConnecting {
+		t.Fatalf("reconnect command=%v state=%s", cmd, updated.Connection)
+	}
+	if _, ok := cmd().(printerConnectedMsg); !ok || session.connects != 1 {
+		t.Fatalf("session was not reconnected: %d", session.connects)
+	}
+}
+
+type trackingPrinterSession struct{ closes, connects int }
+
+func (s *trackingPrinterSession) Connect(context.Context) (map[string]any, error) {
+	s.connects++
+	return map[string]any{"connected": true}, nil
+}
+func (*trackingPrinterSession) PrintImage(context.Context, render.Result, int) api.PrintResponse {
+	return api.PrintResponse{OK: true}
+}
+func (*trackingPrinterSession) Metadata() map[string]any { return nil }
+func (s *trackingPrinterSession) Close() error           { s.closes++; return nil }
 
 func TestPrintResultKeepsConnectedPrinter(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{Session: noopPrinterSession{}})

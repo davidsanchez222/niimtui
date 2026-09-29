@@ -11,7 +11,26 @@ import (
 	"niimtui/internal/render"
 )
 
+func (m Model) confirmPromptOpen() bool {
+	return m.Prompt.Mode == PromptOverwriteDesign || m.Prompt.Mode == PromptDeleteDesign
+}
+
 func (m *Model) handlePromptKey(msg tea.KeyMsg) bool {
+	if m.confirmPromptOpen() {
+		mode, name := m.Prompt.Mode, m.Prompt.Value
+		switch msg.String() {
+		case "y":
+			m.Prompt = PromptState{}
+			if mode == PromptOverwriteDesign {
+				return m.persistDesignPreset(name)
+			}
+			return m.deleteDesignPreset(name)
+		case "n", "esc":
+			m.Prompt = PromptState{}
+			m.setStatus("Cancelled change to saved preset %q.", name)
+		}
+		return true
+	}
 	switch msg.String() {
 	case "esc":
 		m.Prompt = PromptState{}
@@ -26,6 +45,8 @@ func (m *Model) handlePromptKey(msg tea.KeyMsg) bool {
 			return m.exportPNGToPath(value)
 		case PromptSaveDesign:
 			return m.saveDesignPreset(value)
+		case PromptBinding:
+			return m.setSelectedBinding(value)
 		}
 		return true
 	case "backspace":
@@ -54,6 +75,12 @@ func (m *Model) refreshPromptStatus() {
 		m.setStatus("Export PNG path: %s%s (enter save, esc cancel)", m.Prompt.Value, string(promptCursorRune))
 	case PromptSaveDesign:
 		m.setStatus("Save design preset name: %s%s (enter save, esc cancel)", m.Prompt.Value, string(promptCursorRune))
+	case PromptBinding:
+		m.setStatus("Binding name: %s%s (enter set, empty removes, esc cancel)", m.Prompt.Value, string(promptCursorRune))
+	case PromptOverwriteDesign:
+		m.setStatus("Saved preset %q already exists. Overwrite? y yes / n or esc cancel", m.Prompt.Value)
+	case PromptDeleteDesign:
+		m.setStatus("Delete saved preset %q? y yes / n or esc cancel", m.Prompt.Value)
 	}
 }
 

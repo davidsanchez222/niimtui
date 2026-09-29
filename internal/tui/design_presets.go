@@ -14,7 +14,7 @@ import (
 func cloneDesignPresets(presets []config.DesignPreset) []config.DesignPreset {
 	cloned := make([]config.DesignPreset, len(presets))
 	for i, preset := range presets {
-		cloned[i] = config.DesignPreset{Name: preset.Name, Document: cloneDocument(preset.Document)}
+		cloned[i] = config.DesignPreset{Name: preset.Name, Document: cloneDocument(preset.Document), Bindings: append([]config.DesignBinding(nil), preset.Bindings...)}
 	}
 	return cloned
 }
@@ -34,25 +34,70 @@ func (m *Model) saveDesignPreset(name string) bool {
 		m.setStatus("Design preset name is required.")
 		return true
 	}
-	preset := config.DesignPreset{Name: name, Document: cloneDocument(m.Document)}
-	updated := false
-	for i := range m.DesignPresets {
-		if m.DesignPresets[i].Name == name {
-			m.DesignPresets[i] = preset
-			m.DesignPreset = i
-			updated = true
+	for _, preset := range m.DesignPresets {
+		if preset.Name == name {
+			m.Prompt = PromptState{Mode: PromptOverwriteDesign, Value: name}
+			m.refreshPromptStatus()
+			return true
+		}
+	}
+	return m.persistDesignPreset(name)
+}
+
+func (m *Model) persistDesignPreset(name string) bool {
+	preset := config.DesignPreset{Name: name, Document: cloneDocument(m.Document), Bindings: append([]config.DesignBinding(nil), m.Bindings...)}
+	updated := append([]config.DesignPreset(nil), m.DesignPresets...)
+	index := len(updated)
+	for i := range updated {
+		if updated[i].Name == name {
+			updated[i] = preset
+			index = i
 			break
 		}
 	}
-	if !updated {
-		m.DesignPresets = append(m.DesignPresets, preset)
-		m.DesignPreset = len(m.DesignPresets) - 1
+	if index == len(updated) {
+		updated = append(updated, preset)
 	}
-	if err := saveDesignPresets(m.Print.ConfigPath, m.DesignPresets); err != nil {
+	if err := saveDesignPresets(m.Print.ConfigPath, updated); err != nil {
 		m.setStatus("Save design preset failed: %v", err)
 		return true
 	}
+	m.DesignPresets = updated
+	m.DesignPreset = index
 	m.setStatus("Saved design preset %q.", name)
+	return true
+}
+
+func (m *Model) deleteDesignPreset(name string) bool {
+	index := -1
+	for i, preset := range m.DesignPresets {
+		if preset.Name == name {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		m.setStatus("Saved preset %q no longer exists.", name)
+		return true
+	}
+	updated := append([]config.DesignPreset(nil), m.DesignPresets[:index]...)
+	updated = append(updated, m.DesignPresets[index+1:]...)
+	if err := saveDesignPresets(m.Print.ConfigPath, updated); err != nil {
+		m.setStatus("Delete saved preset failed: %v", err)
+		return true
+	}
+	m.DesignPresets = updated
+	if m.DesignPreset == index {
+		m.DesignPreset = -1
+	} else if m.DesignPreset > index {
+		m.DesignPreset--
+	}
+	if len(updated) == 0 {
+		m.closeMenu("")
+	} else {
+		m.MenuListIndex = min(m.MenuListIndex, len(updated)-1)
+	}
+	m.setStatus("Deleted saved preset %q. Current canvas unchanged.", name)
 	return true
 }
 
@@ -92,6 +137,7 @@ func (m *Model) loadDesignPreset(index int) {
 	}
 	preset := m.DesignPresets[index]
 	m.Document = cloneDocument(preset.Document)
+	m.Bindings = append([]config.DesignBinding(nil), preset.Bindings...)
 	m.DesignPreset = index
 	m.Preset = activePresetIndex(m.Presets, "", m.Document)
 	m.NextID = nextIDForDocument(m.Document)
@@ -102,6 +148,83 @@ func (m *Model) loadDesignPreset(index int) {
 	m.reflow()
 	m.commitHistory("load design preset")
 	m.setStatus("Loaded design preset %q.", preset.Name)
+}
+
+func (m *Model) beginBindingPrompt() bool {
+	element, ok := m.selectedElement()
+	if !ok || (element.Text == nil && element.QR == nil) {
+		m.setStatus("Select a text or QR element to bind.")
+		return true
+	}
+	name := ""
+	for _, binding := range m.Bindings {
+		if binding.ElementID == element.ID {
+			name = binding.Name
+			break
+		}
+	}
+	m.Prompt = PromptState{Mode: PromptBinding, Value: name}
+	m.refreshPromptStatus()
+	return true
+}
+
+func (m *Model) setSelectedBinding(name string) bool {
+	element, ok := m.selectedElement()
+	if !ok {
+		return true
+	}
+	name = strings.TrimSpace(name)
+	if name != "" && !config.ValidBindingName(name) {
+		m.setStatus("Binding names must start with a letter and use letters, digits, _ or -.")
+		return true
+	}
+	for _, binding := range m.Bindings {
+		if binding.Name == name && binding.ElementID != element.ID {
+			m.setStatus("Binding %q already belongs to another element.", name)
+			return true
+		}
+	}
+	for i, binding := range m.Bindings {
+		if binding.ElementID == element.ID {
+			if name == "" {
+				m.Bindings = append(m.Bindings[:i], m.Bindings[i+1:]...)
+				m.setStatus("Binding removed. Save the design to persist.")
+			} else {
+				m.Bindings[i].Name = name
+				m.setStatus("Binding %q updated. Save the design to persist.", name)
+			}
+			m.commitHistory("change binding")
+			return true
+		}
+	}
+	if name != "" {
+		m.Bindings = append(m.Bindings, config.DesignBinding{Name: name, ElementID: element.ID})
+		m.setStatus("Binding %q added. Save the design to persist.", name)
+		m.commitHistory("add binding")
+	}
+	return true
+}
+
+func (m *Model) toggleSelectedBindingRequired() bool {
+	for i, binding := range m.Bindings {
+		if binding.ElementID == m.SelectedID {
+			m.Bindings[i].Required = !binding.Required
+			m.setStatus("Binding %q required: %t. Save the design to persist.", binding.Name, m.Bindings[i].Required)
+			m.commitHistory("toggle required binding")
+			return true
+		}
+	}
+	m.setStatus("Bind a selected element first (b).")
+	return true
+}
+
+func (m *Model) removeBinding(elementID string) {
+	for i, binding := range m.Bindings {
+		if binding.ElementID == elementID {
+			m.Bindings = append(m.Bindings[:i], m.Bindings[i+1:]...)
+			return
+		}
+	}
 }
 
 func nextIDForDocument(doc label.Document) int {

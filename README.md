@@ -120,6 +120,9 @@ The TUI is the primary interface for the project.
 - Use keyboard shortcuts for fast editing, exporting, printing, copy/paste, undo/redo, and menu actions.
 - Export PNG previews before printing.
 - Print from the designer when a printer profile is configured.
+- Save designs with named text/QR bindings for reuse from the CLI. Select an element, press `b` to name its binding, and press `!` to require a new value for each CLI invocation. Press `s` to save the design.
+- Saving under an existing name asks for confirmation before overwriting. To delete a saved design, open the menu (`m`), open Saved Presets, select it and press `d`; deletion also requires confirmation. The current canvas stays open.
+- The printer panel shows `D` to disconnect an active printer and `c` to reconnect it.
 - Use terminal image preview in supported terminals such as Kitty and Ghostty.
 
 The designer works best in a large terminal window. Current minimum target size is roughly `140x30` cells.
@@ -138,34 +141,38 @@ Probe a configured printer:
 go run ./cmd/niimtui probe --config ./config.example.json --printer d110-desk
 ```
 
-Render a preview without printing:
+Discover saved designs and their binding names:
 
 ```bash
-go run ./cmd/niimtui print \
-  --config ./config.example.json \
-  --printer b1-round \
-  --preset b1-50x50-round \
-  --layout qr-title-subtitle \
-  --qr-text https://homebox.example/items/123 \
-  --title "Garage Bin 4" \
-  --subtitle "Top Shelf" \
-  --preview-out ./preview.png \
-  --no-print
+go run ./cmd/niimtui designs
 ```
 
-Print the same QR label:
+Render a saved TUI design without connecting to a printer:
 
 ```bash
-go run ./cmd/niimtui print \
-  --config ./config.example.json \
-  --printer b1-round \
-  --preset b1-50x50-round \
-  --layout qr-title-subtitle \
-  --qr-text https://homebox.example/items/123 \
-  --title "Garage Bin 4" \
-  --subtitle "Top Shelf" \
-  --preview-out ./preview.png
+go run ./cmd/niimtui preview --design garage-bin \
+  --set url=https://homebox.example/items/123 \
+  --set title="Garage Bin 4" --out ./preview.png
 ```
+
+Print it to the active printer and its installed default label roll:
+
+```bash
+go run ./cmd/niimtui print --design garage-bin \
+  --set url=https://homebox.example/items/123 \
+  --set title="Garage Bin 4"
+```
+
+For a one-off QR label, no saved design is needed:
+
+```bash
+go run ./cmd/niimtui print --qr https://homebox.example/items/123 \
+  --title "Garage Bin 4" --subtitle "Top Shelf" --printer b1-round
+```
+
+`--config`, `--printer`, and `--preset` override defaults when needed. `--set name=value` replaces only that named text/QR element; omitted optional bindings keep their saved values. Required bindings must be provided even when a saved value exists. `print` rejects a design whose dimensions or shape don't match the selected preset; `preview` can still render it. `print`, `preview`, and `designs` return JSON on stdout; unsuccessful prints exit nonzero. The TUI's `s` command saves designs in your config file, so `config.example.json` by itself has no saved designs to list.
+
+Previous CLI examples using `print --preview-out FILE --no-print` now use `preview --out FILE`. Use `--qr` in place of `--qr-text`; for quick labels, the presence of `--title` and `--subtitle` determines the layout.
 
 ## support
 
