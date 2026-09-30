@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,17 +13,46 @@ import (
 )
 
 func (m Model) confirmPromptOpen() bool {
-	return m.Prompt.Mode == PromptOverwriteDesign || m.Prompt.Mode == PromptDeleteDesign
+	switch m.Prompt.Mode {
+	case PromptOverwriteDesign, PromptDeleteDesign, PromptOpenGallery, PromptCommand:
+		return true
+	}
+	return false
 }
 
 func (m *Model) handlePromptKey(msg tea.KeyMsg) bool {
 	if m.confirmPromptOpen() {
 		mode, name := m.Prompt.Mode, m.Prompt.Value
+		if mode == PromptCommand {
+			switch msg.String() {
+			case "esc", "enter":
+				m.Prompt = PromptState{}
+				m.setStatus("Closed print command.")
+			case "c":
+				if err := copyTerminalCommand(name); err != nil {
+					m.setStatus("Could not copy command: %v", err)
+				} else {
+					m.setStatus("Sent print command to terminal clipboard (if supported).")
+				}
+			case "up", "k":
+				m.CommandScroll = max(0, m.CommandScroll-1)
+			case "down", "j":
+				m.CommandScroll++
+			}
+			return true
+		}
 		switch msg.String() {
 		case "y":
 			m.Prompt = PromptState{}
 			if mode == PromptOverwriteDesign {
 				return m.persistDesignPreset(name)
+			}
+			if mode == PromptOpenGallery {
+				item, ok := m.currentGalleryItem()
+				if ok && item.Name == name {
+					_ = m.loadGalleryItem(item)
+				}
+				return true
 			}
 			return m.deleteDesignPreset(name)
 		case "n", "esc":
@@ -69,6 +99,11 @@ func (m *Model) handlePromptKey(msg tea.KeyMsg) bool {
 	return true
 }
 
+func copyTerminalCommand(command string) error {
+	_, err := fmt.Fprintf(os.Stdout, "\x1b]52;c;%s\a", base64.StdEncoding.EncodeToString([]byte(command)))
+	return err
+}
+
 func (m *Model) refreshPromptStatus() {
 	switch m.Prompt.Mode {
 	case PromptExportPNG:
@@ -81,6 +116,8 @@ func (m *Model) refreshPromptStatus() {
 		m.setStatus("Saved preset %q already exists. Overwrite? y yes / n or esc cancel", m.Prompt.Value)
 	case PromptDeleteDesign:
 		m.setStatus("Delete saved preset %q? y yes / n or esc cancel", m.Prompt.Value)
+	case PromptOpenGallery:
+		m.setStatus("Discard unsaved changes and open %q? y yes / n or esc cancel", m.Prompt.Value)
 	}
 }
 

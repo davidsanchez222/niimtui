@@ -64,6 +64,9 @@ func (m *Model) persistDesignPreset(name string) bool {
 	}
 	m.DesignPresets = updated
 	m.DesignPreset = index
+	m.cleanDocument = cloneDocument(m.Document)
+	m.cleanBindings = append([]config.DesignBinding(nil), m.Bindings...)
+	m.unsavedTemplate = false
 	m.setStatus("Saved design preset %q.", name)
 	return true
 }
@@ -89,6 +92,7 @@ func (m *Model) deleteDesignPreset(name string) bool {
 	m.DesignPresets = updated
 	if m.DesignPreset == index {
 		m.DesignPreset = -1
+		m.unsavedTemplate = true
 	} else if m.DesignPreset > index {
 		m.DesignPreset--
 	}
@@ -138,6 +142,9 @@ func (m *Model) loadDesignPreset(index int) {
 	preset := m.DesignPresets[index]
 	m.Document = cloneDocument(preset.Document)
 	m.Bindings = append([]config.DesignBinding(nil), preset.Bindings...)
+	m.cleanDocument = cloneDocument(m.Document)
+	m.cleanBindings = append([]config.DesignBinding(nil), m.Bindings...)
+	m.unsavedTemplate = false
 	m.DesignPreset = index
 	m.Preset = activePresetIndex(m.Presets, "", m.Document)
 	m.NextID = nextIDForDocument(m.Document)

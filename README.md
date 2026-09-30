@@ -122,7 +122,10 @@ The TUI is the primary interface for the project.
 - Print from the designer when a printer profile is configured.
 - Save designs with named text/QR bindings for reuse from the CLI. Select an element, press `b` to name its binding, and press `!` to require a new value for each CLI invocation. Press `s` to save the design.
 - Saving under an existing name asks for confirmation before overwriting. To delete a saved design, open the menu (`m`), open Saved Presets, select it and press `d`; deletion also requires confirmation. The current canvas stays open.
-- The printer panel shows `D` to disconnect an active printer and `c` to reconnect it.
+- Press `Ctrl+T` (or click a tab header) to switch between the label designer and the label gallery. The gallery includes starter layouts for installed rolls and your saved designs, with a canvas preview and terminal-image preview where supported. Use arrows to browse and Enter to edit; unsaved edits are confirmed before replacing the canvas.
+- On a saved design in the gallery, press `c` to see its runnable `niimtui print --design ...` command. Required bindings use their saved values; press `c` again to send the full command to a terminal clipboard that supports OSC 52.
+- Press `Tab` to focus the printer sidebar. Use arrows to browse printers and installed rolls, Enter to select, `c` to connect, `D` to disconnect, `r` to rescan, and Esc or Tab to return to the editor. These controls replace the global `1–9` printer and `n/N` roll shortcuts.
+- At startup, the TUI scans once for configured advertising BLE printers. It connects to the sole detected printer, or to the active printer when several are detected. If none is detected, it remains disconnected; a manual `c` in the focused printer sidebar can still try to connect. Auto-selection does not change your saved active printer.
 - Use terminal image preview in supported terminals such as Kitty and Ghostty.
 
 The designer works best in a large terminal window. Current minimum target size is roughly `140x30` cells.

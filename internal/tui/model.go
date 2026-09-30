@@ -14,6 +14,7 @@ import (
 	"niimtui/internal/label"
 	"niimtui/internal/printtrace"
 	"niimtui/internal/render"
+	"niimtui/internal/transport"
 )
 
 type PrinterSession interface {
@@ -24,20 +25,25 @@ type PrinterSession interface {
 }
 
 type PrinterSessionFactory func(selector string) (PrinterSession, error)
+type PrinterDiscovery func(ctx context.Context) ([]transport.ScanResult, error)
 
 type PrintConfig struct {
-	Session       PrinterSession
-	NewSession    PrinterSessionFactory
-	ConfigPath    string
-	Printers      []config.PrinterProfile
-	DesignPresets []config.DesignPreset
-	Printer       string
-	Model         string
-	DeviceName    string
-	Identifier    string
-	OffsetXMM     float64
-	OffsetYMM     float64
-	Copies        int
+	Session          PrinterSession
+	NewSession       PrinterSessionFactory
+	Discover         PrinterDiscovery
+	DiscoveryContext context.Context
+	PreferredPrinter string
+	ExplicitPrinter  bool
+	ConfigPath       string
+	Printers         []config.PrinterProfile
+	DesignPresets    []config.DesignPreset
+	Printer          string
+	Model            string
+	DeviceName       string
+	Identifier       string
+	OffsetXMM        float64
+	OffsetYMM        float64
+	Copies           int
 }
 
 type ConnectionInfo struct {
@@ -55,10 +61,12 @@ const (
 
 type printerConnectedMsg struct {
 	Info ConnectionInfo
+	Seq  int
 }
 
 type printerConnectionFailedMsg struct {
 	Err error
+	Seq int
 }
 
 type DragMode int
@@ -124,6 +132,8 @@ const (
 	PromptBinding         PromptMode = "binding"
 	PromptOverwriteDesign PromptMode = "overwrite-design"
 	PromptDeleteDesign    PromptMode = "delete-design"
+	PromptOpenGallery     PromptMode = "open-gallery"
+	PromptCommand         PromptMode = "print-command"
 )
 
 type PromptState struct {
@@ -140,8 +150,14 @@ const (
 )
 
 type Model struct {
-	Width  int
-	Height int
+	Width         int
+	Height        int
+	Tab           tuiTab
+	GalleryIndex  int
+	GallerySeq    int
+	GalleryPNG    []byte
+	GalleryErr    string
+	CommandScroll int
 
 	Document      label.Document
 	Canvas        Canvas
@@ -175,11 +191,26 @@ type Model struct {
 	MenuListMode    MenuListMode
 	MenuListIndex   int
 	AutoInsert      bool
+	SidebarFocused  bool
+	SidebarSection  sidebarSection
+	SidebarPrinter  int
+	SidebarRoll     int
 
-	Print       PrintConfig
-	Connection  ConnectionStatus
-	ConnectErr  string
-	ConnectMeta map[string]any
+	Print           PrintConfig
+	Connection      ConnectionStatus
+	ConnectSeq      int
+	ConnectErr      string
+	ConnectMeta     map[string]any
+	Discovering     bool
+	DetectedNames   map[string]bool
+	PendingConnect  bool
+	ScanSeq         int
+	scanCtx         context.Context
+	scanCancel      context.CancelFunc
+	startupDocument label.Document
+	cleanDocument   label.Document
+	cleanBindings   []config.DesignBinding
+	unsavedTemplate bool
 
 	EditingText bool
 	TextBuffer  string
@@ -221,6 +252,9 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		doc.Shape = strings.ToLower(strings.TrimSpace(shape))
 	}
 	status := "Click to select. Drag to move. Drag handles to resize."
+	if printConfig.Discover != nil {
+		status = "Scanning for configured printers. You can start designing now."
+	}
 	preview := LivePreviewState{Protocol: detectLivePreviewProtocol()}
 	if preview.Protocol != LivePreviewDisabled {
 		preview.RequestedSeq = 1
@@ -230,6 +264,17 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 	connection := ConnectionUnavailable
 	if printConfig.Session != nil {
 		connection = ConnectionConnecting
+	} else if printConfig.NewSession != nil {
+		connection = ConnectionDisconnected
+	}
+	var scanCtx context.Context
+	var scanCancel context.CancelFunc
+	if printConfig.Discover != nil {
+		parent := printConfig.DiscoveryContext
+		if parent == nil {
+			parent = context.Background()
+		}
+		scanCtx, scanCancel = context.WithCancel(parent)
 	}
 
 	fonts := discoverFonts(fontPath)
@@ -237,6 +282,8 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 	visiblePresets := presetsForPrinter(presets, printConfig.Model)
 	m := Model{
 		Document:        doc,
+		Tab:             tabDesigner,
+		cleanDocument:   cloneDocument(doc),
 		AllPresets:      presets,
 		Presets:         visiblePresets,
 		Preset:          activePresetIndex(visiblePresets, presetName, doc),
@@ -248,6 +295,11 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		FontPickerIndex: fontOptionIndex(fonts, fontPath),
 		Print:           printConfig,
 		Connection:      connection,
+		Discovering:     printConfig.Discover != nil,
+		ScanSeq:         1,
+		scanCtx:         scanCtx,
+		scanCancel:      scanCancel,
+		startupDocument: cloneDocument(doc),
 		StatusBase:      status,
 		Status:          status,
 		Preview:         preview,
@@ -307,13 +359,16 @@ func activePresetIndex(presets []config.LabelPreset, name string, doc label.Docu
 
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{}
+	if m.Print.Discover != nil {
+		cmds = append(cmds, printerScanCmd(m.Print.Discover, m.scanCtx, m.ScanSeq))
+	}
 	if m.Print.Session == nil {
 		if m.Preview.Protocol != LivePreviewDisabled && m.Preview.RequestedSeq > 0 {
-			return livePreviewDebounceCmd(m.Preview.RequestedSeq)
+			cmds = append(cmds, livePreviewDebounceCmd(m.Preview.RequestedSeq))
 		}
-		return nil
+		return tea.Batch(cmds...)
 	}
-	cmds = append(cmds, connectPrinterCmd(m.Print.Session))
+	cmds = append(cmds, connectPrinterCmd(m.Print.Session, m.ConnectSeq))
 	if m.Preview.Protocol != LivePreviewDisabled && m.Preview.RequestedSeq > 0 {
 		cmds = append(cmds, livePreviewDebounceCmd(m.Preview.RequestedSeq))
 	}
@@ -345,16 +400,16 @@ func (m Model) editingTargetLabel() string {
 	return "text"
 }
 
-func connectPrinterCmd(session PrinterSession) tea.Cmd {
+func connectPrinterCmd(session PrinterSession, seq int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := printtrace.Start(context.Background())
 		printtrace.Mark(ctx, "TUI connect requested")
 		meta, err := session.Connect(ctx)
 		printtrace.Mark(ctx, "TUI connect completed")
 		if err != nil {
-			return printerConnectionFailedMsg{Err: err}
+			return printerConnectionFailedMsg{Err: err, Seq: seq}
 		}
-		return printerConnectedMsg{Info: ConnectionInfo{Meta: meta}}
+		return printerConnectedMsg{Info: ConnectionInfo{Meta: meta}, Seq: seq}
 	}
 }
 

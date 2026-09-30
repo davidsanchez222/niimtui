@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -23,6 +24,9 @@ func RunWithPresets(widthMM, heightMM float64, shape, fontPath string, printConf
 	}
 
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	printConfig.DiscoveryContext = ctx
 	if os.Getenv("NIIMTUI_DEBUG_PANIC") == "1" {
 		options = append(options, tea.WithoutCatchPanics())
 	}

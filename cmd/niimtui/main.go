@@ -15,6 +15,7 @@ import (
 	"niimtui/internal/render"
 	"niimtui/internal/server"
 	"niimtui/internal/service"
+	"niimtui/internal/transport"
 	"niimtui/internal/tui"
 )
 
@@ -285,9 +286,9 @@ func runTUI(args []string) error {
 		return err
 	}
 	var svc *service.Service
-	var session *service.Session
 	var printers []config.PrinterProfile
 	var designPresets []config.DesignPreset
+	preferredPrinter := ""
 	resolvedConfigPath := *configPath
 	printerSelector := *printer
 	printerProfileName := printerSelector
@@ -323,21 +324,24 @@ func runTUI(args []string) error {
 			return err
 		}
 		presets = cfg.Presets
+		preferredPrinter = cfg.ActivePrinter
 		printers = cfg.Printers
 		designPresets = cfg.DesignPresets
-		printerProfile, ok, err := printerForSelector(cfg, printerSelector)
-		if err != nil && (*printer != "" || *widthMM <= 0 || *heightMM <= 0) {
-			return err
+		printerProfile := cfg.Printers[0]
+		if printerSelector != "" || cfg.ActivePrinter != "" {
+			var err error
+			printerProfile, _, err = printerForSelector(cfg, printerSelector)
+			if err != nil {
+				return err
+			}
 		}
-		if ok {
-			printerProfileName = printerProfile.Name
-			printerSelector = printerProfile.Name
-			printerModel = printerProfile.Model
-			deviceName = printerProfile.DeviceName
-			identifier = printerProfile.Identifier
-			offsetXMM = printerProfile.Defaults.OffsetXMM
-			offsetYMM = printerProfile.Defaults.OffsetYMM
-		}
+		printerProfileName = printerProfile.Name
+		printerSelector = printerProfile.Name
+		printerModel = printerProfile.Model
+		deviceName = printerProfile.DeviceName
+		identifier = printerProfile.Identifier
+		offsetXMM = printerProfile.Defaults.OffsetXMM
+		offsetYMM = printerProfile.Defaults.OffsetYMM
 		if *widthMM <= 0 || *heightMM <= 0 {
 			preset, err := defaultPresetForPrinter(cfg, printerProfile)
 			if err != nil {
@@ -356,12 +360,7 @@ func runTUI(args []string) error {
 		if err != nil {
 			return err
 		}
-		if ok {
-			session, err = svc.NewSession(printerProfile.Name)
-			if err != nil {
-				return err
-			}
-		}
+		defer svc.Close()
 	}
 	if *widthMM <= 0 {
 		return errors.New("-width-mm is required and must be greater than zero unless setup/default config provides a preset")
@@ -371,12 +370,16 @@ func runTUI(args []string) error {
 	}
 
 	var newSession tui.PrinterSessionFactory
+	var discover tui.PrinterDiscovery
 	if svc != nil {
 		newSession = func(selector string) (tui.PrinterSession, error) {
 			return svc.NewSession(selector)
 		}
+		discover = func(ctx context.Context) ([]transport.ScanResult, error) {
+			return svc.Scan(ctx, "ble")
+		}
 	}
-	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{Session: session, NewSession: newSession, ConfigPath: resolvedConfigPath, Printers: printers, DesignPresets: designPresets, Printer: printerProfileName, Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
+	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{NewSession: newSession, Discover: discover, ConfigPath: resolvedConfigPath, Printers: printers, DesignPresets: designPresets, Printer: printerProfileName, PreferredPrinter: preferredPrinter, ExplicitPrinter: *printer != "", Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {

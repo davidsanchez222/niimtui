@@ -73,7 +73,7 @@ func openPreviewFile(path string) (bool, error) {
 
 func (m *Model) printCurrentDocument() tea.Cmd {
 	if m.Print.Session == nil {
-		m.setStatus("Printing unavailable. Run setup or pass --config/--printer.")
+		m.setStatus("Printer not connected. Press Tab to focus printers, then c to connect.")
 		return nil
 	}
 	if m.Print.Model != "" && (m.Preset < 0 || m.Preset >= len(m.Presets) || !config.MatchesStock(m.Document, m.Presets[m.Preset])) {
@@ -85,7 +85,7 @@ func (m *Model) printCurrentDocument() tea.Cmd {
 		return nil
 	}
 	if m.Connection != ConnectionConnected {
-		m.setStatus("Printer disconnected. Press c to reconnect.")
+		m.setStatus("Printer disconnected. Press Tab to focus printers, then c to reconnect.")
 		return nil
 	}
 	m.setStatus("Printing current label...")

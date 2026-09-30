@@ -35,6 +35,7 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if msg.Button != tea.MouseButtonLeft {
 			return m, nil
 		}
+		m.SidebarFocused = false
 		m.handleMousePressAt(msg, time.Now())
 	case tea.MouseActionMotion:
 		if m.Drag.Mode == DragNone {

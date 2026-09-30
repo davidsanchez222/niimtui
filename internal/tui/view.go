@@ -106,19 +106,36 @@ func (m Model) View() string {
 
 	canvasPanelWidth := m.canvasPanelWidth()
 	bodyHeight := m.canvasPanelHeight()
-	canvasLines := fitPanelLines(centerCanvasLines(strings.Split(renderCanvas(m), "\n"), canvasPanelWidth, bodyHeight), bodyHeight, canvasPanelWidth)
-	if m.EditingText {
-		canvasLines = overlayCenteredBox(canvasLines, editingPopup(m, canvasPanelWidth, bodyHeight), canvasPanelWidth, bodyHeight)
+	var canvasLines []string
+	if m.Tab == tabGallery {
+		canvasLines = galleryCanvasLines(m, canvasPanelWidth, bodyHeight)
+	} else {
+		canvasLines = fitPanelLines(centerCanvasLines(strings.Split(renderCanvas(m), "\n"), canvasPanelWidth, bodyHeight), bodyHeight, canvasPanelWidth)
+		if m.EditingText {
+			canvasLines = overlayCenteredBox(canvasLines, editingPopup(m, canvasPanelWidth, bodyHeight), canvasPanelWidth, bodyHeight)
+		}
 	}
-	leftLines := fitPanelLines(devicePanelLines(m, layoutLeftPanelWidth), bodyHeight, layoutLeftPanelWidth)
-	propertyLines := fitPanelLines(propertyPanelLines(m, layoutPropertiesWidth), bodyHeight, layoutPropertiesWidth)
+	leftPanel := devicePanelLines(m, layoutLeftPanelWidth)
+	if m.Tab == tabGallery {
+		leftPanel = galleryListLines(m, layoutLeftPanelWidth)
+	} else if m.SidebarFocused {
+		leftPanel = sidebarLines(m, layoutLeftPanelWidth)
+	}
+	leftLines := fitPanelLines(leftPanel, bodyHeight, layoutLeftPanelWidth)
+	var properties []string
+	if m.Tab == tabGallery {
+		properties = m.galleryPreviewLines(layoutPropertiesWidth)
+	} else {
+		properties = propertyPanelLines(m, layoutPropertiesWidth)
+	}
+	propertyLines := fitPanelLines(properties, bodyHeight, layoutPropertiesWidth)
 
 	viewWidth := max(m.Width, layoutLeftPanelWidth+layoutPanelGap+canvasPanelWidth+layoutPanelGap+layoutPropertiesWidth)
 	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, logoHeader())
 	status := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, statusStyle.Render(truncateText(m.Status, max(viewWidth-8, 1))))
 	lines := []string{
 		title,
-		"",
+		tabHeader(m, viewWidth),
 		status,
 	}
 	if m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
@@ -132,6 +149,27 @@ func (m Model) View() string {
 	lines = append(lines, footerLines(m, viewWidth)...)
 
 	return strings.Join(lines, "\n")
+}
+
+func tabHeader(m Model, width int) string {
+	designer, gallery := "  Designer  ", "  Gallery  "
+	if m.Tab == tabDesigner {
+		designer = "[ Designer ]"
+	} else {
+		gallery = "[ Gallery ]"
+	}
+	return lipgloss.PlaceHorizontal(width, lipgloss.Center, helpLabelStyle.Render(designer)+"   "+helpLabelStyle.Render(gallery))
+}
+
+func tabAt(width, x int) (tuiTab, bool) {
+	left := (width - 26) / 2
+	if x >= left && x < left+12 {
+		return tabDesigner, true
+	}
+	if x >= left+15 && x < left+26 {
+		return tabGallery, true
+	}
+	return tabDesigner, false
 }
 
 func (m Model) isTerminalTooSmall() bool {
@@ -190,16 +228,24 @@ func smallTerminalView(width, height int) string {
 func modalBodyLines(m Model, width, height int) []string {
 	content := helpModalContent()
 	if m.confirmPromptOpen() {
-		verb := "Overwrite"
-		if m.Prompt.Mode == PromptDeleteDesign {
-			verb = "Delete"
-		}
-		content = []string{
-			propertyTitleStyle.Render(verb + " saved preset?"),
-			"",
-			fmt.Sprintf("%s %q?", verb, m.Prompt.Value),
-			"",
-			mutedStyle.Render("y confirms · n or esc cancels"),
+		switch m.Prompt.Mode {
+		case PromptCommand:
+			content = []string{propertyTitleStyle.Render("Print this saved design"), "", mutedStyle.Render("c copies full command · ↑/↓ scroll · esc closes"), ""}
+			wrapped := wrapCommand(m.Prompt.Value, 76)
+			start := min(m.CommandScroll, max(0, len(wrapped)-max(1, height-9)))
+			content = append(content, wrapped[start:min(len(wrapped), start+max(1, height-9))]...)
+		default:
+			verb := "Overwrite"
+			title := "Overwrite saved preset?"
+			if m.Prompt.Mode == PromptDeleteDesign {
+				verb = "Delete"
+				title = "Delete saved preset?"
+			}
+			if m.Prompt.Mode == PromptOpenGallery {
+				verb = "Discard edits and open"
+				title = "Discard unsaved edits?"
+			}
+			content = []string{propertyTitleStyle.Render(title), "", fmt.Sprintf("%s %q?", verb, m.Prompt.Value), "", mutedStyle.Render("y confirms · n or esc cancels")}
 		}
 	} else if m.MenuOpen {
 		content = menuModalContent(m)
@@ -214,6 +260,17 @@ func modalBodyLines(m Model, width, height int) []string {
 		Render(strings.Join(content, "\n"))
 	body := lipgloss.Place(width, max(height, 8), lipgloss.Center, lipgloss.Center, box)
 	return strings.Split(body, "\n")
+}
+
+func wrapCommand(command string, width int) []string {
+	runes := []rune(command)
+	lines := make([]string, 0, (len(runes)+width-1)/width)
+	for len(runes) > 0 {
+		n := min(len(runes), width)
+		lines = append(lines, string(runes[:n]))
+		runes = runes[n:]
+	}
+	return lines
 }
 
 func editingPopup(m Model, width, height int) string {
@@ -568,16 +625,16 @@ func (m Model) currentPresetLabel() string {
 
 func presetSwitchHelp(m Model) string {
 	if len(m.Presets) == 0 {
-		return mutedStyle.Render("No installed rolls for printer")
+		return helpItem("tab", "manage printer")
 	}
-	return helpItem("n/N", "cycle label size")
+	return helpItem("tab", "manage printer/roll")
 }
 
 func installedPrinterLines(m Model, width int) []string {
 	if len(m.Print.Printers) == 0 {
 		return []string{mutedStyle.Render("No printers installed"), ""}
 	}
-	limit := min(len(m.Print.Printers), 9)
+	limit := min(len(m.Print.Printers), 5)
 	lines := make([]string, 0, limit+1)
 	for i := 0; i < limit; i++ {
 		printer := m.Print.Printers[i]
@@ -587,7 +644,7 @@ func installedPrinterLines(m Model, width int) []string {
 			marker = "*"
 			style = propertySelectedStyle
 		}
-		prefix := keyStyle.Render(fmt.Sprintf("%d", i+1)) + style.Render(" "+marker+" ")
+		prefix := style.Render(" " + marker + " ")
 		name := truncateText(printerDisplayName(printer), max(width-lipgloss.Width(prefix), 1))
 		lines = append(lines, prefix+style.Render(name))
 	}
@@ -709,7 +766,7 @@ func helpModalContent() []string {
 		helpRow("e", "Export PNG to a chosen path"),
 		helpRow("g", "Toggle visual grid"),
 		helpRow("I", "Toggle inverted black/white colors"),
-		helpRow("1-9 / c / D", "Switch / connect / disconnect printer"),
+		helpRow("tab / ctrl+t", "Printer controls / switch designer and gallery"),
 		helpRow("s", "Save current design preset"),
 		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
@@ -819,6 +876,23 @@ func helpRow(key, description string) string {
 }
 
 func footerLines(m Model, width int) []string {
+	if m.Tab == tabGallery {
+		return []string{
+			footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
+			centerStyledLine(helpItem("ctrl+t", "designer")+"  "+helpItem("↑/↓", "browse")+"  "+helpItem("enter", "edit")+"  "+helpItem("c", "print command"), width),
+			strings.Repeat(" ", width), strings.Repeat(" ", width),
+			centerStyledLine(helpItem("ctrl+c", "quit"), width),
+		}
+	}
+	if m.SidebarFocused {
+		return []string{
+			footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
+			centerStyledLine(sidebarFooter(m), width),
+			centerStyledLine(helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan"), width),
+			strings.Repeat(" ", width),
+			centerStyledLine(helpItem("ctrl+c", "quit"), width),
+		}
+	}
 	printHelp := ""
 	if m.Print.Session != nil {
 		printHelp = helpItem("P", "print") + "  "
@@ -842,8 +916,9 @@ func footerLines(m Model, width int) []string {
 		helpItem("B", "redo branch"),
 	}, "  ")
 	movement := strings.Join([]string{
-		helpItem("1-9", "printer"),
-		helpItem("arrows/hjkl", "move"),
+		helpItem("tab", "printer"),
+		helpItem("ctrl+t", "gallery"),
+		helpItem("hjkl", "move"),
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
 		helpItem("+/-", "font/QR size"),
@@ -949,7 +1024,10 @@ func (m Model) selectedFontName(fontPath string) string {
 }
 
 func connectHelp(m Model) string {
-	if m.Print.Session == nil {
+	if !m.SidebarFocused {
+		return ""
+	}
+	if m.Print.Session == nil && m.Print.NewSession == nil {
 		return ""
 	}
 	switch m.Connection {

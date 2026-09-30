@@ -120,6 +120,9 @@ func terminalLivePreviewCmd(m Model) tea.Cmd {
 	if m.isTerminalTooSmall() || m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
 		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}
+	if m.Tab == tabGallery {
+		return galleryTerminalPreviewCmd(m)
+	}
 	protocol := m.Preview.Protocol
 	png := append([]byte(nil), m.Preview.PNG...)
 	canvasPanelWidth := m.canvasPanelWidth()
@@ -156,7 +159,8 @@ func writeTerminalLivePreviewClear(w io.Writer, canvasPanelWidth int) (int, erro
 }
 
 func terminalLivePreviewDeleteEscape() string {
-	return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d;\x1b\\", terminalLivePreviewImageID)
+	// Kitty replies on stdin can otherwise be mistaken for text editor input.
+	return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2;\x1b\\", terminalLivePreviewImageID)
 }
 
 func clearTerminalLivePreview(left, top, width, rows int) string {
@@ -214,9 +218,11 @@ func terminalImageEscape(protocol LivePreviewProtocol, png []byte, cols, rows in
 }
 
 func (m Model) livePreviewPanelCellSize(width int) (int, int) {
+	return previewPanelCellSize(width, m.Document.WidthMM, m.Document.HeightMM)
+}
+
+func previewPanelCellSize(width int, aspectWidth, aspectHeight float64) (int, int) {
 	cols := min(max(width-4, terminalLivePreviewMinCols), terminalLivePreviewMaxCols)
-	aspectWidth := m.Document.WidthMM
-	aspectHeight := m.Document.HeightMM
 	rows := 4
 	if aspectWidth > 0 && aspectHeight > 0 {
 		aspect := aspectWidth / aspectHeight
@@ -240,20 +246,23 @@ func kittyImageEscape(encoded string, cols, rows int) string {
 			more = 1
 		}
 		if start == 0 {
-			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,i=4242,c=%d,r=%d,m=%d;%s\x1b\\", cols, rows, more, encoded[start:end])
+			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,i=4242,c=%d,r=%d,m=%d,q=2;%s\x1b\\", cols, rows, more, encoded[start:end])
 			continue
 		}
-		fmt.Fprintf(&b, "\x1b_Gm=%d;%s\x1b\\", more, encoded[start:end])
+		fmt.Fprintf(&b, "\x1b_Gm=%d,q=2;%s\x1b\\", more, encoded[start:end])
 	}
 	return b.String()
 }
 
 func (m Model) hasTerminalLivePreview() bool {
+	if m.Tab == tabGallery {
+		return m.Preview.Protocol == LivePreviewKitty && len(m.GalleryPNG) > 0
+	}
 	return m.Preview.Protocol == LivePreviewKitty && len(m.Preview.PNG) > 0
 }
 
 func (m *Model) livePreviewModalCmd(wasOpen bool) tea.Cmd {
-	if !m.hasTerminalLivePreview() {
+	if m.Preview.Protocol != LivePreviewKitty {
 		return nil
 	}
 	isOpen := m.HelpOpen || m.MenuOpen || m.confirmPromptOpen()
@@ -261,6 +270,9 @@ func (m *Model) livePreviewModalCmd(wasOpen bool) tea.Cmd {
 		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}
 	if wasOpen && !isOpen {
+		if !m.hasTerminalLivePreview() {
+			return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
+		}
 		m.Preview.RedrawSeq++
 		return livePreviewRedrawCmd(m.Preview.RedrawSeq)
 	}

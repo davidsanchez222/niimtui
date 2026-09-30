@@ -13,48 +13,117 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
+	if scan, ok := msg.(printerScanMsg); ok {
+		active := scan.Seq == m.ScanSeq && m.Discovering
+		cmd := m.handlePrinterScan(scan)
+		if active && m.Prompt.Mode != PromptNone {
+			m.refreshPromptStatus()
+		}
+		if active && m.Tab == tabGallery {
+			cmd = tea.Batch(cmd, m.requestGalleryPreview())
+		}
+		return m, cmd
+	}
+	if rendered, ok := msg.(galleryRenderedMsg); ok {
+		return m, m.onGalleryRendered(rendered)
+	}
+	if connected, ok := msg.(printerConnectedMsg); ok {
+		if connected.Seq != m.ConnectSeq {
+			return m, nil
+		}
+		m.Connection = ConnectionConnected
+		m.ConnectErr = ""
+		m.ConnectMeta = connected.Info.Meta
+		m.setStatus("Printer connected.")
+		if m.Prompt.Mode != PromptNone {
+			m.refreshPromptStatus()
+		}
+		return m, nil
+	}
+	if failed, ok := msg.(printerConnectionFailedMsg); ok {
+		if failed.Seq != m.ConnectSeq {
+			return m, nil
+		}
+		m.Connection = ConnectionDisconnected
+		m.ConnectErr = failed.Err.Error()
+		m.setStatus("Printer connection failed: %v", failed.Err)
+		if m.Prompt.Mode != PromptNone {
+			m.refreshPromptStatus()
+		}
+		return m, nil
+	}
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
 		m.closePrinterSession()
 		return m, tea.Quit
 	}
-	if m.Prompt.Mode != PromptNone {
-		wasOpen := m.HelpOpen || m.MenuOpen || m.confirmPromptOpen()
-		if key, ok := msg.(tea.KeyMsg); ok {
-			m.handlePromptKey(key)
-		}
-		return m, m.livePreviewModalCmd(wasOpen)
-	}
-	if m.EditingText {
-		switch msg := msg.(type) {
-		case tea.WindowSizeMsg:
-			m.Width = msg.Width
-			m.Height = msg.Height
-			m.Ready = true
-			m.reflow()
-			m.refreshStatus()
-			return m, m.livePreviewResizeCmd()
-		case tea.KeyMsg:
-			m.handleTextEditing(msg)
-			return m, nil
-		}
-		return m, nil
-	}
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.Width = msg.Width
-		m.Height = msg.Height
+	if resized, ok := msg.(tea.WindowSizeMsg); ok {
+		m.Width = resized.Width
+		m.Height = resized.Height
 		m.Ready = true
 		m.reflow()
 		m.refreshStatus()
 		return m, m.livePreviewResizeCmd()
+	}
+	if m.Prompt.Mode != PromptNone {
+		switch input := msg.(type) {
+		case tea.KeyMsg:
+			wasOpen := m.HelpOpen || m.MenuOpen || m.confirmPromptOpen()
+			m.handlePromptKey(input)
+			return m, m.livePreviewModalCmd(wasOpen)
+		case tea.MouseMsg:
+			return m, nil
+		}
+	}
+	if m.EditingText {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			m.handleTextEditing(msg)
+			return m, nil
+		case tea.MouseMsg:
+			return m, nil
+		}
+	}
+
+	switch msg := msg.(type) {
 	case tea.MouseMsg:
+		if m.MenuOpen || m.HelpOpen {
+			return m, nil
+		}
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if msg.Y == 1 {
+				if tab, ok := tabAt(m.Width, msg.X); ok {
+					return m, m.switchTab(tab)
+				}
+			}
+			if m.Tab == tabGallery && msg.Y >= layoutBodyTop+3 && msg.X < layoutLeftPanelWidth {
+				items := m.galleryItems()
+				start, _ := sidebarWindow(len(items), m.GalleryIndex, max(1, m.canvasPanelHeight()-7))
+				index := start + msg.Y - layoutBodyTop - 3
+				if index >= 0 && index < len(items) {
+					m.GalleryIndex = index
+					cmd := m.requestGalleryPreview()
+					if m.Preview.Protocol == LivePreviewKitty {
+						cmd = tea.Batch(clearTerminalLivePreviewCmd(m.canvasPanelWidth()), cmd)
+					}
+					return m, cmd
+				}
+			}
+		}
+		if m.Tab == tabGallery {
+			return m, nil
+		}
 		updated, cmd := m.updateMouse(msg)
 		if model, ok := updated.(Model); ok {
 			return model, cmd
 		}
 		return m, cmd
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+t" && !m.MenuOpen && !m.HelpOpen {
+			if m.Tab == tabGallery {
+				return m, m.switchTab(tabDesigner)
+			}
+			return m, m.switchTab(tabGallery)
+		}
 		if m.MenuOpen {
 			if msg.String() == "q" {
 				m.closePrinterSession()
@@ -76,6 +145,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			return m, m.livePreviewModalCmd(wasOpen)
 		}
+		if m.Tab == tabGallery {
+			return m, m.handleGalleryKey(msg)
+		}
+		if m.SidebarFocused {
+			return m, m.handleSidebarKey(msg)
+		}
+		if msg.String() == "tab" || msg.String() == "shift+tab" {
+			m.FocusPickerOpen = false
+			m.closeFontPicker()
+			m.focusSidebar()
+			return m, nil
+		}
 		if m.FocusPickerOpen {
 			m.handleFocusPickerKey(msg)
 			return m, nil
@@ -85,16 +166,6 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		if msg.String() == "P" {
 			return m, m.printCurrentDocument()
-		}
-		if msg.String() == "c" {
-			return m, m.reconnectPrinter()
-		}
-		if msg.String() == "D" {
-			m.disconnectPrinter()
-			return m, nil
-		}
-		if handled, cmd := m.handlePrinterNumberKey(msg); handled {
-			return m, cmd
 		}
 		if msg.String() == "z" {
 			m.undo()
@@ -137,7 +208,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		}
 	case printResultMsg:
-		return m, m.handlePrintResult(msg)
+		cmd := m.handlePrintResult(msg)
+		if m.Prompt.Mode != PromptNone {
+			m.refreshPromptStatus()
+		}
+		return m, cmd
 	case livePreviewTickMsg:
 		if msg.Seq != m.Preview.RequestedSeq || m.Preview.Protocol == LivePreviewDisabled {
 			return m, nil
@@ -149,23 +224,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.Seq == m.Preview.RequestedSeq {
 			m.Preview.Err = msg.Err.Error()
 			m.setStatus("Realtime preview failed: %v", msg.Err)
+			if m.Prompt.Mode != PromptNone {
+				m.refreshPromptStatus()
+			}
 		}
 		return m, nil
 	case livePreviewRedrawMsg:
 		if m.hasTerminalLivePreview() && !m.HelpOpen && !m.MenuOpen && !m.confirmPromptOpen() && msg.Seq == m.Preview.RedrawSeq {
+			if m.Tab == tabGallery {
+				return m, galleryTerminalPreviewCmd(m)
+			}
 			return m, terminalLivePreviewCmd(m)
 		}
-		return m, nil
-	case printerConnectedMsg:
-		m.Connection = ConnectionConnected
-		m.ConnectErr = ""
-		m.ConnectMeta = msg.Info.Meta
-		m.setStatus("Printer connected.")
-		return m, nil
-	case printerConnectionFailedMsg:
-		m.Connection = ConnectionDisconnected
-		m.ConnectErr = msg.Err.Error()
-		m.setStatus("Printer connection failed: %v", msg.Err)
 		return m, nil
 	}
 
@@ -197,7 +267,7 @@ func (m Model) withLivePreviewSchedule(beforeKey string, cmd tea.Cmd) (tea.Model
 }
 
 func (m *Model) reconnectPrinter() tea.Cmd {
-	if m.Print.Session == nil {
+	if m.Print.Session == nil && m.Print.NewSession == nil {
 		m.setStatus("Printer connection unavailable. Run setup or pass --config/--printer.")
 		return nil
 	}
@@ -209,10 +279,15 @@ func (m *Model) reconnectPrinter() tea.Cmd {
 		m.setStatus("Printer already connecting.")
 		return nil
 	}
-	m.Connection = ConnectionConnecting
-	m.ConnectErr = ""
-	m.setStatus("Connecting to printer...")
-	return connectPrinterCmd(m.Print.Session)
+	if m.Discovering {
+		if m.scanCancel != nil {
+			m.scanCancel()
+		}
+		m.PendingConnect = true
+		m.setStatus("Stopping discovery before connecting to %s...", m.Print.Printer)
+		return nil
+	}
+	return m.connectSelectedPrinter()
 }
 
 func (m *Model) disconnectPrinter() {
@@ -221,6 +296,7 @@ func (m *Model) disconnectPrinter() {
 		return
 	}
 	err := m.Print.Session.Close()
+	m.ConnectSeq++
 	m.Connection = ConnectionDisconnected
 	m.ConnectMeta = nil
 	m.ConnectErr = ""
@@ -288,10 +364,6 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return true
 	case "m":
 		return m.toggleMenu()
-	case "n":
-		return m.switchPreset(1)
-	case "N":
-		return m.switchPreset(-1)
 	case "?":
 		m.HelpOpen = !m.HelpOpen
 		if m.HelpOpen {
@@ -338,35 +410,6 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	default:
 		return false
 	}
-}
-
-func (m *Model) handlePrinterNumberKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if len(msg.Runes) != 1 || msg.Runes[0] < '1' || msg.Runes[0] > '9' {
-		return false, nil
-	}
-	return true, m.switchPrinterIndex(int(msg.Runes[0] - '1'))
-}
-
-func (m *Model) switchPreset(delta int) bool {
-	if len(m.Presets) == 0 || delta == 0 {
-		m.setStatus("No label presets available.")
-		return true
-	}
-	index := m.Preset
-	if index < 0 || index >= len(m.Presets) {
-		index = activePresetIndex(m.Presets, "", m.Document)
-	}
-	if index < 0 {
-		index = 0
-	} else {
-		index = (index + delta) % len(m.Presets)
-		if index < 0 {
-			index += len(m.Presets)
-		}
-	}
-	m.applyPreset(index)
-	m.commitHistory("change label roll")
-	return true
 }
 
 func (m *Model) applyPreset(index int) {

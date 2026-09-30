@@ -67,6 +67,27 @@ func TestTerminalLivePreviewClearDeletesKittyImage(t *testing.T) {
 	}
 }
 
+func TestKittyPreviewCommandsSuppressTerminalResponses(t *testing.T) {
+	var output bytes.Buffer
+	// Enough data to require multiple graphics commands, not just a first chunk.
+	if _, err := writeTerminalLivePreview(&output, LivePreviewKitty, bytes.Repeat([]byte{42}, 9000), 40, 12, 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeTerminalLivePreviewClear(&output, 40); err != nil {
+		t.Fatal(err)
+	}
+	commands := strings.Split(output.String(), "\x1b_G")[1:]
+	if len(commands) < 4 {
+		t.Fatalf("got %d graphics commands, want delete, multiple chunks, and clear", len(commands))
+	}
+	for _, command := range commands {
+		controls, _, ok := strings.Cut(command, ";")
+		if !ok || !strings.Contains(controls, ",q=2") {
+			t.Fatalf("graphics command requests a terminal reply: %q", controls)
+		}
+	}
+}
+
 func TestLivePreviewPanelCellSizeUsesDocumentAspect(t *testing.T) {
 	square := NewModel(50, 50, "round", "", PrintConfig{})
 	wide := NewModel(50, 30, "rect", "", PrintConfig{})

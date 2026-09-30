@@ -181,9 +181,10 @@ func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 	m.Height = 30
 	m.reflow()
 
-	if !m.switchPreset(1) {
-		t.Fatal("switchPreset() = false, want true")
-	}
+	m.focusSidebar()
+	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyRight})
+	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if m.Document.WidthMM != 50 || m.Document.HeightMM != 50 || m.Document.Shape != "round" {
 		t.Fatalf("document = %.0fx%.0f %s, want 50x50 round", m.Document.WidthMM, m.Document.HeightMM, m.Document.Shape)
 	}
@@ -221,9 +222,11 @@ func TestSwitchPrinterFiltersPresetsAndSavesActivePrinter(t *testing.T) {
 		NewSession: func(string) (PrinterSession, error) { return noopPrinterSession{}, nil },
 	}, cfg.Presets, "b1-50x30")
 
-	cmd := m.switchPrinterIndex(1)
+	m.focusSidebar()
+	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyDown})
+	cmd := m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("switchPrinterIndex() returned nil command, want connect command")
+		t.Fatal("focused printer selection returned nil, want connect command")
 	}
 	if m.Print.Printer != "d110-default" || m.Print.Model != "D110" {
 		t.Fatalf("active printer = %q %q, want d110-default D110", m.Print.Printer, m.Print.Model)
@@ -240,7 +243,7 @@ func TestSwitchPrinterFiltersPresetsAndSavesActivePrinter(t *testing.T) {
 	}
 }
 
-func TestNumberKeySwitchesPrinter(t *testing.T) {
+func TestFocusedSidebarSelectsPrinter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	cfg := config.Config{
 		Server:        config.ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "test-token"},
@@ -259,14 +262,47 @@ func TestNumberKeySwitchesPrinter(t *testing.T) {
 	}
 	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{ConfigPath: path, Printers: cfg.Printers, Printer: "b1-default", Model: "B1"}, cfg.Presets, "b1-50x30")
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if !m.SidebarFocused {
+		t.Fatal("Tab did not focus printer sidebar")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.Print.Printer != "d110-default" || m.Print.Model != "D110" {
 		t.Fatalf("active printer = %q %q, want d110-default D110", m.Print.Printer, m.Print.Model)
 	}
 }
 
-func TestPrinterPanelShowsNumberedPrintersWithoutProfile(t *testing.T) {
+func TestPrinterSidebarKeysAreContextual(t *testing.T) {
+	presets := []config.LabelPreset{{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"}, {Name: "b1-50x50", WidthMM: 50, HeightMM: 50, Shape: "round"}}
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{Printers: []config.PrinterProfile{{Name: "b1", Model: "B1"}}, Printer: "b1", Model: "B1"}, presets, "b1-50x30")
+	updated, _ := m.Update(testKey("n"))
+	m = updated.(Model)
+	if m.Preset != 0 {
+		t.Fatal("legacy global roll shortcut still active")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.Preset != 1 || m.Document.HeightMM != 50 || m.Document.Shape != "round" {
+		t.Fatalf("sidebar roll selection: index=%d doc=%#v", m.Preset, m.Document)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.SidebarFocused {
+		t.Fatal("Esc did not return focus to the designer")
+	}
+}
+
+func TestPrinterPanelShowsConfiguredPrintersWithoutProfile(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{
 		Printers: []config.PrinterProfile{
 			{Name: "b1-default", Model: "B1", DeviceName: "B1-Test"},
@@ -281,14 +317,15 @@ func TestPrinterPanelShowsNumberedPrintersWithoutProfile(t *testing.T) {
 		t.Fatalf("printer panel = %q, should not contain Profile", panel)
 	}
 	if !strings.Contains(panel, "B1-Test (B1)") || !strings.Contains(panel, "D110-Test (D110)") {
-		t.Fatalf("printer panel = %q, want numbered display names", panel)
+		t.Fatalf("printer panel = %q, want printer display names", panel)
 	}
 }
 
 func TestConnectHelpRendersInPrinterPanel(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{Session: noopPrinterSession{}})
 	m.Connection = ConnectionDisconnected
-	leftPanel := strings.Join(devicePanelLines(m, layoutLeftPanelWidth), "\n")
+	m.focusSidebar()
+	leftPanel := strings.Join(sidebarLines(m, layoutLeftPanelWidth), "\n")
 	if !strings.Contains(leftPanel, "reconnect") {
 		t.Fatalf("printer panel = %q, want reconnect help", leftPanel)
 	}
@@ -334,7 +371,8 @@ func TestDisconnectShortcutClosesSessionAndAllowsReconnect(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{Session: session})
 	m.Connection = ConnectionConnected
 	m.ConnectMeta = map[string]any{"connected": true}
-	panel := strings.Join(devicePanelLines(m, layoutLeftPanelWidth), "\n")
+	m.focusSidebar()
+	panel := strings.Join(sidebarLines(m, layoutLeftPanelWidth), "\n")
 	if !strings.Contains(panel, "disconnect") || !strings.Contains(panel, "D") {
 		t.Fatalf("disconnect shortcut missing in printer panel: %q", panel)
 	}
@@ -342,7 +380,7 @@ func TestDisconnectShortcutClosesSessionAndAllowsReconnect(t *testing.T) {
 	if cmd != nil || session.closes != 1 || updated.Connection != ConnectionDisconnected || updated.ConnectMeta != nil {
 		t.Fatalf("disconnect state: cmd=%v closes=%d state=%s meta=%v", cmd, session.closes, updated.Connection, updated.ConnectMeta)
 	}
-	if panel = strings.Join(devicePanelLines(updated, layoutLeftPanelWidth), "\n"); !strings.Contains(panel, "c reconnect") || strings.Contains(panel, "D disconnect") {
+	if panel = strings.Join(sidebarLines(updated, layoutLeftPanelWidth), "\n"); !strings.Contains(panel, "c reconnect") || strings.Contains(panel, "D disconnect") {
 		t.Fatalf("reconnect shortcut missing after disconnect: %q", panel)
 	}
 	updated, cmd = updated.update(testKey("c"))
