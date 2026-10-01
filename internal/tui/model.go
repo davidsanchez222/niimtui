@@ -137,27 +137,22 @@ const (
 )
 
 type PromptState struct {
-	Mode  PromptMode
-	Value string
+	Mode   PromptMode
+	Value  string
+	Choice int
 }
 
-type MenuListMode string
-
-const (
-	MenuListNone          MenuListMode = ""
-	MenuListLabelRolls    MenuListMode = "label-rolls"
-	MenuListDesignPresets MenuListMode = "design-presets"
-)
-
 type Model struct {
-	Width         int
-	Height        int
-	Tab           tuiTab
-	GalleryIndex  int
-	GallerySeq    int
-	GalleryPNG    []byte
-	GalleryErr    string
-	CommandScroll int
+	Width            int
+	Height           int
+	Tab              tuiTab
+	GalleryIndex     int
+	GalleryCollapsed [3]bool
+	galleryStarters  []galleryItem
+	GallerySeq       int
+	GalleryPNG       []byte
+	GalleryErr       string
+	CommandScroll    int
 
 	Document      label.Document
 	Canvas        Canvas
@@ -184,17 +179,14 @@ type Model struct {
 	FontPickerIndex  int
 	FontPickerQuery  string
 
-	FocusPickerOpen bool
-	HelpOpen        bool
-	MenuOpen        bool
-	MenuIndex       int
-	MenuListMode    MenuListMode
-	MenuListIndex   int
-	AutoInsert      bool
-	SidebarFocused  bool
-	SidebarSection  sidebarSection
-	SidebarPrinter  int
-	SidebarRoll     int
+	FocusPickerOpen  bool
+	HelpOpen         bool
+	MenuOpen         bool
+	MenuIndex        int
+	AutoInsert       bool
+	SidebarFocused   bool
+	SidebarIndex     int
+	SidebarCollapsed map[string]bool
 
 	Print           PrintConfig
 	Connection      ConnectionStatus
@@ -220,7 +212,8 @@ type Model struct {
 	Status string
 	Ready  bool
 
-	Preview LivePreviewState
+	Preview   LivePreviewState
+	Selection textSelection
 }
 
 type LivePreviewProtocol string
@@ -251,7 +244,7 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 	if strings.TrimSpace(shape) != "" {
 		doc.Shape = strings.ToLower(strings.TrimSpace(shape))
 	}
-	status := "Click to select. Drag to move. Drag handles to resize."
+	status := "Click to select. Canvas drag edits; drag panel text to highlight and copy."
 	if printConfig.Discover != nil {
 		status = "Scanning for configured printers. You can start designing now."
 	}
@@ -303,6 +296,13 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		StatusBase:      status,
 		Status:          status,
 		Preview:         preview,
+	}
+	m.galleryStarters = starterGalleryItems(m.AllPresets)
+	for i, row := range m.galleryRows() {
+		if !row.Header && !row.Empty {
+			m.GalleryIndex = i
+			break
+		}
 	}
 	m.initHistory()
 	return m

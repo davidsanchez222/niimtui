@@ -176,13 +176,13 @@ func TestSwitchPresetUpdatesDocumentAndCanvas(t *testing.T) {
 		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect"},
 		{Name: "b1-50x50-round", WidthMM: 50, HeightMM: 50, Shape: "round"},
 	}
-	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{}, presets, "b1-50x30")
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{Printers: []config.PrinterProfile{{Name: "b1", Model: "B1"}}, Printer: "b1", Model: "B1"}, presets, "b1-50x30")
 	m.Width = 160
 	m.Height = 30
 	m.reflow()
 
 	m.focusSidebar()
-	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyRight})
+	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyDown})
 	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyDown})
 	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if m.Document.WidthMM != 50 || m.Document.HeightMM != 50 || m.Document.Shape != "round" {
@@ -223,6 +223,7 @@ func TestSwitchPrinterFiltersPresetsAndSavesActivePrinter(t *testing.T) {
 	}, cfg.Presets, "b1-50x30")
 
 	m.focusSidebar()
+	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyDown})
 	m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyDown})
 	cmd := m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
@@ -269,6 +270,8 @@ func TestFocusedSidebarSelectsPrinter(t *testing.T) {
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.Print.Printer != "d110-default" || m.Print.Model != "D110" {
@@ -286,7 +289,17 @@ func TestPrinterSidebarKeysAreContextual(t *testing.T) {
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
+	updated, _ = m.Update(testKey("h"))
+	m = updated.(Model)
+	if !m.SidebarCollapsed["b1"] || len(m.sidebarRows()) != 1 {
+		t.Fatal("h did not collapse the printer's rolls")
+	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(Model)
+	if m.SidebarCollapsed["b1"] {
+		t.Fatal("right arrow did not expand printer rolls")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
@@ -299,6 +312,23 @@ func TestPrinterSidebarKeysAreContextual(t *testing.T) {
 	m = updated.(Model)
 	if m.SidebarFocused {
 		t.Fatal("Esc did not return focus to the designer")
+	}
+}
+
+func TestPrinterTreeCanSelectRollOnAnotherPrinter(t *testing.T) {
+	printers := []config.PrinterProfile{{Name: "b1", Model: "B1", DefaultPreset: "b1-round"}, {Name: "d110", Model: "D110", DefaultPreset: "d110-small"}}
+	stocks := []config.LabelPreset{{Name: "b1-round", WidthMM: 50, HeightMM: 50, Shape: "round"}, {Name: "d110-small", WidthMM: 40, HeightMM: 12, Shape: "rect"}}
+	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{ConfigPath: filepath.Join(t.TempDir(), "missing.json"), Printers: printers, Printer: "b1", Model: "B1", NewSession: func(string) (PrinterSession, error) { return noopPrinterSession{}, nil }}, stocks, "b1-round")
+	m.focusSidebar()
+	if got := len(m.sidebarRows()); got != 4 {
+		t.Fatalf("tree has %d rows, want two printers and two rolls", got)
+	}
+	m.handleSidebarKey(testKey("j")) // B1 roll
+	m.handleSidebarKey(testKey("j")) // D110 printer
+	m.handleSidebarKey(testKey("j")) // D110 roll
+	cmd := m.handleSidebarKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil || m.Print.Printer != "d110" || m.Preset != 0 || m.Document.HeightMM != 12 {
+		t.Fatalf("roll selection did not switch printer and stock: cmd=%v printer=%q preset=%d", cmd, m.Print.Printer, m.Preset)
 	}
 }
 
@@ -363,6 +393,29 @@ func TestFocusedBindingLegend(t *testing.T) {
 	legend = strings.Join(footerLines(m, minTerminalWidth), "\n")
 	if strings.Contains(legend, "binding") || strings.Contains(legend, "required") {
 		t.Fatalf("binding hints still shown after clearing selection: %q", legend)
+	}
+}
+
+func TestNavigationLegendsShowArrowAndVimKeys(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{Printers: []config.PrinterProfile{{Name: "b1", Model: "B1"}}, Printer: "b1", Model: "B1"})
+	m.Width, m.Height, m.Ready = minTerminalWidth, minTerminalHeight, true
+	m.reflow()
+	m.focusSidebar()
+	if legend := strings.Join(sidebarLines(m, layoutLeftPanelWidth), "\n") + strings.Join(footerLines(m, minTerminalWidth), "\n"); !strings.Contains(legend, "↑/↓ k/j") || !strings.Contains(legend, "←/→ h/l") {
+		t.Fatalf("printer tree hints missing arrow/Vim pairs: %q", legend)
+	}
+	m.Tab = tabGallery
+	for _, line := range footerLines(m, minTerminalWidth) {
+		if width := lipgloss.Width(line); width > minTerminalWidth {
+			t.Fatalf("gallery legend exceeds terminal width: %d", width)
+		}
+	}
+	if legend := strings.Join(footerLines(m, minTerminalWidth), "\n"); !strings.Contains(legend, "↑/↓ k/j") || !strings.Contains(legend, "←/→ h/l") {
+		t.Fatalf("gallery hints missing arrow/Vim pairs: %q", legend)
+	}
+	m.Prompt = PromptState{Mode: PromptOverwriteDesign, Value: "existing"}
+	if modal := strings.Join(modalBodyLines(m, minTerminalWidth, m.canvasPanelHeight()), "\n"); !strings.Contains(modal, "↑/↓ or k/j") {
+		t.Fatalf("confirmation hints missing arrow/Vim pair: %q", modal)
 	}
 }
 

@@ -52,18 +52,54 @@ func TestOverwriteSavedDesignRequiresConfirmation(t *testing.T) {
 	}
 }
 
-func TestDeleteSavedPresetFromMenuRequiresConfirmation(t *testing.T) {
+func TestOverwritePromptCanBeNavigatedAndDefaultsToCancel(t *testing.T) {
+	path := writeDesignFeatureConfig(t)
+	m := NewModel(50, 30, "rect", "", PrintConfig{ConfigPath: path})
+	m.saveDesignPreset("box")
+	m.addTextElement()
+	m.saveDesignPreset("box")
+	if m.Prompt.Mode != PromptOverwriteDesign || m.Prompt.Choice != 0 {
+		t.Fatalf("unsafe confirmation default: %#v", m.Prompt)
+	}
+	m.handlePromptKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if len(m.DesignPresets[0].Document.Elements) != 0 {
+		t.Fatal("Enter overwrote without choosing Yes")
+	}
+	m.saveDesignPreset("box")
+	m.handlePromptKey(testKey("j"))
+	if m.Prompt.Choice != 1 {
+		t.Fatalf("j did not select Overwrite: %#v", m.Prompt)
+	}
+	m.handlePromptKey(tea.KeyMsg{Type: tea.KeyEnter})
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.DesignPresets[0].Document.Elements) != 1 {
+		t.Fatal("navigated overwrite was not persisted")
+	}
+	m.saveDesignPreset("box")
+	m.handlePromptKey(tea.KeyMsg{Type: tea.KeyUp})
+	if m.Prompt.Choice != 1 {
+		t.Fatal("up arrow did not cycle confirmation options")
+	}
+}
+
+func TestDeleteSavedPresetFromGalleryRequiresConfirmation(t *testing.T) {
 	path := writeDesignFeatureConfig(t)
 	m := NewModel(50, 30, "rect", "", PrintConfig{ConfigPath: path})
 	m.saveDesignPreset("first")
 	m.Document = label.NewDocument(40, 12)
 	m.saveDesignPreset("second")
 	m.loadDesignPreset(1)
-	m.toggleMenu()
-	m.MenuIndex = 1
-	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-	m.MenuListIndex = 0
-	m.handleMenuKey(testKey("d"))
+	m.Tab = tabGallery
+	for i, row := range m.galleryRows() {
+		if !row.Header && row.Item.Name == "first" {
+			m.GalleryIndex = i
+			break
+		}
+	}
+	m.handleGalleryKey(testKey("d"))
 	if m.Prompt.Mode != PromptDeleteDesign || m.Prompt.Value != "first" {
 		t.Fatalf("delete prompt = %#v", m.Prompt)
 	}
@@ -72,10 +108,10 @@ func TestDeleteSavedPresetFromMenuRequiresConfirmation(t *testing.T) {
 		t.Fatalf("delete alert missing from view: %s", view)
 	}
 	m.handlePromptKey(tea.KeyMsg{Type: tea.KeyEsc})
-	if len(m.DesignPresets) != 2 || !m.MenuOpen || m.MenuListMode != MenuListDesignPresets {
-		t.Fatalf("cancel changed list or closed menu: %#v", m.DesignPresets)
+	if len(m.DesignPresets) != 2 || m.Tab != tabGallery {
+		t.Fatalf("cancel changed list or gallery: %#v", m.DesignPresets)
 	}
-	m.handleMenuKey(testKey("d"))
+	m.handleGalleryKey(testKey("d"))
 	m.handlePromptKey(testKey("y"))
 	loaded, err := config.Load(path)
 	if err != nil {
@@ -84,14 +120,14 @@ func TestDeleteSavedPresetFromMenuRequiresConfirmation(t *testing.T) {
 	if len(loaded.DesignPresets) != 1 || loaded.DesignPresets[0].Name != "second" || m.DesignPreset != 0 || m.Document.WidthMM != 40 {
 		t.Fatalf("delete changed selected design or canvas: %#v, index=%d, doc=%#v", loaded.DesignPresets, m.DesignPreset, m.Document)
 	}
-	m.handleMenuKey(testKey("d"))
+	m.handleGalleryKey(testKey("d"))
 	m.handlePromptKey(testKey("y"))
 	loaded, err = config.Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(loaded.DesignPresets) != 0 || m.DesignPreset != -1 || m.MenuOpen || m.Document.WidthMM != 40 {
-		t.Fatalf("last delete state: %#v, index=%d, open=%t, doc=%#v", loaded.DesignPresets, m.DesignPreset, m.MenuOpen, m.Document)
+	if len(loaded.DesignPresets) != 0 || m.DesignPreset != -1 || m.Tab != tabGallery || m.Document.WidthMM != 40 {
+		t.Fatalf("last delete state: %#v, index=%d, tab=%d, doc=%#v", loaded.DesignPresets, m.DesignPreset, m.Tab, m.Document)
 	}
 }
 

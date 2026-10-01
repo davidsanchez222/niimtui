@@ -25,10 +25,27 @@ func TestGalleryBuildsRenderableStarterLayoutsAndSavedDesigns(t *testing.T) {
 	saved.Shape = "round"
 	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{DesignPresets: []config.DesignPreset{{Name: "my design", Document: saved}}}, stocks, "b1-round")
 	items := m.galleryItems()
-	if len(items) != 6 || !items[5].Saved || items[5].Name != "my design" {
+	if len(items) < 3 || !items[len(items)-1].Saved || items[len(items)-1].Name != "my design" {
 		t.Fatalf("gallery items = %#v", items)
 	}
+	headers := []string{}
+	for _, row := range m.galleryRows() {
+		if row.Header {
+			headers = append(headers, row.Group.title())
+		}
+	}
+	if strings.Join(headers, ",") != "B1,D110,Custom" {
+		t.Fatalf("gallery headers = %v", headers)
+	}
 	for _, item := range items {
+		if item.Group == galleryD110 && strings.Contains(strings.ToLower(item.Name), "title") {
+			t.Fatalf("small roll has clipped text template: %q", item.Name)
+		}
+		for _, element := range item.Document.Elements {
+			if !item.Saved && element.Text != nil && element.Text.FontSize != 40 {
+				t.Fatalf("starter font size = %v for %q", element.Text.FontSize, item.Name)
+			}
+		}
 		result, err := render.RenderDocument(item.Document)
 		if err != nil {
 			t.Fatalf("render %q: %v", item.Name, err)
@@ -37,6 +54,44 @@ func TestGalleryBuildsRenderableStarterLayoutsAndSavedDesigns(t *testing.T) {
 			t.Fatalf("invalid preview for %q: %v", item.Name, err)
 		}
 	}
+}
+
+func TestGalleryGroupsCollapseWithoutLosingSavedDesigns(t *testing.T) {
+	stock := config.LabelPreset{Name: "b1-round", WidthMM: 50, HeightMM: 50, Shape: "round"}
+	doc := label.NewDocument(50, 50)
+	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{DesignPresets: []config.DesignPreset{{Name: "my box", Document: doc}}}, []config.LabelPreset{stock}, stock.Name)
+	m.Tab = tabGallery
+	m.GalleryIndex = galleryRowIndex(t, m, "b1-round / QR")
+	m.handleGalleryKey(testKey("h"))
+	if !m.GalleryCollapsed[galleryB1] {
+		t.Fatal("h did not collapse B1")
+	}
+	if _, ok := m.currentGalleryItem(); ok {
+		t.Fatal("cursor remained on hidden item")
+	}
+	if galleryRowIndex(t, m, "my box") <= m.GalleryIndex {
+		t.Fatal("custom design disappeared when B1 collapsed")
+	}
+	m.handleGalleryKey(testKey("l"))
+	if m.GalleryCollapsed[galleryB1] {
+		t.Fatal("l did not expand B1")
+	}
+	m.GalleryIndex = galleryRowIndex(t, m, "my box")
+	m.handleGalleryKey(testKey("d"))
+	if m.Prompt.Mode != PromptDeleteDesign || m.Prompt.Value != "my box" {
+		t.Fatalf("gallery deletion prompt = %#v", m.Prompt)
+	}
+}
+
+func galleryRowIndex(t *testing.T, m Model, name string) int {
+	t.Helper()
+	for i, row := range m.galleryRows() {
+		if !row.Header && !row.Empty && row.Item.Name == name {
+			return i
+		}
+	}
+	t.Fatalf("gallery row %q not found", name)
+	return -1
 }
 
 func TestGalleryTabsKeepDraftAndConfirmBeforeReplacingIt(t *testing.T) {
@@ -80,7 +135,7 @@ func TestGalleryPreviewIgnoresStaleRender(t *testing.T) {
 	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{}, stocks, "b1-50x50")
 	m.Tab = tabGallery
 	first := m.requestGalleryPreview()
-	m.GalleryIndex = 1
+	m.GalleryIndex = galleryRowIndex(t, m, "b1-50x50 / QR + title")
 	second := m.requestGalleryPreview()
 	m.onGalleryRendered(first().(galleryRenderedMsg))
 	if len(m.GalleryPNG) != 0 {
@@ -94,10 +149,10 @@ func TestGalleryPreviewIgnoresStaleRender(t *testing.T) {
 
 func TestGalleryImagePreviewTracksSelectedLabelSize(t *testing.T) {
 	stocks := []config.LabelPreset{
-		{Name: "wide", WidthMM: 50, HeightMM: 30, Shape: "rect"},
-		{Name: "square", WidthMM: 50, HeightMM: 50, Shape: "round"},
+		{Name: "b1-wide", WidthMM: 50, HeightMM: 30, Shape: "rect"},
+		{Name: "b1-square", WidthMM: 50, HeightMM: 50, Shape: "round"},
 	}
-	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{}, stocks, "wide")
+	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{}, stocks, "b1-wide")
 	m.Tab = tabGallery
 	m.Preview.Protocol = LivePreviewKitty
 	m.Width, m.Height = minTerminalWidth, minTerminalHeight
@@ -111,8 +166,11 @@ func TestGalleryImagePreviewTracksSelectedLabelSize(t *testing.T) {
 	previous := os.Stdout
 	os.Stdout = f
 	defer func() { os.Stdout = previous }()
-	for _, selected := range []struct{ index, heightPx, previewLines int }{{0, 240, 12}, {3, 400, 16}} { // first wide, then first square layout
-		index := selected.index
+	for _, selected := range []struct {
+		name                   string
+		heightPx, previewLines int
+	}{{"b1-wide / QR", 240, 12}, {"b1-square / QR", 400, 16}} {
+		index := galleryRowIndex(t, m, selected.name)
 		m.GalleryIndex = index
 		msg := m.requestGalleryPreview()().(galleryRenderedMsg)
 		if msg.Err != nil {
@@ -180,13 +238,32 @@ func TestMouseTabSelection(t *testing.T) {
 	m.reflow()
 	updated, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: m.Width/2 + 5, Y: 1})
 	m = updated.(Model)
+	updated, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: m.Width/2 + 5, Y: 1})
+	m = updated.(Model)
 	if m.Tab != tabGallery {
 		t.Fatal("clicking Gallery tab did not switch tabs")
 	}
 	updated, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: m.Width/2 - 5, Y: 1})
 	m = updated.(Model)
+	updated, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: m.Width/2 - 5, Y: 1})
+	m = updated.(Model)
 	if m.Tab != tabDesigner {
 		t.Fatal("clicking Designer tab did not switch tabs")
+	}
+}
+
+func TestMouseClickStillCollapsesGalleryHeader(t *testing.T) {
+	stock := config.LabelPreset{Name: "b1-round", WidthMM: 50, HeightMM: 50, Shape: "round"}
+	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{}, []config.LabelPreset{stock}, stock.Name)
+	m.Width, m.Height, m.Ready = minTerminalWidth, minTerminalHeight, true
+	m.Tab = tabGallery
+	m.reflow()
+	updated, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 5, Y: layoutBodyTop + 3})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 5, Y: layoutBodyTop + 3})
+	m = updated.(Model)
+	if !m.GalleryCollapsed[galleryB1] {
+		t.Fatal("clicking B1 header did not collapse its designs")
 	}
 }
 
@@ -199,7 +276,7 @@ func TestGalleryShowsCommandForSavedDesign(t *testing.T) {
 		Printers: []config.PrinterProfile{printer}, Printer: printer.Name, Model: printer.Model,
 		ConfigPath: "/tmp/label config.json", DesignPresets: []config.DesignPreset{{Name: "my label", Document: doc}},
 	}, []config.LabelPreset{stock}, stock.Name)
-	m.GalleryIndex = len(m.galleryItems()) - 1
+	m.GalleryIndex = galleryRowIndex(t, m, "my label")
 	m.showGalleryCommand()
 	if m.Prompt.Mode != PromptCommand || !strings.Contains(m.Prompt.Value, "--design 'my label'") {
 		t.Fatalf("command dialog = %#v", m.Prompt)
@@ -207,5 +284,43 @@ func TestGalleryShowsCommandForSavedDesign(t *testing.T) {
 	m.handlePromptKey(tea.KeyMsg{Type: tea.KeyEsc})
 	if m.Prompt.Mode != PromptNone {
 		t.Fatal("command dialog did not close")
+	}
+}
+
+func TestSavedPrintCommandOmitsDefaultConfigButKeepsCustomConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	defaultPath, err := config.DefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stock := config.LabelPreset{Name: "b1-50x50", WidthMM: 50, HeightMM: 50, Shape: "round"}
+	doc := label.NewDocument(50, 50)
+	doc.Shape = "round"
+	model := NewModelWithPresets(50, 50, "round", "", PrintConfig{
+		Printer: "b1", Model: "B1", ConfigPath: defaultPath,
+		Printers:      []config.PrinterProfile{{Name: "b1", Model: "B1"}},
+		DesignPresets: []config.DesignPreset{{Name: "my label", Document: doc}},
+	}, []config.LabelPreset{stock}, stock.Name)
+	model.GalleryIndex = galleryRowIndex(t, model, "my label")
+	model.showGalleryCommand()
+	if strings.Contains(model.Prompt.Value, "--config") {
+		t.Fatalf("default path in print command: %q", model.Prompt.Value)
+	}
+	model.Prompt = PromptState{}
+	model.Print.ConfigPath = filepath.Join(t.TempDir(), "other config.json")
+	model.showGalleryCommand()
+	if !strings.Contains(model.Prompt.Value, "--config '") {
+		t.Fatalf("custom config path omitted: %q", model.Prompt.Value)
+	}
+	t.Setenv("XDG_CONFIG_HOME", ".relative-config")
+	relativeDefault, err := config.DefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	model.Prompt = PromptState{}
+	model.Print.ConfigPath = relativeDefault
+	model.showGalleryCommand()
+	if strings.Contains(model.Prompt.Value, "--config") {
+		t.Fatalf("relative default path in print command: %q", model.Prompt.Value)
 	}
 }

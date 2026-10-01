@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,10 +63,17 @@ func (m *Model) persistDesignPreset(name string) bool {
 	}
 	m.DesignPresets = updated
 	m.DesignPreset = index
+	m.GalleryCollapsed[galleryCustom] = false
+	for i, row := range m.galleryRows() {
+		if !row.Header && row.Item.Saved && row.Item.Name == name {
+			m.GalleryIndex = i
+			break
+		}
+	}
 	m.cleanDocument = cloneDocument(m.Document)
 	m.cleanBindings = append([]config.DesignBinding(nil), m.Bindings...)
 	m.unsavedTemplate = false
-	m.setStatus("Saved design preset %q.", name)
+	m.setStatus("Saved design %q. Open Gallery (Ctrl+T) to view it.", name)
 	return true
 }
 
@@ -96,11 +102,7 @@ func (m *Model) deleteDesignPreset(name string) bool {
 	} else if m.DesignPreset > index {
 		m.DesignPreset--
 	}
-	if len(updated) == 0 {
-		m.closeMenu("")
-	} else {
-		m.MenuListIndex = min(m.MenuListIndex, len(updated)-1)
-	}
+	m.reconcileGalleryAfterDelete(name)
 	m.setStatus("Deleted saved preset %q. Current canvas unchanged.", name)
 	return true
 }
@@ -120,19 +122,6 @@ func saveDesignPresets(path string, presets []config.DesignPreset) error {
 	}
 	cfg.DesignPresets = cloneDesignPresets(presets)
 	return config.Save(path, cfg)
-}
-
-func (m *Model) loadNextDesignPreset() bool {
-	if len(m.DesignPresets) == 0 {
-		m.setStatus("No saved design presets.")
-		return true
-	}
-	next := m.DesignPreset + 1
-	if next < 0 || next >= len(m.DesignPresets) {
-		next = 0
-	}
-	m.loadDesignPreset(next)
-	return true
 }
 
 func (m *Model) loadDesignPreset(index int) {
@@ -247,16 +236,6 @@ func nextIDForDocument(doc label.Document) int {
 		}
 	}
 	return nextID
-}
-
-func (m Model) currentDesignPresetLabel() string {
-	if m.DesignPreset >= 0 && m.DesignPreset < len(m.DesignPresets) {
-		return m.DesignPresets[m.DesignPreset].Name
-	}
-	if len(m.DesignPresets) == 0 {
-		return "none"
-	}
-	return fmt.Sprintf("%d saved", len(m.DesignPresets))
 }
 
 func cleanExportPath(path string) string {

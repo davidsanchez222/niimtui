@@ -97,6 +97,10 @@ const (
 )
 
 func (m Model) View() string {
+	return highlightSelection(m.view(), m.Selection)
+}
+
+func (m Model) view() string {
 	if !m.Ready {
 		return "Loading label designer..."
 	}
@@ -230,7 +234,7 @@ func modalBodyLines(m Model, width, height int) []string {
 	if m.confirmPromptOpen() {
 		switch m.Prompt.Mode {
 		case PromptCommand:
-			content = []string{propertyTitleStyle.Render("Print this saved design"), "", mutedStyle.Render("c copies full command · ↑/↓ scroll · esc closes"), ""}
+			content = []string{propertyTitleStyle.Render("Print this saved design"), "", mutedStyle.Render("c copies full command · ↑/↓ or k/j scroll · esc closes"), ""}
 			wrapped := wrapCommand(m.Prompt.Value, 76)
 			start := min(m.CommandScroll, max(0, len(wrapped)-max(1, height-9)))
 			content = append(content, wrapped[start:min(len(wrapped), start+max(1, height-9))]...)
@@ -245,7 +249,21 @@ func modalBodyLines(m Model, width, height int) []string {
 				verb = "Discard edits and open"
 				title = "Discard unsaved edits?"
 			}
-			content = []string{propertyTitleStyle.Render(title), "", fmt.Sprintf("%s %q?", verb, m.Prompt.Value), "", mutedStyle.Render("y confirms · n or esc cancels")}
+			content = []string{propertyTitleStyle.Render(title), "", fmt.Sprintf("%s %q?", verb, m.Prompt.Value), "", mutedStyle.Render("↑/↓ or k/j choose · enter selects · y/n shortcuts"), ""}
+			for i, option := range []string{"[n] Cancel", "[y] " + verb} {
+				prefix := "  "
+				if i == m.Prompt.Choice {
+					prefix = "> "
+				}
+				style := lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
+				if i == 1 {
+					style = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+				}
+				if i == m.Prompt.Choice {
+					style = style.Bold(true).Background(lipgloss.Color("236"))
+				}
+				content = append(content, style.Render(prefix+option))
+			}
 		}
 	} else if m.MenuOpen {
 		content = menuModalContent(m)
@@ -768,7 +786,7 @@ func helpModalContent() []string {
 		helpRow("I", "Toggle inverted black/white colors"),
 		helpRow("tab / ctrl+t", "Printer controls / switch designer and gallery"),
 		helpRow("s", "Save current design preset"),
-		helpRow("hjkl / arrows", "Move selected element by one canvas cell"),
+		helpRow("↑↓←→ / kjhl", "Move selected element by one canvas cell"),
 		helpRow("H / L", "Shrink / grow selected width"),
 		helpRow("K / J", "Shrink / grow selected height"),
 		helpRow("[ ] / { }", "Resize diagonally from the bottom-right"),
@@ -782,17 +800,11 @@ func helpModalContent() []string {
 }
 
 func menuModalContent(m Model) []string {
-	if m.MenuListMode != MenuListNone {
-		return menuListModalContent(m)
-	}
 	autoInsert := "off"
 	if m.AutoInsert {
 		autoInsert = "on"
 	}
 	items := []string{
-		"Label roll: " + m.currentPresetLabel(),
-		"Saved preset: " + m.currentDesignPresetLabel(),
-		"Save current design",
 		"Auto Insert on Text/QR Creation: " + autoInsert,
 		"Close",
 	}
@@ -811,56 +823,8 @@ func menuModalContent(m Model) []string {
 	}
 	lines = append(lines,
 		"",
-		mutedStyle.Render("j/k or arrows move, enter opens/selects, esc closes"),
+		mutedStyle.Render("↑/↓ or k/j move, enter selects, esc closes"),
 	)
-	return lines
-}
-
-func menuListModalContent(m Model) []string {
-	title := "Select"
-	items := []string{}
-	activeIndex := -1
-	switch m.MenuListMode {
-	case MenuListLabelRolls:
-		title = "Label Rolls"
-		activeIndex = m.Preset
-		for _, preset := range m.Presets {
-			items = append(items, preset.Name)
-		}
-	case MenuListDesignPresets:
-		title = "Saved Presets"
-		activeIndex = m.DesignPreset
-		for _, preset := range m.DesignPresets {
-			items = append(items, preset.Name)
-		}
-	}
-
-	lines := []string{
-		propertyTitleStyle.Render(title),
-		"",
-	}
-	if len(items) == 0 {
-		lines = append(lines, mutedStyle.Render("No items available"))
-	} else {
-		for i, item := range items {
-			prefix := "  "
-			style := helpLabelStyle
-			if i == m.MenuListIndex {
-				prefix = "> "
-				style = propertySelectedStyle
-			}
-			marker := ""
-			if i == activeIndex {
-				marker = " *"
-			}
-			lines = append(lines, style.Render(prefix+item+marker))
-		}
-	}
-	help := "j/k or arrows move, enter selects, esc closes"
-	if m.MenuListMode == MenuListDesignPresets {
-		help = "j/k or arrows move, enter loads, d deletes, esc closes"
-	}
-	lines = append(lines, "", mutedStyle.Render(help))
 	return lines
 }
 
@@ -879,8 +843,8 @@ func footerLines(m Model, width int) []string {
 	if m.Tab == tabGallery {
 		return []string{
 			footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
-			centerStyledLine(helpItem("ctrl+t", "designer")+"  "+helpItem("↑/↓", "browse")+"  "+helpItem("enter", "edit")+"  "+helpItem("c", "print command"), width),
-			strings.Repeat(" ", width), strings.Repeat(" ", width),
+			centerStyledLine(helpItem("ctrl+t", "designer")+"  "+helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open")+"  "+helpItem("c", "command")+"  "+helpItem("d", "delete"), width),
+			strings.Repeat(" ", width), centerStyledLine(helpItem("drag", "highlight/copy text"), width),
 			centerStyledLine(helpItem("ctrl+c", "quit"), width),
 		}
 	}
@@ -889,7 +853,7 @@ func footerLines(m Model, width int) []string {
 			footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
 			centerStyledLine(sidebarFooter(m), width),
 			centerStyledLine(helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan"), width),
-			strings.Repeat(" ", width),
+			centerStyledLine(helpItem("drag", "highlight/copy text"), width),
 			centerStyledLine(helpItem("ctrl+c", "quit"), width),
 		}
 	}
@@ -918,10 +882,10 @@ func footerLines(m Model, width int) []string {
 	movement := strings.Join([]string{
 		helpItem("tab", "printer"),
 		helpItem("ctrl+t", "gallery"),
-		helpItem("hjkl", "move"),
+		helpItem("↑↓←→/kjhl", "move"),
 		helpItem("HJKL", "resize w/h"),
 		helpItem("[]/{}", "resize diagonal"),
-		helpItem("+/-", "font/QR size"),
+		helpItem("+/-", "size"),
 		helpItem("g", "grid"),
 		helpItem("I", "invert colors"),
 		helpItem("m", "menu"),
@@ -973,9 +937,9 @@ func fontPickerLinesWithLimit(m Model, width, itemLimit int) []string {
 	if m.FontPickerSearch {
 		searchValue += string(promptCursorRune)
 	}
-	help := "browse: / search j/k ctrl+d/u"
+	help := "browse: ↑/↓ or k/j"
 	if m.FontPickerSearch {
-		help = "search: type ctrl+n/p esc"
+		help = "type · ↑/↓ or ctrl+n/p"
 	}
 	lines := []string{
 		propertyItem("Search", searchValue),

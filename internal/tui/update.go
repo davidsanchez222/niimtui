@@ -57,12 +57,21 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	if resized, ok := msg.(tea.WindowSizeMsg); ok {
+		m.Selection = textSelection{}
 		m.Width = resized.Width
 		m.Height = resized.Height
 		m.Ready = true
 		m.reflow()
 		m.refreshStatus()
 		return m, m.livePreviewResizeCmd()
+	}
+	if mouse, ok := msg.(tea.MouseMsg); ok {
+		if handled, cmd := m.handleSelectableMouse(mouse); handled {
+			return m, cmd
+		}
+	}
+	if _, ok := msg.(tea.KeyMsg); ok {
+		m.Selection = textSelection{}
 	}
 	if m.Prompt.Mode != PromptNone {
 		switch input := msg.(type) {
@@ -88,26 +97,6 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.MouseMsg:
 		if m.MenuOpen || m.HelpOpen {
 			return m, nil
-		}
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			if msg.Y == 1 {
-				if tab, ok := tabAt(m.Width, msg.X); ok {
-					return m, m.switchTab(tab)
-				}
-			}
-			if m.Tab == tabGallery && msg.Y >= layoutBodyTop+3 && msg.X < layoutLeftPanelWidth {
-				items := m.galleryItems()
-				start, _ := sidebarWindow(len(items), m.GalleryIndex, max(1, m.canvasPanelHeight()-7))
-				index := start + msg.Y - layoutBodyTop - 3
-				if index >= 0 && index < len(items) {
-					m.GalleryIndex = index
-					cmd := m.requestGalleryPreview()
-					if m.Preview.Protocol == LivePreviewKitty {
-						cmd = tea.Batch(clearTerminalLivePreviewCmd(m.canvasPanelWidth()), cmd)
-					}
-					return m, cmd
-				}
-			}
 		}
 		if m.Tab == tabGallery {
 			return m, nil

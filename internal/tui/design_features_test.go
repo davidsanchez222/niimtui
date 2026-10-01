@@ -110,7 +110,8 @@ func TestSaveAndLoadDesignPreset(t *testing.T) {
 	}
 	m.Document = label.NewDocument(10, 10)
 	m.DesignPresets = loaded.DesignPresets
-	m.loadNextDesignPreset()
+	m.GalleryIndex = galleryRowIndex(t, m, "saved-layout")
+	m.loadGalleryItem(m.galleryRows()[m.GalleryIndex].Item)
 	if !m.Document.Inverted || len(m.Document.Elements) != 1 || m.Document.Elements[0].Text.Value != "Saved" {
 		t.Fatalf("loaded document = %#v", m.Document)
 	}

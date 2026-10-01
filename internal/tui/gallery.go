@@ -27,6 +27,33 @@ type galleryItem struct {
 	Bindings []config.DesignBinding
 	Saved    bool
 	Stock    string
+	Group    galleryGroup
+}
+
+type galleryGroup uint8
+
+const (
+	galleryB1 galleryGroup = iota
+	galleryD110
+	galleryCustom
+)
+
+func (group galleryGroup) title() string {
+	switch group {
+	case galleryB1:
+		return "B1"
+	case galleryD110:
+		return "D110"
+	default:
+		return "Custom"
+	}
+}
+
+type galleryRow struct {
+	Group  galleryGroup
+	Header bool
+	Empty  bool
+	Item   galleryItem
 }
 
 type galleryRenderedMsg struct {
@@ -36,23 +63,78 @@ type galleryRenderedMsg struct {
 }
 
 func (m Model) galleryItems() []galleryItem {
-	items := make([]galleryItem, 0, len(m.DesignPresets)+len(m.AllPresets)*3)
-	stocks := m.AllPresets
-	if len(stocks) == 0 {
-		stocks = []config.LabelPreset{{Name: "custom", WidthMM: m.Document.WidthMM, HeightMM: m.Document.HeightMM, Shape: m.Document.Shape}}
-	}
-	for _, stock := range stocks {
-		for _, kind := range []string{"QR", "QR + title", "Title + details"} {
-			if kind == "QR + title" && math.Min(stock.WidthMM, stock.HeightMM) < 24 {
-				continue
-			}
-			items = append(items, galleryItem{Name: stock.Name + " / " + kind, Document: starterDocument(stock, kind), Stock: stock.Name})
-		}
-	}
+	items := make([]galleryItem, 0, len(m.DesignPresets)+len(m.galleryStarters))
+	items = append(items, m.galleryStarters...)
 	for _, saved := range m.DesignPresets {
-		items = append(items, galleryItem{Name: saved.Name, Document: saved.Document, Bindings: saved.Bindings, Saved: true})
+		items = append(items, galleryItem{Name: saved.Name, Document: saved.Document, Bindings: saved.Bindings, Saved: true, Group: galleryCustom})
 	}
 	return items
+}
+
+func starterGalleryItems(stocks []config.LabelPreset) []galleryItem {
+	items := make([]galleryItem, 0, len(stocks)*3)
+	for _, stock := range stocks {
+		var group galleryGroup
+		switch {
+		case strings.HasPrefix(strings.ToLower(stock.Name), "b1-"):
+			group = galleryB1
+		case strings.HasPrefix(strings.ToLower(stock.Name), "d110-"):
+			group = galleryD110
+		default:
+			continue
+		}
+		for _, kind := range []string{"QR", "QR + title", "Title + details"} {
+			doc := starterDocument(stock, kind)
+			if !starterTextFits(doc) {
+				continue
+			}
+			items = append(items, galleryItem{Name: stock.Name + " / " + kind, Document: doc, Stock: stock.Name, Group: group})
+		}
+	}
+	return items
+}
+
+func starterTextFits(doc label.Document) bool {
+	for _, element := range doc.Elements {
+		if element.Text == nil {
+			continue
+		}
+		height, err := render.RequiredTextHeightMM(element, element.WidthMM)
+		if err != nil || height > element.HeightMM {
+			return false
+		}
+	}
+	return true
+}
+
+func (m Model) galleryRows() []galleryRow {
+	items := m.galleryItems()
+	rows := make([]galleryRow, 0, len(items)+3)
+	for _, group := range []galleryGroup{galleryB1, galleryD110, galleryCustom} {
+		rows = append(rows, galleryRow{Group: group, Header: true})
+		if m.GalleryCollapsed[group] {
+			continue
+		}
+		count := 0
+		for _, item := range items {
+			if item.Group == group {
+				rows = append(rows, galleryRow{Group: group, Item: item})
+				count++
+			}
+		}
+		if count == 0 {
+			rows = append(rows, galleryRow{Group: group, Empty: true})
+		}
+	}
+	return rows
+}
+
+func (m Model) currentGalleryRow() (galleryRow, bool) {
+	rows := m.galleryRows()
+	if m.GalleryIndex < 0 || m.GalleryIndex >= len(rows) {
+		return galleryRow{}, false
+	}
+	return rows[m.GalleryIndex], true
 }
 
 func starterDocument(stock config.LabelPreset, kind string) label.Document {
@@ -60,7 +142,7 @@ func starterDocument(stock config.LabelPreset, kind string) label.Document {
 	doc.Shape = stock.Shape
 	w, h := stock.WidthMM, stock.HeightMM
 	margin := math.Max(1, math.Min(w, h)*0.07)
-	textSize := math.Max(10, math.Min(18, h*0.55))
+	textSize := 40.0
 	switch kind {
 	case "QR":
 		size := math.Min(w, h) * 0.64
@@ -72,18 +154,48 @@ func starterDocument(stock config.LabelPreset, kind string) label.Document {
 	default:
 		doc.Elements = append(doc.Elements,
 			label.NewTextElement("text-1", "Item title", margin, h*0.17, w-2*margin, h*0.3, textSize),
-			label.NewTextElement("text-2", "Details", margin, h*0.55, w-2*margin, h*0.24, math.Max(9, textSize*0.8)),
+			label.NewTextElement("text-2", "Details", margin, h*0.55, w-2*margin, h*0.24, textSize),
 		)
 	}
 	return doc
 }
 
 func (m Model) currentGalleryItem() (galleryItem, bool) {
-	items := m.galleryItems()
-	if m.GalleryIndex < 0 || m.GalleryIndex >= len(items) {
+	row, ok := m.currentGalleryRow()
+	if !ok || row.Header || row.Empty {
 		return galleryItem{}, false
 	}
-	return items[m.GalleryIndex], true
+	return row.Item, true
+}
+
+func (m *Model) toggleGalleryGroup(group galleryGroup, collapsed bool) {
+	if m.GalleryCollapsed[group] == collapsed {
+		return
+	}
+	selected, _ := m.currentGalleryRow()
+	m.GalleryCollapsed[group] = collapsed
+	rows := m.galleryRows()
+	for i, row := range rows {
+		if (selected.Group == group && collapsed && row.Header && row.Group == group) ||
+			(row.Header == selected.Header && row.Empty == selected.Empty && row.Group == selected.Group && (row.Header || row.Item.Name == selected.Item.Name)) {
+			m.GalleryIndex = i
+			break
+		}
+	}
+}
+
+func (m *Model) reconcileGalleryAfterDelete(_ string) {
+	m.GalleryPNG = nil
+	m.GallerySeq++
+	for i, row := range m.galleryRows() {
+		if row.Group == galleryCustom && !row.Header && !row.Empty {
+			m.GalleryIndex = i
+			return
+		}
+		if row.Group == galleryCustom && row.Header {
+			m.GalleryIndex = i
+		}
+	}
 }
 
 func (m *Model) switchTab(tab tuiTab) tea.Cmd {
@@ -92,7 +204,7 @@ func (m *Model) switchTab(tab tuiTab) tea.Cmd {
 	}
 	m.Tab = tab
 	m.SidebarFocused = false
-	m.setStatus("Label gallery: arrows browse, Enter opens design, c shows saved print command.")
+	m.setStatus("Label gallery: ↑/↓ or k/j browse, ←/→ or h/l fold, Enter opens, c shows saved print command.")
 	if tab == tabGallery {
 		cmd := m.requestGalleryPreview()
 		if m.Preview.Protocol == LivePreviewKitty {
@@ -112,24 +224,49 @@ func (m *Model) switchTab(tab tuiTab) tea.Cmd {
 }
 
 func (m *Model) handleGalleryKey(key tea.KeyMsg) tea.Cmd {
-	items := m.galleryItems()
+	rows := m.galleryRows()
 	switch key.String() {
 	case "up", "k", "down", "j":
-		if len(items) == 0 {
+		if len(rows) == 0 {
 			return nil
 		}
 		step := 1
 		if key.String() == "up" || key.String() == "k" {
 			step = -1
 		}
-		m.GalleryIndex = (m.GalleryIndex + step + len(items)) % len(items)
+		for i := 0; i < len(rows); i++ {
+			m.GalleryIndex = (m.GalleryIndex + step + len(rows)) % len(rows)
+			if !rows[m.GalleryIndex].Empty {
+				break
+			}
+		}
 		cmd := m.requestGalleryPreview()
 		if m.Preview.Protocol == LivePreviewKitty {
 			return tea.Batch(clearTerminalLivePreviewCmd(m.canvasPanelWidth()), cmd)
 		}
 		return cmd
+	case "left", "h", "right", "l", " ":
+		row, ok := m.currentGalleryRow()
+		if !ok {
+			return nil
+		}
+		collapsed := key.String() == "left" || key.String() == "h"
+		if key.String() == " " {
+			collapsed = !m.GalleryCollapsed[row.Group]
+		}
+		m.toggleGalleryGroup(row.Group, collapsed)
+		return m.requestGalleryPreview()
 	case "enter":
+		if row, ok := m.currentGalleryRow(); ok && row.Header {
+			m.toggleGalleryGroup(row.Group, !m.GalleryCollapsed[row.Group])
+			return m.requestGalleryPreview()
+		}
 		return m.openGalleryItem()
+	case "d":
+		if item, ok := m.currentGalleryItem(); ok && item.Saved {
+			m.Prompt = PromptState{Mode: PromptDeleteDesign, Value: item.Name}
+			m.refreshPromptStatus()
+		}
 	case "c":
 		m.showGalleryCommand()
 	}
@@ -139,7 +276,9 @@ func (m *Model) handleGalleryKey(key tea.KeyMsg) tea.Cmd {
 func (m *Model) requestGalleryPreview() tea.Cmd {
 	item, ok := m.currentGalleryItem()
 	if !ok {
+		m.GallerySeq++
 		m.GalleryPNG = nil
+		m.GalleryErr = ""
 		return nil
 	}
 	m.GallerySeq++
@@ -251,31 +390,44 @@ func (m Model) galleryPreviewCellSize(width int) (int, int) {
 }
 
 func galleryListLines(m Model, width int) []string {
-	items := m.galleryItems()
-	lines := []string{propertyTitleStyle.Render("Label gallery"), mutedStyle.Render("↑/↓ browse · enter edit"), ""}
-	if len(items) == 0 {
-		return append(lines, mutedStyle.Render("No designs available"))
-	}
+	items := m.galleryRows()
+	lines := []string{propertyTitleStyle.Render("Label gallery"), mutedStyle.Render("↑/↓ or k/j browse"), ""}
 	start, end := sidebarWindow(len(items), m.GalleryIndex, max(1, m.canvasPanelHeight()-7))
 	for i := start; i < end; i++ {
-		item := items[i]
+		row := items[i]
 		prefix := "  "
 		if i == m.GalleryIndex {
 			prefix = "> "
 		}
+		if row.Header {
+			arrow := "▾ "
+			if m.GalleryCollapsed[row.Group] {
+				arrow = "▸ "
+			}
+			lines = append(lines, propertyTitleStyle.Render(prefix+arrow+row.Group.title()))
+			continue
+		}
+		if row.Empty {
+			lines = append(lines, mutedStyle.Render("    No labels configured"))
+			continue
+		}
+		item := row.Item
 		mark := " "
 		if !m.galleryCompatible(item) {
 			mark = "!"
 		}
-		lines = append(lines, truncateText(prefix+mark+" "+item.Name, width))
+		lines = append(lines, truncateText(prefix+mark+" "+strings.TrimPrefix(item.Name, item.Stock+" / "), width))
 	}
-	lines = append(lines, "", mutedStyle.Render("! = no matching installed roll"), helpItem("c", "saved print command"))
+	lines = append(lines, "", mutedStyle.Render("! = no matching roll"), helpItem("c", "command")+"  "+helpItem("d", "delete"))
 	return padLines(lines, width)
 }
 
 func (m Model) galleryPreviewLines(width int) []string {
 	item, ok := m.currentGalleryItem()
 	if !ok {
+		if row, selected := m.currentGalleryRow(); selected && row.Header {
+			return padLines([]string{propertyTitleStyle.Render(row.Group.title()), "", mutedStyle.Render("↑/↓ or k/j browse"), mutedStyle.Render("←/→ or h/l fold")}, width)
+		}
 		return padLines([]string{"No label selected"}, width)
 	}
 	source := "Starter design"

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -73,7 +74,17 @@ func (m *Model) showGalleryCommand() {
 			}
 		}
 	}
-	command, err := savedPrintCommand(item, printer, stock, m.Print.ConfigPath)
+	path := m.Print.ConfigPath
+	if path != "" {
+		if defaultPath, err := config.DefaultPath(); err == nil {
+			resolved, pathErr := filepath.Abs(path)
+			defaultResolved, defaultErr := filepath.Abs(defaultPath)
+			if pathErr == nil && defaultErr == nil && resolved == defaultResolved {
+				path = ""
+			}
+		}
+	}
+	command, err := savedPrintCommand(item, printer, stock, path)
 	if err != nil {
 		m.setStatus("Print command: %v", err)
 		return

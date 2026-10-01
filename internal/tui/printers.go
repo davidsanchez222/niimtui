@@ -166,12 +166,6 @@ func (m *Model) applyPrinter(printer config.PrinterProfile) tea.Cmd {
 
 func (m *Model) setPrinterProfile(printer config.PrinterProfile, resize bool) {
 	m.Print.Printer = printer.Name
-	for i, candidate := range m.Print.Printers {
-		if candidate.Name == printer.Name {
-			m.SidebarPrinter = i
-			break
-		}
-	}
 	m.Print.Model = printer.Model
 	m.Print.DeviceName = printer.DeviceName
 	m.Print.Identifier = printer.Identifier
@@ -189,7 +183,6 @@ func (m *Model) setPrinterProfile(printer config.PrinterProfile, resize bool) {
 	} else {
 		m.Preset = activePresetIndex(m.Presets, "", m.Document)
 	}
-	m.SidebarRoll = max(0, m.Preset)
 }
 
 func (m *Model) connectSelectedPrinter() tea.Cmd {

@@ -41,7 +41,19 @@ func (m *Model) handlePromptKey(msg tea.KeyMsg) bool {
 			}
 			return true
 		}
-		switch msg.String() {
+		choice := msg.String()
+		switch choice {
+		case "up", "k", "down", "j", "left", "h", "right", "l":
+			m.Prompt.Choice = 1 - m.Prompt.Choice
+			return true
+		case "enter":
+			if m.Prompt.Choice == 1 {
+				choice = "y"
+			} else {
+				choice = "n"
+			}
+		}
+		switch choice {
 		case "y":
 			m.Prompt = PromptState{}
 			if mode == PromptOverwriteDesign {
@@ -113,7 +125,7 @@ func (m *Model) refreshPromptStatus() {
 	case PromptBinding:
 		m.setStatus("Binding name: %s%s (enter set, empty removes, esc cancel)", m.Prompt.Value, string(promptCursorRune))
 	case PromptOverwriteDesign:
-		m.setStatus("Saved preset %q already exists. Overwrite? y yes / n or esc cancel", m.Prompt.Value)
+		m.setStatus("Saved preset %q already exists. Choose with ↑/↓ or k/j and Enter; y/n also work.", m.Prompt.Value)
 	case PromptDeleteDesign:
 		m.setStatus("Delete saved preset %q? y yes / n or esc cancel", m.Prompt.Value)
 	case PromptOpenGallery:

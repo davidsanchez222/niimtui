@@ -748,7 +748,7 @@ func TestMenuTogglesAutoInsert(t *testing.T) {
 	if !m.MenuOpen {
 		t.Fatal("menu did not open")
 	}
-	m.MenuIndex = 3
+	m.MenuIndex = 0
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if !m.AutoInsert {
 		t.Fatal("auto insert was not enabled")
@@ -759,32 +759,23 @@ func TestMenuTogglesAutoInsert(t *testing.T) {
 	}
 }
 
-func TestMenuSelectsLabelRollAndCloses(t *testing.T) {
-	presets := []config.LabelPreset{
-		{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "blank"},
-		{Name: "b1-50x50", WidthMM: 50, HeightMM: 50, Shape: "rect", Layout: "blank"},
-	}
-	m := NewModelWithPresets(50, 30, "rect", "", PrintConfig{}, presets, "b1-50x30")
+func TestMenuKeepsPreferencesButNotDesignAndRollActions(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	if !m.toggleMenu() {
 		t.Fatal("toggleMenu() = false, want true")
 	}
-	m.MenuIndex = 0
-	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.MenuListMode != MenuListLabelRolls || m.MenuListIndex != 0 {
-		t.Fatalf("menu list = %q index %d, want label rolls index 0", m.MenuListMode, m.MenuListIndex)
+	view := strings.Join(menuModalContent(m), "\n")
+	if !strings.Contains(view, "Auto Insert") || strings.Contains(view, "Label roll") || strings.Contains(view, "Saved preset") || strings.Contains(view, "Save current design") {
+		t.Fatalf("menu content = %q", view)
 	}
-	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.MenuIndex = 1
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if m.MenuOpen || m.MenuListMode != MenuListNone {
-		t.Fatalf("menu state = open %t list %q, want closed", m.MenuOpen, m.MenuListMode)
-	}
-	if m.Preset != 1 || m.Document.HeightMM != 50 {
-		t.Fatalf("selected preset = %d height %.1f, want preset 1 height 50", m.Preset, m.Document.HeightMM)
+	if m.MenuOpen {
+		t.Fatal("Close did not close preferences menu")
 	}
 }
 
-func TestMenuSelectsSavedPresetAndCloses(t *testing.T) {
+func TestGallerySelectsSavedPresetAndReturnsToDesigner(t *testing.T) {
 	first := label.NewDocument(50, 30)
 	second := label.NewDocument(40, 12)
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
@@ -792,19 +783,16 @@ func TestMenuSelectsSavedPresetAndCloses(t *testing.T) {
 		{Name: "large", Document: first},
 		{Name: "small", Document: second},
 	}
-	if !m.toggleMenu() {
-		t.Fatal("toggleMenu() = false, want true")
+	m.Tab = tabGallery
+	for i, row := range m.galleryRows() {
+		if !row.Header && row.Item.Name == "small" {
+			m.GalleryIndex = i
+			break
+		}
 	}
-	m.MenuIndex = 1
-	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.MenuListMode != MenuListDesignPresets || m.MenuListIndex != 0 {
-		t.Fatalf("menu list = %q index %d, want saved presets index 0", m.MenuListMode, m.MenuListIndex)
-	}
-	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyDown})
-	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if m.MenuOpen || m.MenuListMode != MenuListNone {
-		t.Fatalf("menu state = open %t list %q, want closed", m.MenuOpen, m.MenuListMode)
+	m.handleGalleryKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.Tab != tabDesigner {
+		t.Fatal("gallery did not return to designer")
 	}
 	if m.DesignPreset != 1 || m.Document.WidthMM != 40 || m.Document.HeightMM != 12 {
 		t.Fatalf("loaded design = index %d %.1fx%.1f, want index 1 40x12", m.DesignPreset, m.Document.WidthMM, m.Document.HeightMM)
@@ -825,7 +813,7 @@ func TestHelpAndMenuRenderAsModalViews(t *testing.T) {
 	m.HelpOpen = false
 	m.MenuOpen = true
 	menu := m.View()
-	if !strings.Contains(menu, "Auto Insert on Text/QR Creation") || !strings.Contains(menu, "Label roll") || !strings.Contains(menu, "Saved preset") {
+	if !strings.Contains(menu, "Auto Insert on Text/QR Creation") || strings.Contains(menu, "Label roll") || strings.Contains(menu, "Saved preset") {
 		t.Fatal("menu modal content missing")
 	}
 }
