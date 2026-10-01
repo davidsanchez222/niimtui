@@ -118,6 +118,7 @@ The TUI is the primary interface for the project.
 - Design labels directly in a terminal canvas.
 - Use mouse interactions for selection, movement, resizing, and layout work.
 - Use keyboard shortcuts for fast editing, exporting, printing, copy/paste, undo/redo, and menu actions.
+- Select a text element and press `F` to browse fonts. Scrolling previews the highlighted font on the canvas and in the terminal-image preview; Enter applies it. Esc leaves search mode, then closes the picker without changing the label.
 - Export PNG previews before printing.
 - Print from the designer when a printer profile is configured.
 - Save designs with named text/QR bindings for reuse from the CLI. Select an element, press `b` to name its binding, and press `!` to require a new value for each CLI invocation. Press `s` to save it under **Custom** in the gallery. Auto Insert remains in the preferences menu (`m`).

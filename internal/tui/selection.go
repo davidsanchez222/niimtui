@@ -61,6 +61,9 @@ func (m *Model) handleSelectableMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 	if !m.Ready || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft || m.canvasMouseTarget(msg.X, msg.Y) {
 		return false, nil
 	}
+	if m.FontPickerOpen {
+		m.closeFontPicker()
+	}
 	m.Selection = textSelection{
 		Start: selectionPoint{msg.X, msg.Y}, End: selectionPoint{msg.X, msg.Y},
 		Lines: strings.Split(ansi.Strip(m.View()), "\n"), Active: true,

@@ -62,7 +62,7 @@ func livePreviewRedrawCmd(seq int) tea.Cmd {
 }
 
 func renderLivePreviewCmd(m Model, seq int) tea.Cmd {
-	doc := m.Document
+	doc := m.previewDocument()
 	printConfig := m.Print
 	return func() tea.Msg {
 		result, err := render.RenderDocument(doc)
@@ -176,7 +176,7 @@ func (m Model) livePreviewKey() string {
 	if m.Preview.Protocol == LivePreviewDisabled {
 		return ""
 	}
-	return documentPreviewKey(m.Document, m.Print)
+	return documentPreviewKey(m.previewDocument(), m.Print)
 }
 
 func documentPreviewKey(doc label.Document, printConfig PrintConfig) string {

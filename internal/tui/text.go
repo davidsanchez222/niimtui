@@ -2,6 +2,7 @@ package tui
 
 import (
 	"math"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -121,6 +122,7 @@ func (m *Model) toggleFontPicker() bool {
 	m.FontPickerSearch = true
 	m.FontPickerQuery = ""
 	m.FontPickerIndex = fontOptionIndex(m.Fonts, element.Text.FontPath)
+	m.updateFontPreview()
 	m.setStatus("Type to search fonts. Ctrl+n/p moves matches, esc browses results.")
 	return true
 }
@@ -193,6 +195,7 @@ func (m *Model) closeFontPicker() {
 	m.FontPickerOpen = false
 	m.FontPickerSearch = false
 	m.FontPickerQuery = ""
+	m.FontPreviewDoc = nil
 }
 
 const fontPickerPageSize = 7
@@ -212,8 +215,45 @@ func (m *Model) moveFontPicker(delta int) bool {
 	}
 	position = clampInt(position+delta, 0, len(indices)-1)
 	m.FontPickerIndex = indices[position]
-	m.setStatus("Font: %s", m.Fonts[m.FontPickerIndex].Name)
+	m.updateFontPreview()
+	m.setStatus("Previewing %s. Enter applies; esc cancels.", m.Fonts[m.FontPickerIndex].Name)
 	return true
+}
+
+// updateFontPreview fits a font only when the picker selection changes; views
+// can reuse the result without reparsing the font for every redraw.
+func (m *Model) updateFontPreview() {
+	if !m.FontPickerOpen || m.FontPickerIndex < 0 || m.FontPickerIndex >= len(m.Fonts) ||
+		!slices.Contains(m.filteredFontIndices(), m.FontPickerIndex) {
+		m.FontPreviewDoc = nil
+		return
+	}
+	if m.FontPreviewDoc != nil && m.FontPreviewIndex == m.FontPickerIndex && m.FontPreviewID == m.SelectedID {
+		return
+	}
+	m.FontPreviewDoc = nil
+	selected, ok := m.selectedElement()
+	if !ok || selected.Text == nil || selected.Text.FontPath == m.Fonts[m.FontPickerIndex].Path {
+		return
+	}
+	doc := cloneDocument(m.Document)
+	element, _ := doc.ElementByID(selected.ID)
+	element.Text.FontPath = m.Fonts[m.FontPickerIndex].Path
+	autoFitTextElement(&element)
+	clampElementToDocument(&element, doc)
+	doc.UpdateElement(element)
+	m.FontPreviewDoc = &doc
+	m.FontPreviewIndex = m.FontPickerIndex
+	m.FontPreviewID = m.SelectedID
+}
+
+// previewDocument renders the highlighted font without changing the saved
+// document or its undo history. Enter commits the chosen font.
+func (m Model) previewDocument() label.Document {
+	if m.FontPickerOpen && m.FontPreviewDoc != nil && m.FontPickerIndex == m.FontPreviewIndex && m.SelectedID == m.FontPreviewID {
+		return *m.FontPreviewDoc
+	}
+	return m.Document
 }
 
 func (m *Model) appendFontSearch(s string) bool {
@@ -244,14 +284,17 @@ func (m *Model) removeFontSearchRune() bool {
 func (m *Model) selectFirstFilteredFont() bool {
 	indices := m.filteredFontIndices()
 	if len(indices) == 0 {
+		m.FontPreviewDoc = nil
 		return false
 	}
 	for _, index := range indices {
 		if index == m.FontPickerIndex {
+			m.updateFontPreview()
 			return true
 		}
 	}
 	m.FontPickerIndex = indices[0]
+	m.updateFontPreview()
 	return true
 }
 
@@ -270,7 +313,7 @@ func (m *Model) applySelectedFont() bool {
 	element, ok := m.selectedElement()
 	indices := m.filteredFontIndices()
 	if !ok || element.Text == nil {
-		m.FontPickerOpen = false
+		m.closeFontPicker()
 		return false
 	}
 	if len(indices) == 0 {

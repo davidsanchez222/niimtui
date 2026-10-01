@@ -441,6 +441,7 @@ func renderCanvas(m Model) string {
 	if canvas.Width < 2 || canvas.Height < 2 {
 		return ""
 	}
+	m.Document = m.previewDocument()
 	isRound := strings.EqualFold(m.Document.Shape, "round")
 
 	grid := make([][]rune, canvas.Height)
@@ -722,6 +723,11 @@ func propertyPanelLines(m Model, width int) []string {
 			lines = append(lines, "", propertyLabel("Editing"), m.TextBuffer)
 		}
 		return padLines(lines, width)
+	}
+	if showFontPicker {
+		if preview, ok := m.previewDocument().ElementByID(element.ID); ok {
+			element = preview
+		}
 	}
 
 	lines = append(lines,

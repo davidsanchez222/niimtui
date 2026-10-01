@@ -66,7 +66,7 @@ func (m *Model) handleMousePressAt(msg tea.MouseMsg, now time.Time) {
 	if m.FocusPickerOpen {
 		m.FocusPickerOpen = false
 	}
-	if m.FontPickerOpen && (!clicked || clickedElement.ID != m.SelectedID) {
+	if m.FontPickerOpen {
 		m.closeFontPicker()
 	}
 	if clicked && m.isDoubleClick(clickedElement, msg, now) && isEditableElement(clickedElement) {

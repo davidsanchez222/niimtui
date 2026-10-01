@@ -17,9 +17,7 @@ func (m *Model) openFocusPicker() bool {
 	}
 	m.FocusPickerOpen = true
 	m.HelpOpen = false
-	m.FontPickerOpen = false
-	m.FontPickerSearch = false
-	m.FontPickerQuery = ""
+	m.closeFontPicker()
 	m.setStatus("Focus mode: press a hint key, or esc to cancel.")
 	return true
 }

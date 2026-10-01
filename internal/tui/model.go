@@ -178,6 +178,9 @@ type Model struct {
 	FontPickerSearch bool
 	FontPickerIndex  int
 	FontPickerQuery  string
+	FontPreviewDoc   *label.Document
+	FontPreviewIndex int
+	FontPreviewID    string
 
 	FocusPickerOpen  bool
 	HelpOpen         bool
