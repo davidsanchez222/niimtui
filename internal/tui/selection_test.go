@@ -113,6 +113,43 @@ func TestMenuTextCanBeHighlightedWithoutActivatingMenu(t *testing.T) {
 	}
 }
 
+func TestHeaderQuitButtonClosesSessionAndReturnsQuit(t *testing.T) {
+	session := &trackingPrinterSession{}
+	m := NewModel(50, 30, "rect", "", PrintConfig{Session: session})
+	m.Width, m.Height, m.Ready = minTerminalWidth, minTerminalHeight, true
+	m.reflow()
+	x, y := selectionCoordinate(t, m.View(), topBarQuitText())
+
+	updated, _ := m.Update(mouseSelectionMsg(tea.MouseActionPress, x, y))
+	m = updated.(Model)
+	updated, cmd := m.Update(mouseSelectionMsg(tea.MouseActionRelease, x, y))
+	m = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("header quit click returned nil command")
+	}
+	if session.closes != 1 {
+		t.Fatalf("session closes = %d, want 1", session.closes)
+	}
+}
+
+func TestTopBarMouseMotionUpdatesHoverTarget(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Width, m.Height, m.Ready = minTerminalWidth, minTerminalHeight, true
+	m.reflow()
+	x, y := selectionCoordinate(t, m.View(), topBarQuitText())
+
+	updated, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, X: x, Y: y})
+	m = updated.(Model)
+
+	if m.TopBarHover != topBarQuit {
+		t.Fatalf("top bar hover = %d, want quit", m.TopBarHover)
+	}
+	if !strings.Contains(m.View(), topBarHoverStyle.Render(topBarQuitText())) {
+		t.Fatal("hovered quit control is not highlighted")
+	}
+}
+
 func TestCanvasDraggingStillMovesElements(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.Width, m.Height, m.Ready = minTerminalWidth, minTerminalHeight, true

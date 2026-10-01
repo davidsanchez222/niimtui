@@ -100,6 +100,11 @@ var (
 	topBarInactiveStyle = lipgloss.NewStyle().
 				Foreground(catColor(mochaOverlay2))
 
+	topBarHoverStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(catColor(mochaMauve)).
+				Background(catColor(mochaSurface0))
+
 	panelTitleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(catColor(mochaText))
@@ -196,30 +201,87 @@ func topBarLines(m Model, width int) []string {
 func topBarContent(m Model, width int) string {
 	brand := logoHeader()
 	controls := tabHeader(m, width)
-	ruleWidth := max(width-lipgloss.Width(brand)-lipgloss.Width(controls)-2, 1)
-	rule := topBarRuleStyle.Render(" " + strings.Repeat("/", ruleWidth) + " ")
-	return fitStyledLine(brand+rule+controls, width)
+	line := fitStyledLine(brand, width)
+	left := max((width-lipgloss.Width(topBarControlsText()))/2, 0)
+	line = overlayStyledLine(line, controls, left, width)
+	quitLeft := max(width-lipgloss.Width(topBarQuitText())-1, 0)
+	return overlayStyledLine(line, topBarQuitControl(m.TopBarHover == topBarQuit), quitLeft, width)
+}
+
+func topBarControlsText() string {
+	return "1 Designer  |  2 Gallery  |  3 Menu"
+}
+
+func topBarQuitText() string {
+	return "ctrl+c quit"
+}
+
+func topBarQuitControl(hover bool) string {
+	key := topBarActiveStyle.Render("ctrl+c")
+	labelStyle := topBarInactiveStyle
+	if hover {
+		labelStyle = topBarHoverStyle
+	}
+	return key + labelStyle.Render(" quit")
 }
 
 func tabHeader(m Model, _ int) string {
 	return strings.Join([]string{
-		topBarControl("1 Designer", m.Tab == tabDesigner && !m.MenuOpen && !m.HelpOpen),
-		topBarControl("2 Gallery", m.Tab == tabGallery && !m.MenuOpen && !m.HelpOpen),
-		topBarControl("3 Menu", m.MenuOpen),
-		topBarControl("? Help", m.HelpOpen),
+		topBarControl("1 Designer", m.Tab == tabDesigner && !m.MenuOpen, m.TopBarHover == topBarDesigner),
+		topBarControl("2 Gallery", m.Tab == tabGallery && !m.MenuOpen, m.TopBarHover == topBarGallery),
+		topBarControl("3 Menu", m.MenuOpen, m.TopBarHover == topBarMenu),
 	}, topBarInactiveStyle.Render("  |  "))
 }
 
-func topBarControl(label string, active bool) string {
+func topBarControl(label string, active, hover bool) string {
+	if hover {
+		return topBarHoverStyle.Render(label)
+	}
 	if active {
 		return topBarActiveStyle.Render(label)
 	}
 	return topBarInactiveStyle.Render(label)
 }
 
+type topBarTarget uint8
+
+const (
+	topBarNone topBarTarget = iota
+	topBarDesigner
+	topBarGallery
+	topBarMenu
+	topBarQuit
+)
+
+func topBarTargetAt(width, x, y int) topBarTarget {
+	if y != 1 {
+		return topBarNone
+	}
+	contentWidth := max(width-2, 1)
+	contentX := x - 1
+	if contentX < 0 || contentX >= contentWidth {
+		return topBarNone
+	}
+	controlsWidth := lipgloss.Width(topBarControlsText())
+	left := max((contentWidth-controlsWidth)/2, 0)
+	switch {
+	case contentX >= left && contentX < left+10:
+		return topBarDesigner
+	case contentX >= left+15 && contentX < left+25:
+		return topBarGallery
+	case contentX >= left+30 && contentX < left+36:
+		return topBarMenu
+	}
+	quitLeft := max(contentWidth-lipgloss.Width(topBarQuitText())-1, 0)
+	if contentX >= quitLeft && contentX < quitLeft+lipgloss.Width(topBarQuitText()) {
+		return topBarQuit
+	}
+	return topBarNone
+}
+
 func tabAt(width, x int) (tuiTab, bool) {
-	controlsWidth := lipgloss.Width("1 Designer  |  2 Gallery  |  3 Menu  |  ? Help")
-	left := max(width-controlsWidth-2, 0)
+	controlsWidth := lipgloss.Width(topBarControlsText())
+	left := 1 + max((max(width-2, 1)-controlsWidth)/2, 0)
 	if x >= left && x < left+10 {
 		return tabDesigner, true
 	}
@@ -234,6 +296,10 @@ func tabAt(width, x int) (tuiTab, bool) {
 		return tabGallery, true
 	}
 	return tabDesigner, false
+}
+
+func quitAt(width, x int) bool {
+	return topBarTargetAt(width, x, 1) == topBarQuit
 }
 
 func panelTitles(m Model) (string, string, string) {
@@ -793,7 +859,6 @@ func propertyPanelLines(m Model, width int) []string {
 	showFontPicker = showFontPicker && fontPickerElement.Text != nil && m.FontPickerOpen
 	lines := []string{
 		propertyTitleStyle.Render("Live Preview"),
-		"",
 	}
 	if m.hasTerminalLivePreview() {
 		_, previewHeight := m.livePreviewPanelCellSize(width)
@@ -813,7 +878,6 @@ func propertyPanelLines(m Model, width int) []string {
 		lines = append(lines, fontPickerLinesWithLimit(m, width, min(fontPickerPageSize, itemLimit))...)
 	}
 	lines = append(lines,
-		"",
 		propertyTitleStyle.Render("Properties"),
 		propertyItem("Label W", fmt.Sprintf("%.1f mm", m.Document.WidthMM)),
 		propertyItem("Label H", fmt.Sprintf("%.1f mm", m.Document.HeightMM)),
@@ -962,18 +1026,23 @@ func footerHelpLines(m Model, width int) []string {
 	if m.Tab == tabGallery {
 		return []string{
 			truncateStyledLine(helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open"), width),
-			truncateStyledLine(helpItem("c", "command")+"  "+helpItem("d", "delete")+"  "+helpItem("ctrl+c", "quit"), width),
+			truncateStyledLine(helpItem("c", "command")+"  "+helpItem("d", "delete"), width),
 		}
 	}
 	if m.SidebarFocused {
 		return []string{
 			truncateStyledLine(sidebarFooter(m), width),
-			truncateStyledLine(helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan")+"  "+helpItem("ctrl+c", "quit"), width),
+			truncateStyledLine(helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan"), width),
 		}
 	}
 	items := []string{}
-	if element, ok := m.selectedElement(); ok && (element.Text != nil || element.QR != nil) {
-		items = append(items, helpItem("b", "binding"), helpItem("!", "required"))
+	if element, ok := m.selectedElement(); ok {
+		if element.Text != nil || element.QR != nil {
+			items = append(items, helpItem("b", "binding"), helpItem("!", "required"), helpItem("+/-", "size"))
+		}
+		if element.Text != nil {
+			items = append(items, helpItem("F", "fonts"))
+		}
 	}
 	if m.Print.Session != nil {
 		items = append(items, helpItem("P", "print"))
@@ -991,11 +1060,13 @@ func footerHelpLines(m Model, width int) []string {
 		helpItem("[]/{}", "resize diagonal"),
 		helpItem("y/x/v/d", "copy/cut/paste/dup"),
 		helpItem("z/Z", "undo/redo"),
+		helpItem("g", "grid"),
+		helpItem("I", "invert"),
 		helpItem("s", "save"),
 		helpItem("p", "preview"),
 		helpItem("e", "export"),
+		helpItem("?", "help"),
 		helpItem("esc", "clear"),
-		helpItem("ctrl+c", "quit"),
 	)
 	return splitKeybindRows(items, width)
 }

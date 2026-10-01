@@ -23,6 +23,7 @@ func (m Model) canvasMouseTarget(x, y int) bool {
 }
 
 func (m *Model) handleSelectableMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
+	m.updateTopBarHover(msg)
 	if m.Selection.Active {
 		switch msg.Action {
 		case tea.MouseActionMotion:
@@ -72,13 +73,31 @@ func (m *Model) handleSelectableMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 }
 
 func (m *Model) clickTextAt(x, y int) (bool, tea.Cmd) {
-	if m.Prompt.Mode != PromptNone || m.MenuOpen || m.HelpOpen || m.EditingText {
-		return true, nil
+	if target := topBarTargetAt(m.Width, x, y); target != topBarNone {
+		switch target {
+		case topBarQuit:
+			m.closePrinterSession()
+			return true, tea.Quit
+		case topBarDesigner:
+			return true, m.switchTopTab(tabDesigner)
+		case topBarGallery:
+			return true, m.switchTopTab(tabGallery)
+		case topBarMenu:
+			wasOpen := m.HelpOpen || m.MenuOpen
+			if !m.MenuOpen {
+				m.toggleMenu()
+			}
+			m.HelpOpen = false
+			return true, m.livePreviewModalCmd(wasOpen)
+		}
 	}
 	if y == 1 {
 		if tab, ok := tabAt(m.Width, x); ok {
-			return true, m.switchTab(tab)
+			return true, m.switchTopTab(tab)
 		}
+	}
+	if m.Prompt.Mode != PromptNone || m.MenuOpen || m.HelpOpen || m.EditingText {
+		return true, nil
 	}
 	if m.Tab == tabGallery && y >= layoutBodyTop+3 && x < layoutLeftPanelWidth {
 		rows := m.galleryRows()
@@ -97,6 +116,13 @@ func (m *Model) clickTextAt(x, y int) (bool, tea.Cmd) {
 		}
 	}
 	return true, nil
+}
+
+func (m *Model) updateTopBarHover(msg tea.MouseMsg) {
+	if msg.Action != tea.MouseActionMotion && msg.Action != tea.MouseActionPress && msg.Action != tea.MouseActionRelease {
+		return
+	}
+	m.TopBarHover = topBarTargetAt(m.Width, msg.X, msg.Y)
 }
 
 func selectionRange(s textSelection) (selectionPoint, selectionPoint) {

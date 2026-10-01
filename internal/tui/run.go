@@ -23,7 +23,7 @@ func RunWithPresets(widthMM, heightMM float64, shape, fontPath string, printConf
 		return err
 	}
 
-	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	printConfig.DiscoveryContext = ctx

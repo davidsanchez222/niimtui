@@ -431,7 +431,12 @@ func TestFocusedBindingLegend(t *testing.T) {
 		}
 	}
 	properties := strings.Join(propertyPanelLines(m, layoutPropertiesWidth), "\n")
-	if !strings.Contains(legend, "binding") || !strings.Contains(legend, "required") || !strings.Contains(properties, "name binding") || !strings.Contains(properties, "search fonts") {
+	for _, want := range []string{"binding", "required", "+/-", "fonts"} {
+		if !strings.Contains(legend, want) {
+			t.Fatalf("text legend missing %q: %q", want, legend)
+		}
+	}
+	if !strings.Contains(properties, "name binding") || !strings.Contains(properties, "search fonts") {
 		t.Fatalf("text hints missing: legend=%q properties=%q", legend, properties)
 	}
 	m.addQRElement()
@@ -443,6 +448,40 @@ func TestFocusedBindingLegend(t *testing.T) {
 	legend = strings.Join(footerLines(m, minTerminalWidth), "\n")
 	if strings.Contains(legend, "binding") || strings.Contains(legend, "required") {
 		t.Fatalf("binding hints still shown after clearing selection: %q", legend)
+	}
+}
+
+func TestDesignerLegendShowsViewAndSizeShortcuts(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	legend := strings.Join(footerHelpLines(m, panelContentWidth(minTerminalWidth)), "\n")
+	for _, want := range []string{"g", "grid", "I", "invert"} {
+		if !strings.Contains(legend, want) {
+			t.Fatalf("designer legend missing %q: %q", want, legend)
+		}
+	}
+	if strings.Contains(legend, "+/-") || strings.Contains(legend, "fonts") {
+		t.Fatalf("selection-only shortcuts shown without selection: %q", legend)
+	}
+}
+
+func TestInspectorRemovesPreviewPropertiesSpacerRows(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	lines := propertyPanelLines(m, layoutPropertiesWidth)
+	previewIndex, propertiesIndex := -1, -1
+	for i, line := range lines {
+		plain := ansi.Strip(line)
+		if strings.Contains(plain, "Press p to open preview") {
+			previewIndex = i
+		}
+		if strings.Contains(plain, "Properties") {
+			propertiesIndex = i
+		}
+	}
+	if previewIndex < 0 || propertiesIndex < 0 {
+		t.Fatalf("missing preview/properties lines: %q", strings.Join(lines, "\n"))
+	}
+	if propertiesIndex-previewIndex != 1 {
+		t.Fatalf("properties line is %d rows after preview, want adjacent: %q", propertiesIndex-previewIndex, strings.Join(lines, "\n"))
 	}
 }
 
@@ -479,8 +518,12 @@ func TestHeaderShortcutsWorkFromGalleryAndFooterOmitsHeaderTabs(t *testing.T) {
 	if !updated.HelpOpen {
 		t.Fatal("? did not open help from gallery")
 	}
-	if !strings.Contains(tabHeader(updated, minTerminalWidth), topBarActiveStyle.Render("? Help")) {
-		t.Fatal("help header control is not active while help is open")
+	if strings.Contains(tabHeader(updated, minTerminalWidth), "Help") {
+		t.Fatal("help should not be rendered as a header tab")
+	}
+	updated, _ = updated.update(testKey("1"))
+	if updated.HelpOpen || updated.Tab != tabDesigner {
+		t.Fatal("1 did not switch from help popup to designer")
 	}
 
 	updated, _ = m.update(testKey("m"))
@@ -494,12 +537,80 @@ func TestHeaderShortcutsWorkFromGalleryAndFooterOmitsHeaderTabs(t *testing.T) {
 	if !strings.Contains(tabHeader(updated, minTerminalWidth), topBarActiveStyle.Render("3 Menu")) {
 		t.Fatal("menu header control is not active while menu is open")
 	}
+	updated, _ = updated.update(testKey("2"))
+	if updated.MenuOpen || updated.Tab != tabGallery {
+		t.Fatal("2 did not switch from menu tab to gallery")
+	}
+	updated, _ = updated.update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	if updated.MenuOpen || updated.Tab != tabDesigner {
+		t.Fatal("ctrl+t did not switch tabs after leaving menu")
+	}
 
+	m.Tab = tabDesigner
 	legend := strings.ToLower(strings.Join(footerLines(m, minTerminalWidth), "\n"))
-	for _, removed := range []string{"gallery", "menu", "help"} {
+	if !strings.Contains(legend, "?") || !strings.Contains(legend, "help") {
+		t.Fatalf("footer missing help shortcut: %q", legend)
+	}
+	for _, removed := range []string{"gallery", "menu", "ctrl+c"} {
 		if strings.Contains(legend, removed) {
 			t.Fatalf("footer still contains %q: %q", removed, legend)
 		}
+	}
+}
+
+func TestTopBarCentersTabsWithoutSlashFiller(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	content := ansi.Strip(topBarContent(m, minTerminalWidth-2))
+	if strings.Contains(content, "/") {
+		t.Fatalf("top bar contains slash filler: %q", content)
+	}
+	controls := "1 Designer  |  2 Gallery  |  3 Menu"
+	left := strings.Index(content, controls)
+	if left < 0 {
+		t.Fatalf("top bar missing controls: %q", content)
+	}
+	wantLeft := ((minTerminalWidth - 2) - lipgloss.Width(controls)) / 2
+	cellLeft := ansi.StringWidth(content[:left])
+	if cellLeft != wantLeft {
+		t.Fatalf("controls left = %d cells, want centered at %d: %q", cellLeft, wantLeft, content)
+	}
+	if !strings.Contains(content, topBarQuitText()) {
+		t.Fatalf("top bar missing quit control: %q", content)
+	}
+}
+
+func TestTopBarHoverHighlightsClickableControls(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.TopBarHover = topBarQuit
+	content := topBarContent(m, minTerminalWidth-2)
+	if !strings.Contains(content, topBarHoverStyle.Render(topBarQuitText())) {
+		t.Fatalf("quit control is not highlighted on hover: %q", content)
+	}
+
+	m.TopBarHover = topBarMenu
+	content = topBarContent(m, minTerminalWidth-2)
+	if !strings.Contains(content, topBarHoverStyle.Render("3 Menu")) {
+		t.Fatalf("menu control is not highlighted on hover: %q", content)
+	}
+}
+
+func TestTopBarTargetAtDetectsClickableControls(t *testing.T) {
+	width := minTerminalWidth
+	contentWidth := width - 2
+	controlsLeft := 1 + (contentWidth-lipgloss.Width(topBarControlsText()))/2
+	quitLeft := 1 + contentWidth - lipgloss.Width(topBarQuitText()) - 1
+
+	if got := topBarTargetAt(width, controlsLeft, 1); got != topBarDesigner {
+		t.Fatalf("designer target = %d, want %d", got, topBarDesigner)
+	}
+	if got := topBarTargetAt(width, controlsLeft+30, 1); got != topBarMenu {
+		t.Fatalf("menu target = %d, want %d", got, topBarMenu)
+	}
+	if got := topBarTargetAt(width, quitLeft, 1); got != topBarQuit {
+		t.Fatalf("quit target = %d, want %d", got, topBarQuit)
+	}
+	if got := topBarTargetAt(width, quitLeft, 0); got != topBarNone {
+		t.Fatalf("off-row target = %d, want none", got)
 	}
 }
 
@@ -512,7 +623,10 @@ func TestDesignerKeybindRowsFillFirstRowBeforeWrapping(t *testing.T) {
 	if width := lipgloss.Width(rows[0]); width < 110 {
 		t.Fatalf("first keybind row width = %d, want most of the footer width: %q", width, ansi.Strip(rows[0]))
 	}
-	if !strings.Contains(rows[1], "ctrl+c") {
+	if strings.Contains(strings.Join(rows, "\n"), "ctrl+c") {
+		t.Fatalf("keybind rows should not include ctrl+c: %q", rows)
+	}
+	if !strings.Contains(rows[1], "esc") {
 		t.Fatalf("second keybind row = %q, want overflow shortcuts", rows[1])
 	}
 }

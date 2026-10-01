@@ -190,6 +190,7 @@ type Model struct {
 	SidebarFocused   bool
 	SidebarIndex     int
 	SidebarCollapsed map[string]bool
+	TopBarHover      topBarTarget
 
 	Print           PrintConfig
 	Connection      ConnectionStatus

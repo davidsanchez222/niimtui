@@ -107,15 +107,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, cmd
 	case tea.KeyMsg:
-		if msg.String() == "1" && !m.MenuOpen && !m.HelpOpen {
-			return m, m.switchTab(tabDesigner)
+		if msg.String() == "1" {
+			return m, m.switchTopTab(tabDesigner)
 		}
-		if msg.String() == "2" && !m.MenuOpen && !m.HelpOpen {
-			return m, m.switchTab(tabGallery)
+		if msg.String() == "2" {
+			return m, m.switchTopTab(tabGallery)
 		}
 		if msg.String() == "3" {
 			wasOpen := m.HelpOpen || m.MenuOpen
-			m.toggleMenu()
+			if !m.MenuOpen {
+				m.toggleMenu()
+			}
+			m.HelpOpen = false
 			return m, m.livePreviewModalCmd(wasOpen)
 		}
 		if msg.String() == "?" {
@@ -131,11 +134,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			return m, m.livePreviewModalCmd(wasOpen)
 		}
-		if msg.String() == "ctrl+t" && !m.MenuOpen && !m.HelpOpen {
+		if msg.String() == "ctrl+t" {
 			if m.Tab == tabGallery {
-				return m, m.switchTab(tabDesigner)
+				return m, m.switchTopTab(tabDesigner)
 			}
-			return m, m.switchTab(tabGallery)
+			return m, m.switchTopTab(tabGallery)
 		}
 		if m.MenuOpen {
 			if msg.String() == "q" {
@@ -235,6 +238,28 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) switchTopTab(tab tuiTab) tea.Cmd {
+	wasOpen := m.HelpOpen || m.MenuOpen
+	m.HelpOpen = false
+	m.MenuOpen = false
+	if m.Tab == tab {
+		if tab == tabGallery {
+			m.setStatus("Label gallery: ↑/↓ or k/j browse, ←/→ or h/l fold, Enter opens, c shows saved print command.")
+		} else {
+			m.setStatus("Label designer focused.")
+		}
+		if wasOpen {
+			return m.livePreviewModalCmd(wasOpen)
+		}
+		return nil
+	}
+	cmd := m.switchTab(tab)
+	if wasOpen {
+		return tea.Batch(cmd, m.livePreviewModalCmd(wasOpen))
+	}
+	return cmd
 }
 
 func (m *Model) livePreviewResizeCmd() tea.Cmd {
@@ -357,8 +382,6 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 	case "s":
 		m.beginSaveDesignPrompt()
 		return true
-	case "m":
-		return m.toggleMenu()
 	case "?":
 		m.HelpOpen = !m.HelpOpen
 		if m.HelpOpen {
