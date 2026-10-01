@@ -112,9 +112,11 @@ const (
 	layoutPropertiesWidth = 30
 	layoutPanelGap        = 1
 	layoutTopBarHeight    = 3
-	layoutFooterHeight    = 3
-	layoutBodyTop         = layoutTopBarHeight + 1
+	layoutStatusHeight    = 1
+	layoutFooterHeight    = 4
+	layoutBodyTop         = layoutTopBarHeight + layoutStatusHeight + 1
 	printableGuideRune    = '┊'
+	printableGuideHorz    = '┈'
 	gridHorizontalRune    = '┄'
 	gridVerticalRune      = '┊'
 	gridIntersectionRune  = '┼'
@@ -163,6 +165,7 @@ func (m Model) view() string {
 
 	viewWidth := max(m.Width, layoutLeftPanelWidth+layoutPanelGap+canvasPanelWidth+2+layoutPanelGap+layoutPropertiesWidth)
 	lines := topBarLines(m, viewWidth)
+	lines = append(lines, statusLine(m, viewWidth))
 	if m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
 		lines = append(lines, modalBodyLines(m, viewWidth, bodyHeight)...)
 		lines = append(lines, footerLines(m, viewWidth)...)
@@ -199,18 +202,19 @@ func topBarContent(m Model, width int) string {
 }
 
 func tabHeader(m Model, _ int) string {
-	designer, gallery := "1 Designer", "2 Gallery"
-	if m.Tab == tabDesigner {
-		designer = topBarActiveStyle.Render(designer)
-	} else {
-		designer = topBarInactiveStyle.Render(designer)
+	return strings.Join([]string{
+		topBarControl("1 Designer", m.Tab == tabDesigner && !m.MenuOpen && !m.HelpOpen),
+		topBarControl("2 Gallery", m.Tab == tabGallery && !m.MenuOpen && !m.HelpOpen),
+		topBarControl("3 Menu", m.MenuOpen),
+		topBarControl("? Help", m.HelpOpen),
+	}, topBarInactiveStyle.Render("  |  "))
+}
+
+func topBarControl(label string, active bool) string {
+	if active {
+		return topBarActiveStyle.Render(label)
 	}
-	if m.Tab == tabGallery {
-		gallery = topBarActiveStyle.Render(gallery)
-	} else {
-		gallery = topBarInactiveStyle.Render(gallery)
-	}
-	return strings.Join([]string{designer, gallery, topBarInactiveStyle.Render("3 Menu"), topBarInactiveStyle.Render("? Help")}, topBarInactiveStyle.Render("  |  "))
+	return topBarInactiveStyle.Render(label)
 }
 
 func tabAt(width, x int) (tuiTab, bool) {
@@ -252,11 +256,11 @@ func panelLines(title string, body []string, width, height int, active bool) []s
 		border = panelActiveBorderStyle
 	}
 	titleText := panelTitleStyle.Render(" " + title + " ")
-	titleWidth := lipgloss.Width(titleText)
+	titleWidth := lipgloss.Width(" " + title + " ")
 	ruleWidth := max(width-titleWidth-3, 0)
 	top := border.Render("╭─") + titleText + border.Render(strings.Repeat("─", ruleWidth)+"╮")
 	bottom := border.Render("╰" + strings.Repeat("─", width-2) + "╯")
-	lines := []string{fitStyledLine(top, width)}
+	lines := []string{top}
 	for i := 0; i < height-2; i++ {
 		line := ""
 		if i < len(body) {
@@ -273,6 +277,10 @@ func panelContentWidth(width int) int {
 	return max(width-2, 1)
 }
 
+func statusLine(m Model, width int) string {
+	return fitStyledLine(" "+statusStyle.Render(truncateText(m.Status, max(width-4, 1))), width)
+}
+
 func (m Model) isTerminalTooSmall() bool {
 	return m.Width < minTerminalWidth || m.Height < minTerminalHeight
 }
@@ -282,7 +290,7 @@ func (m Model) canvasPanelWidth() int {
 }
 
 func (m Model) canvasPanelHeight() int {
-	return max(m.Height-8, 6)
+	return max(m.Height-layoutTopBarHeight-layoutStatusHeight-layoutFooterHeight-2, 6)
 }
 
 func (m Model) canvasPanelLeft() int {
@@ -642,7 +650,7 @@ func renderCanvasLine(row []rune, focusCells map[int]bool) string {
 			b.WriteString(focusHintStyle.Render(string(r)))
 			continue
 		}
-		if r == printableGuideRune || r == '┬' || r == '┴' {
+		if isPrintableGuideRune(r) {
 			b.WriteString(printableGuideStyle.Render(string(r)))
 			continue
 		}
@@ -689,6 +697,10 @@ func drawGridGuide(grid [][]rune, canvas Canvas) {
 
 func isGridRune(r rune) bool {
 	return r == gridHorizontalRune || r == gridVerticalRune || r == gridIntersectionRune
+}
+
+func isPrintableGuideRune(r rune) bool {
+	return r == printableGuideRune || r == printableGuideHorz || r == '┬' || r == '┴' || r == '├' || r == '┤'
 }
 
 func isPrintDirectionRune(r rune) bool {
@@ -895,7 +907,7 @@ func helpModalContent() []string {
 		helpRow("[ ] / { }", "Resize diagonally from the bottom-right"),
 		helpRow("+ / -", "Increase / decrease selected text font size or QR size"),
 		helpRow("p", "Open the native OS preview image"),
-		helpRow("m", "Open the options menu"),
+		helpRow("3", "Open the options menu"),
 		helpRow("?", "Toggle this help popup"),
 		helpRow("esc", "Close popup or clear selection"),
 		helpRow("ctrl+c", "Quit immediately"),
@@ -943,19 +955,21 @@ func helpRow(key, description string) string {
 }
 
 func footerLines(m Model, width int) []string {
-	contentWidth := max(width-2, 1)
-	statusWidth := min(44, max(contentWidth/3, 24))
-	status := statusStyle.Render(truncateText(m.Status, max(statusWidth-2, 1)))
-	help := footerHelpLine(m, max(contentWidth-lipgloss.Width(status)-2, 1))
-	return panelLines("Status", []string{status + "  " + help}, width, layoutFooterHeight, false)
+	return panelLines("Keybinds", footerHelpLines(m, panelContentWidth(width)), width, layoutFooterHeight, false)
 }
 
-func footerHelpLine(m Model, width int) string {
+func footerHelpLines(m Model, width int) []string {
 	if m.Tab == tabGallery {
-		return truncateStyledLine(helpItem("1", "designer")+"  "+helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open")+"  "+helpItem("c", "command")+"  "+helpItem("d", "delete")+"  "+helpItem("ctrl+c", "quit"), width)
+		return []string{
+			truncateStyledLine(helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open"), width),
+			truncateStyledLine(helpItem("c", "command")+"  "+helpItem("d", "delete")+"  "+helpItem("ctrl+c", "quit"), width),
+		}
 	}
 	if m.SidebarFocused {
-		return truncateStyledLine(sidebarFooter(m)+"  "+helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan")+"  "+helpItem("ctrl+c", "quit"), width)
+		return []string{
+			truncateStyledLine(sidebarFooter(m), width),
+			truncateStyledLine(helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan")+"  "+helpItem("ctrl+c", "quit"), width),
+		}
 	}
 	items := []string{}
 	if element, ok := m.selectedElement(); ok && (element.Text != nil || element.QR != nil) {
@@ -970,17 +984,49 @@ func footerHelpLine(m Model, width int) string {
 		helpItem("q", "QR"),
 		helpItem("i", "edit"),
 		helpItem("tab", "printer"),
-		helpItem("2", "gallery"),
 		helpItem("↑↓←→/kjhl", "move"),
+		helpItem("r", "rotate"),
+		helpItem("R", "rotate canvas"),
 		helpItem("HJKL", "resize"),
+		helpItem("[]/{}", "resize diagonal"),
+		helpItem("y/x/v/d", "copy/cut/paste/dup"),
+		helpItem("z/Z", "undo/redo"),
 		helpItem("s", "save"),
 		helpItem("p", "preview"),
-		helpItem("3", "menu"),
-		helpItem("?", "help"),
+		helpItem("e", "export"),
 		helpItem("esc", "clear"),
 		helpItem("ctrl+c", "quit"),
 	)
-	return truncateStyledLine(strings.Join(items, "  "), width)
+	return splitKeybindRows(items, width)
+}
+
+func splitKeybindRows(items []string, width int) []string {
+	if len(items) == 0 {
+		return []string{"", ""}
+	}
+	separator := "  "
+	row := ""
+	index := 0
+	for ; index < len(items); index++ {
+		candidate := items[index]
+		if row != "" {
+			candidate = row + separator + items[index]
+		}
+		if row != "" && lipgloss.Width(candidate) > width {
+			break
+		}
+		row = candidate
+	}
+	if row == "" {
+		row = items[0]
+		index = 1
+	}
+
+	second := strings.Join(items[index:], separator)
+	return []string{
+		truncateStyledLine(row, width),
+		truncateStyledLine(second, width),
+	}
 }
 
 func propertyItem(label, value string) string {
@@ -1312,11 +1358,15 @@ func drawPrintDirectionGuide(grid [][]rune, canvas Canvas, m Model) {
 	}
 	midX := canvas.Width / 2
 	midY := canvas.Height / 2
-	switch printDirectionLabel(m.Print.Model) {
-	case "bottom to top":
+	switch effectivePrintDirection(m) {
+	case printDirectionUp:
 		grid[0][midX] = '▲'
-	case "left to right":
+	case printDirectionRight:
 		grid[midY][canvas.Width-1] = '▶'
+	case printDirectionDown:
+		grid[canvas.Height-1][midX] = '▼'
+	case printDirectionLeft:
+		grid[midY][0] = '◀'
 	}
 }
 
@@ -1326,15 +1376,24 @@ func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
 	}
 	printableWidthMM := render.ModelPrintableWidthMM(m.Print.Model)
 	if printableWidthMM <= 0 || printableWidthMM >= m.Document.WidthMM {
+		if effectivePrintDirection(m).horizontal() && printableWidthMM > 0 && printableWidthMM < m.Document.HeightMM {
+			drawHorizontalPrintableAreaGuide(grid, canvas, m, printableWidthMM)
+		}
+		return
+	}
+	if effectivePrintDirection(m).horizontal() {
+		if printableWidthMM < m.Document.HeightMM {
+			drawHorizontalPrintableAreaGuide(grid, canvas, m, printableWidthMM)
+		}
 		return
 	}
 	leftMM := (m.Document.WidthMM - printableWidthMM) / 2
 	rightMM := leftMM + printableWidthMM
 	leftX, _ := canvas.LabelToScreen(leftMM, 0)
 	rightX, _ := canvas.LabelToScreen(rightMM, 0)
-	left := leftX - canvas.X
-	right := rightX - canvas.X
-	if left <= 0 || right >= canvas.Width-1 || right <= left {
+	left := clampInt(leftX-canvas.X, 1, max(canvas.Width-2, 1))
+	right := clampInt(rightX-canvas.X, 1, max(canvas.Width-2, 1))
+	if right <= left {
 		return
 	}
 	grid[0][left] = '┬'
@@ -1345,4 +1404,62 @@ func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
 		grid[y][left] = printableGuideRune
 		grid[y][right] = printableGuideRune
 	}
+}
+
+func drawHorizontalPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model, printableWidthMM float64) {
+	topMM := (m.Document.HeightMM - printableWidthMM) / 2
+	bottomMM := topMM + printableWidthMM
+	_, topY := canvas.LabelToScreen(0, topMM)
+	_, bottomY := canvas.LabelToScreen(0, bottomMM)
+	top := clampInt(topY-canvas.Y, 1, max(canvas.Height-2, 1))
+	bottom := clampInt(bottomY-canvas.Y, 1, max(canvas.Height-2, 1))
+	if bottom <= top {
+		return
+	}
+	grid[top][0] = '├'
+	grid[top][canvas.Width-1] = '┤'
+	grid[bottom][0] = '├'
+	grid[bottom][canvas.Width-1] = '┤'
+	for x := 1; x < canvas.Width-1; x++ {
+		grid[top][x] = printableGuideHorz
+		grid[bottom][x] = printableGuideHorz
+	}
+}
+
+type printDirection int
+
+const (
+	printDirectionUnknown printDirection = iota
+	printDirectionUp
+	printDirectionRight
+	printDirectionDown
+	printDirectionLeft
+)
+
+func (d printDirection) horizontal() bool {
+	return d == printDirectionLeft || d == printDirectionRight
+}
+
+func effectivePrintDirection(m Model) printDirection {
+	base := printDirectionUnknown
+	switch printDirectionLabel(m.Print.Model) {
+	case "bottom to top":
+		base = printDirectionUp
+	case "left to right":
+		base = printDirectionRight
+	}
+	if base == printDirectionUnknown {
+		return base
+	}
+	steps := normalizedTUIRotation(m.Document.Rotation) / 90
+	return rotatePrintDirection(base, steps)
+}
+
+func rotatePrintDirection(direction printDirection, steps int) printDirection {
+	if direction == printDirectionUnknown {
+		return direction
+	}
+	directions := []printDirection{printDirectionUp, printDirectionRight, printDirectionDown, printDirectionLeft}
+	index := int(direction) - int(printDirectionUp)
+	return directions[(index+steps)%len(directions)]
 }

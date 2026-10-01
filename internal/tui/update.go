@@ -113,9 +113,22 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.String() == "2" && !m.MenuOpen && !m.HelpOpen {
 			return m, m.switchTab(tabGallery)
 		}
-		if msg.String() == "3" && !m.HelpOpen {
+		if msg.String() == "3" {
 			wasOpen := m.HelpOpen || m.MenuOpen
 			m.toggleMenu()
+			return m, m.livePreviewModalCmd(wasOpen)
+		}
+		if msg.String() == "?" {
+			wasOpen := m.HelpOpen || m.MenuOpen
+			m.HelpOpen = !m.HelpOpen
+			if m.HelpOpen {
+				m.MenuOpen = false
+				m.FocusPickerOpen = false
+				m.closeFontPicker()
+				m.setStatus("Help opened. Press ? or esc to close.")
+			} else {
+				m.setStatus("Help closed.")
+			}
 			return m, m.livePreviewModalCmd(wasOpen)
 		}
 		if msg.String() == "ctrl+t" && !m.MenuOpen && !m.HelpOpen {
@@ -178,24 +191,6 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.String() == "B" {
 			m.cycleRedoBranch()
 			return m, nil
-		}
-		if msg.String() == "m" {
-			wasOpen := m.HelpOpen || m.MenuOpen
-			m.toggleMenu()
-			return m, m.livePreviewModalCmd(wasOpen)
-		}
-		if msg.String() == "?" {
-			wasOpen := m.HelpOpen || m.MenuOpen
-			m.HelpOpen = !m.HelpOpen
-			if m.HelpOpen {
-				m.MenuOpen = false
-				m.FocusPickerOpen = false
-				m.closeFontPicker()
-				m.setStatus("Help opened. Press ? or esc to close.")
-			} else {
-				m.setStatus("Help closed.")
-			}
-			return m, m.livePreviewModalCmd(wasOpen)
 		}
 		if m.handleCommandKey(msg) {
 			return m, nil

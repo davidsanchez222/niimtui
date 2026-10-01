@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -85,6 +86,20 @@ func TestKittyPreviewCommandsSuppressTerminalResponses(t *testing.T) {
 		if !ok || !strings.Contains(controls, ",q=2") {
 			t.Fatalf("graphics command requests a terminal reply: %q", controls)
 		}
+	}
+}
+
+func TestKittyPreviewDrawsInsideInspectorContent(t *testing.T) {
+	var output bytes.Buffer
+	if _, err := writeTerminalLivePreview(&output, LivePreviewKitty, []byte{1, 2, 3}, 40, 12, 5); err != nil {
+		t.Fatal(err)
+	}
+
+	row := layoutBodyTop + 2
+	col := layoutLeftPanelWidth + layoutPanelGap + 40 + 2 + layoutPanelGap + 2
+	want := "\x1b[" + strconv.Itoa(row) + ";" + strconv.Itoa(col) + "H"
+	if !strings.Contains(output.String(), want) {
+		t.Fatalf("kitty preview position = %q, want cursor move %q", output.String(), want)
 	}
 }
 

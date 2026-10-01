@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"niimtui/internal/api"
 	"niimtui/internal/config"
@@ -45,6 +46,55 @@ func TestDrawPrintDirectionGuideShowsModelDirection(t *testing.T) {
 	drawPrintDirectionGuide(grid, canvas, NewModel(50, 30, "rect", "", PrintConfig{Model: "B1"}))
 	if grid[0][canvas.Width/2] != '▲' {
 		t.Fatalf("B1 print direction marker = %q, want ▲", grid[0][canvas.Width/2])
+	}
+}
+
+func TestDrawPrintDirectionGuideRespectsCanvasRotation(t *testing.T) {
+	canvas := Canvas{Width: 12, Height: 8}
+	m := NewModel(50, 30, "rect", "", PrintConfig{Model: "B1"})
+	m.Document.Rotation = 90
+	grid := newTestGrid(canvas)
+
+	drawPrintDirectionGuide(grid, canvas, m)
+
+	if grid[canvas.Height/2][canvas.Width-1] != '▶' {
+		t.Fatalf("rotated B1 print direction marker = %q, want ▶", grid[canvas.Height/2][canvas.Width-1])
+	}
+	if grid[0][canvas.Width/2] == '▲' {
+		t.Fatal("rotated B1 print direction marker stayed at top")
+	}
+}
+
+func TestDrawPrintableAreaGuideRespectsCanvasRotation(t *testing.T) {
+	canvas := newCanvas(80, 24, 30, 50)
+	m := NewModel(30, 50, "rect", "", PrintConfig{Model: "B1"})
+	m.Document.Rotation = 90
+	grid := newTestGrid(canvas)
+
+	drawPrintableAreaGuide(grid, canvas, m)
+
+	if countRune(grid, printableGuideHorz) == 0 {
+		t.Fatal("rotated printable area guide did not draw horizontal bounds")
+	}
+	if countRune(grid, printableGuideRune) != 0 {
+		t.Fatal("rotated printable area guide drew vertical bounds")
+	}
+	if countRune(grid, '├') == 0 || countRune(grid, '┤') == 0 {
+		t.Fatal("rotated printable area guide did not draw horizontal border junctions")
+	}
+}
+
+func TestPanelTitleBorderFillsWidth(t *testing.T) {
+	line := ansi.Strip(panelLines("Keybinds", []string{""}, 80, 3, false)[0])
+	if lipgloss.Width(line) != 80 {
+		t.Fatalf("panel title width = %d, want 80: %q", lipgloss.Width(line), line)
+	}
+	afterTitle := strings.TrimPrefix(line, "╭─ Keybinds ")
+	if afterTitle == line || !strings.HasSuffix(afterTitle, "╮") {
+		t.Fatalf("panel title line has unexpected shape: %q", line)
+	}
+	if strings.Contains(strings.TrimSuffix(afterTitle, "╮"), " ") {
+		t.Fatalf("panel title border has padding gap after title: %q", line)
 	}
 }
 
@@ -419,6 +469,54 @@ func TestNavigationLegendsShowArrowAndVimKeys(t *testing.T) {
 	}
 }
 
+func TestHeaderShortcutsWorkFromGalleryAndFooterOmitsHeaderTabs(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Width, m.Height, m.Ready = minTerminalWidth, minTerminalHeight, true
+	m.Tab = tabGallery
+	m.reflow()
+
+	updated, _ := m.update(testKey("?"))
+	if !updated.HelpOpen {
+		t.Fatal("? did not open help from gallery")
+	}
+	if !strings.Contains(tabHeader(updated, minTerminalWidth), topBarActiveStyle.Render("? Help")) {
+		t.Fatal("help header control is not active while help is open")
+	}
+
+	updated, _ = m.update(testKey("m"))
+	if updated.MenuOpen {
+		t.Fatal("m opened menu; want only 3 to open menu")
+	}
+	updated, _ = m.update(testKey("3"))
+	if !updated.MenuOpen {
+		t.Fatal("3 did not open menu")
+	}
+	if !strings.Contains(tabHeader(updated, minTerminalWidth), topBarActiveStyle.Render("3 Menu")) {
+		t.Fatal("menu header control is not active while menu is open")
+	}
+
+	legend := strings.ToLower(strings.Join(footerLines(m, minTerminalWidth), "\n"))
+	for _, removed := range []string{"gallery", "menu", "help"} {
+		if strings.Contains(legend, removed) {
+			t.Fatalf("footer still contains %q: %q", removed, legend)
+		}
+	}
+}
+
+func TestDesignerKeybindRowsFillFirstRowBeforeWrapping(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	rows := footerHelpLines(m, panelContentWidth(minTerminalWidth))
+	if len(rows) != 2 {
+		t.Fatalf("keybind rows = %d, want 2", len(rows))
+	}
+	if width := lipgloss.Width(rows[0]); width < 110 {
+		t.Fatalf("first keybind row width = %d, want most of the footer width: %q", width, ansi.Strip(rows[0]))
+	}
+	if !strings.Contains(rows[1], "ctrl+c") {
+		t.Fatalf("second keybind row = %q, want overflow shortcuts", rows[1])
+	}
+}
+
 func TestDisconnectShortcutClosesSessionAndAllowsReconnect(t *testing.T) {
 	session := &trackingPrinterSession{}
 	m := NewModel(50, 30, "rect", "", PrintConfig{Session: session})
@@ -507,6 +605,18 @@ func countNonZeroRunes(grid [][]rune) int {
 	for _, row := range grid {
 		for _, r := range row {
 			if r != 0 {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func countRune(grid [][]rune, target rune) int {
+	count := 0
+	for _, row := range grid {
+		for _, r := range row {
+			if r == target {
 				count++
 			}
 		}

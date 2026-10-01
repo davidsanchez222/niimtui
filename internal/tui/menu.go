@@ -20,7 +20,7 @@ func (m *Model) toggleMenu() bool {
 
 func (m *Model) handleMenuKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
-	case "esc", "m":
+	case "esc", "3":
 		m.closeMenu("Menu closed.")
 	case "up", "k":
 		m.MenuIndex = wrapMenuIndex(m.MenuIndex - 1)

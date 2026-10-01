@@ -141,7 +141,7 @@ func clearTerminalLivePreviewCmd(canvasPanelWidth int) tea.Cmd {
 }
 
 func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasPanelWidth, cols, rows int) (int, error) {
-	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 1
+	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 2
 	left := panelLeft
 	top := layoutBodyTop + 2
 	escape := terminalImageEscape(protocol, png, cols, rows)
@@ -152,7 +152,7 @@ func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []b
 }
 
 func writeTerminalLivePreviewClear(w io.Writer, canvasPanelWidth int) (int, error) {
-	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 1
+	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 2
 	left := panelLeft
 	top := layoutBodyTop + 2
 	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, panelContentWidth(layoutPropertiesWidth), terminalLivePreviewMaxRows))
