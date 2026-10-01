@@ -15,80 +15,105 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("63")).
+			Foreground(catColor(mochaPeach)).
 			Padding(0, 1)
 
 	canvasStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252"))
+			Foreground(catColor(mochaText))
 
 	printableGuideStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196"))
+				Foreground(catColor(mochaRed))
 
 	printDirectionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("45")).
+				Foreground(catColor(mochaSky)).
 				Bold(true)
 
 	gridStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("238"))
+			Foreground(catColor(mochaSurface1))
 
 	propertyTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("111"))
+				Foreground(catColor(mochaMauve))
 
 	propertySelectedStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("215"))
+				Foreground(catColor(mochaPeach)).
+				Background(catColor(mochaSurface0))
 
 	propertyLabelStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("229"))
+				Foreground(catColor(mochaYellow))
 
 	mutedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244"))
+			Foreground(catColor(mochaOverlay1))
 
 	helpLabelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("250"))
+			Foreground(catColor(mochaSubtext1))
 
 	statusStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("16")).
-			Background(lipgloss.Color("215")).
-			Padding(0, 2)
+			Foreground(catColor(mochaCrust)).
+			Background(catColor(mochaPeach)).
+			Padding(0, 1)
 
 	focusHintStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("16")).
-			Background(lipgloss.Color("205"))
+			Foreground(catColor(mochaCrust)).
+			Background(catColor(mochaPink))
 
 	keyStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("215"))
+			Foreground(catColor(mochaMauve))
 
 	headerWordStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("255"))
+			Foreground(catColor(mochaText))
 
 	headerSubStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("111"))
+			Foreground(catColor(mochaLavender))
 
 	footerRuleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("238"))
+			Foreground(catColor(mochaSurface1))
 
 	editInputStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("111")).
+			BorderForeground(catColor(mochaMauve)).
 			Padding(0, 1)
+
+	panelBorderStyle = lipgloss.NewStyle().
+				Foreground(catColor(mochaSurface2))
+
+	panelActiveBorderStyle = lipgloss.NewStyle().
+				Foreground(catColor(mochaMauve))
+
+	topBarBorderStyle = lipgloss.NewStyle().
+				Foreground(catColor(mochaSurface1))
+
+	topBarRuleStyle = lipgloss.NewStyle().
+			Foreground(catColor(mochaMauve))
+
+	topBarActiveStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(catColor(mochaMauve))
+
+	topBarInactiveStyle = lipgloss.NewStyle().
+				Foreground(catColor(mochaOverlay2))
+
+	panelTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(catColor(mochaText))
 )
 
 const (
 	minTerminalWidth      = 140
 	minTerminalHeight     = 30
-	layoutLeftPanelWidth  = 30
-	layoutPropertiesWidth = 28
-	layoutPanelGap        = 2
-	layoutFramePadding    = 8
-	layoutBodyTop         = 3
+	layoutLeftPanelWidth  = 32
+	layoutPropertiesWidth = 30
+	layoutPanelGap        = 1
+	layoutTopBarHeight    = 3
+	layoutFooterHeight    = 3
+	layoutBodyTop         = layoutTopBarHeight + 1
 	printableGuideRune    = '┊'
 	gridHorizontalRune    = '┄'
 	gridVerticalRune      = '┊'
@@ -119,61 +144,133 @@ func (m Model) view() string {
 			canvasLines = overlayCenteredBox(canvasLines, editingPopup(m, canvasPanelWidth, bodyHeight), canvasPanelWidth, bodyHeight)
 		}
 	}
-	leftPanel := devicePanelLines(m, layoutLeftPanelWidth)
+	leftContentWidth := panelContentWidth(layoutLeftPanelWidth)
+	rightContentWidth := panelContentWidth(layoutPropertiesWidth)
+	leftPanel := devicePanelLines(m, leftContentWidth)
 	if m.Tab == tabGallery {
-		leftPanel = galleryListLines(m, layoutLeftPanelWidth)
+		leftPanel = galleryListLines(m, leftContentWidth)
 	} else if m.SidebarFocused {
-		leftPanel = sidebarLines(m, layoutLeftPanelWidth)
+		leftPanel = sidebarLines(m, leftContentWidth)
 	}
-	leftLines := fitPanelLines(leftPanel, bodyHeight, layoutLeftPanelWidth)
+	leftLines := fitPanelLines(leftPanel, bodyHeight, leftContentWidth)
 	var properties []string
 	if m.Tab == tabGallery {
-		properties = m.galleryPreviewLines(layoutPropertiesWidth)
+		properties = m.galleryPreviewLines(rightContentWidth)
 	} else {
-		properties = propertyPanelLines(m, layoutPropertiesWidth)
+		properties = propertyPanelLines(m, rightContentWidth)
 	}
-	propertyLines := fitPanelLines(properties, bodyHeight, layoutPropertiesWidth)
+	propertyLines := fitPanelLines(properties, bodyHeight, rightContentWidth)
 
-	viewWidth := max(m.Width, layoutLeftPanelWidth+layoutPanelGap+canvasPanelWidth+layoutPanelGap+layoutPropertiesWidth)
-	title := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, logoHeader())
-	status := lipgloss.PlaceHorizontal(viewWidth, lipgloss.Center, statusStyle.Render(truncateText(m.Status, max(viewWidth-8, 1))))
-	lines := []string{
-		title,
-		tabHeader(m, viewWidth),
-		status,
-	}
+	viewWidth := max(m.Width, layoutLeftPanelWidth+layoutPanelGap+canvasPanelWidth+2+layoutPanelGap+layoutPropertiesWidth)
+	lines := topBarLines(m, viewWidth)
 	if m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
 		lines = append(lines, modalBodyLines(m, viewWidth, bodyHeight)...)
 		lines = append(lines, footerLines(m, viewWidth)...)
 		return strings.Join(lines, "\n")
 	}
-	for i := 0; i < bodyHeight; i++ {
-		lines = append(lines, leftLines[i]+strings.Repeat(" ", layoutPanelGap)+canvasLines[i]+strings.Repeat(" ", layoutPanelGap)+propertyLines[i])
+	leftTitle, centerTitle, rightTitle := panelTitles(m)
+	leftBox := panelLines(leftTitle, leftLines, layoutLeftPanelWidth, bodyHeight+2, m.SidebarFocused || m.Tab == tabGallery)
+	centerBox := panelLines(centerTitle, canvasLines, canvasPanelWidth+2, bodyHeight+2, !m.SidebarFocused && m.Tab == tabDesigner)
+	rightBox := panelLines(rightTitle, propertyLines, layoutPropertiesWidth, bodyHeight+2, false)
+	for i := range leftBox {
+		lines = append(lines, leftBox[i]+strings.Repeat(" ", layoutPanelGap)+centerBox[i]+strings.Repeat(" ", layoutPanelGap)+rightBox[i])
 	}
 	lines = append(lines, footerLines(m, viewWidth)...)
 
 	return strings.Join(lines, "\n")
 }
 
-func tabHeader(m Model, width int) string {
-	designer, gallery := "  Designer  ", "  Gallery  "
-	if m.Tab == tabDesigner {
-		designer = "[ Designer ]"
-	} else {
-		gallery = "[ Gallery ]"
+func topBarLines(m Model, width int) []string {
+	contentWidth := max(width-2, 1)
+	content := topBarContent(m, contentWidth)
+	return []string{
+		topBarBorderStyle.Render("╭" + strings.Repeat("─", contentWidth) + "╮"),
+		topBarBorderStyle.Render("│") + content + topBarBorderStyle.Render("│"),
+		topBarBorderStyle.Render("╰" + strings.Repeat("─", contentWidth) + "╯"),
 	}
-	return lipgloss.PlaceHorizontal(width, lipgloss.Center, helpLabelStyle.Render(designer)+"   "+helpLabelStyle.Render(gallery))
+}
+
+func topBarContent(m Model, width int) string {
+	brand := logoHeader()
+	controls := tabHeader(m, width)
+	ruleWidth := max(width-lipgloss.Width(brand)-lipgloss.Width(controls)-2, 1)
+	rule := topBarRuleStyle.Render(" " + strings.Repeat("/", ruleWidth) + " ")
+	return fitStyledLine(brand+rule+controls, width)
+}
+
+func tabHeader(m Model, _ int) string {
+	designer, gallery := "1 Designer", "2 Gallery"
+	if m.Tab == tabDesigner {
+		designer = topBarActiveStyle.Render(designer)
+	} else {
+		designer = topBarInactiveStyle.Render(designer)
+	}
+	if m.Tab == tabGallery {
+		gallery = topBarActiveStyle.Render(gallery)
+	} else {
+		gallery = topBarInactiveStyle.Render(gallery)
+	}
+	return strings.Join([]string{designer, gallery, topBarInactiveStyle.Render("3 Menu"), topBarInactiveStyle.Render("? Help")}, topBarInactiveStyle.Render("  |  "))
 }
 
 func tabAt(width, x int) (tuiTab, bool) {
-	left := (width - 26) / 2
-	if x >= left && x < left+12 {
+	controlsWidth := lipgloss.Width("1 Designer  |  2 Gallery  |  3 Menu  |  ? Help")
+	left := max(width-controlsWidth-2, 0)
+	if x >= left && x < left+10 {
 		return tabDesigner, true
 	}
-	if x >= left+15 && x < left+26 {
+	if x >= left+15 && x < left+25 {
+		return tabGallery, true
+	}
+	legacyLeft := (width - 26) / 2
+	if x >= legacyLeft && x < legacyLeft+12 {
+		return tabDesigner, true
+	}
+	if x >= legacyLeft+15 && x < legacyLeft+26 {
 		return tabGallery, true
 	}
 	return tabDesigner, false
+}
+
+func panelTitles(m Model) (string, string, string) {
+	if m.Tab == tabGallery {
+		return "Library", "Label Preview", "Details"
+	}
+	left := "Printer"
+	if m.SidebarFocused {
+		left = "Printers & Rolls"
+	}
+	return left, "Designer", "Inspector"
+}
+
+func panelLines(title string, body []string, width, height int, active bool) []string {
+	width = max(width, 4)
+	height = max(height, 2)
+	contentWidth := panelContentWidth(width)
+	border := panelBorderStyle
+	if active {
+		border = panelActiveBorderStyle
+	}
+	titleText := panelTitleStyle.Render(" " + title + " ")
+	titleWidth := lipgloss.Width(titleText)
+	ruleWidth := max(width-titleWidth-3, 0)
+	top := border.Render("╭─") + titleText + border.Render(strings.Repeat("─", ruleWidth)+"╮")
+	bottom := border.Render("╰" + strings.Repeat("─", width-2) + "╯")
+	lines := []string{fitStyledLine(top, width)}
+	for i := 0; i < height-2; i++ {
+		line := ""
+		if i < len(body) {
+			line = body[i]
+		}
+		line = truncateStyledLine(line, contentWidth)
+		lines = append(lines, border.Render("│")+fitStyledLine(line, contentWidth)+border.Render("│"))
+	}
+	lines = append(lines, bottom)
+	return lines
+}
+
+func panelContentWidth(width int) int {
+	return max(width-2, 1)
 }
 
 func (m Model) isTerminalTooSmall() bool {
@@ -181,7 +278,7 @@ func (m Model) isTerminalTooSmall() bool {
 }
 
 func (m Model) canvasPanelWidth() int {
-	return max(m.Width-layoutLeftPanelWidth-layoutPropertiesWidth-layoutFramePadding, 12)
+	return max(m.Width-layoutLeftPanelWidth-layoutPropertiesWidth-(2*layoutPanelGap)-2, 12)
 }
 
 func (m Model) canvasPanelHeight() int {
@@ -189,7 +286,7 @@ func (m Model) canvasPanelHeight() int {
 }
 
 func (m Model) canvasPanelLeft() int {
-	return layoutLeftPanelWidth + layoutPanelGap
+	return layoutLeftPanelWidth + layoutPanelGap + 1
 }
 
 func centerCanvasLines(lines []string, width, height int) []string {
@@ -846,78 +943,44 @@ func helpRow(key, description string) string {
 }
 
 func footerLines(m Model, width int) []string {
+	contentWidth := max(width-2, 1)
+	statusWidth := min(44, max(contentWidth/3, 24))
+	status := statusStyle.Render(truncateText(m.Status, max(statusWidth-2, 1)))
+	help := footerHelpLine(m, max(contentWidth-lipgloss.Width(status)-2, 1))
+	return panelLines("Status", []string{status + "  " + help}, width, layoutFooterHeight, false)
+}
+
+func footerHelpLine(m Model, width int) string {
 	if m.Tab == tabGallery {
-		return []string{
-			footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
-			centerStyledLine(helpItem("ctrl+t", "designer")+"  "+helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open")+"  "+helpItem("c", "command")+"  "+helpItem("d", "delete"), width),
-			strings.Repeat(" ", width), centerStyledLine(helpItem("drag", "highlight/copy text"), width),
-			centerStyledLine(helpItem("ctrl+c", "quit"), width),
-		}
+		return truncateStyledLine(helpItem("1", "designer")+"  "+helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open")+"  "+helpItem("c", "command")+"  "+helpItem("d", "delete")+"  "+helpItem("ctrl+c", "quit"), width)
 	}
 	if m.SidebarFocused {
-		return []string{
-			footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
-			centerStyledLine(sidebarFooter(m), width),
-			centerStyledLine(helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan"), width),
-			centerStyledLine(helpItem("drag", "highlight/copy text"), width),
-			centerStyledLine(helpItem("ctrl+c", "quit"), width),
-		}
+		return truncateStyledLine(sidebarFooter(m)+"  "+helpItem("c", "connect")+"  "+helpItem("D", "disconnect")+"  "+helpItem("r", "rescan")+"  "+helpItem("ctrl+c", "quit"), width)
 	}
-	printHelp := ""
+	items := []string{}
+	if element, ok := m.selectedElement(); ok && (element.Text != nil || element.QR != nil) {
+		items = append(items, helpItem("b", "binding"), helpItem("!", "required"))
+	}
 	if m.Print.Session != nil {
-		printHelp = helpItem("P", "print") + "  "
+		items = append(items, helpItem("P", "print"))
 	}
-	createEdit := strings.Join([]string{
+	items = append(items,
 		helpItem("f", "focus"),
 		helpItem("t", "text"),
 		helpItem("q", "QR"),
 		helpItem("i", "edit"),
-		helpItem("bksp/del", "remove"),
-		helpItem("r", "rotate"),
-		helpItem("R", "rotate canvas"),
-	}, "  ")
-	clipboardHistory := strings.Join([]string{
-		helpItem("y", "copy"),
-		helpItem("x", "cut"),
-		helpItem("v", "paste"),
-		helpItem("d", "duplicate"),
-		helpItem("z", "undo"),
-		helpItem("Z", "redo"),
-		helpItem("B", "redo branch"),
-	}, "  ")
-	movement := strings.Join([]string{
 		helpItem("tab", "printer"),
-		helpItem("ctrl+t", "gallery"),
+		helpItem("2", "gallery"),
 		helpItem("↑↓←→/kjhl", "move"),
-		helpItem("HJKL", "resize w/h"),
-		helpItem("[]/{}", "resize diagonal"),
-		helpItem("+/-", "size"),
-		helpItem("g", "grid"),
-		helpItem("I", "invert colors"),
-		helpItem("m", "menu"),
+		helpItem("HJKL", "resize"),
+		helpItem("s", "save"),
+		helpItem("p", "preview"),
+		helpItem("3", "menu"),
 		helpItem("?", "help"),
-	}, "  ")
-	previewItems := []string{
-		helpItem("s", "save design"),
-		helpItem("p", "open preview"),
-		helpItem("e", "export PNG"),
-	}
-	if element, ok := m.selectedElement(); ok && (element.Text != nil || element.QR != nil) {
-		previewItems = append(previewItems, helpItem("b", "binding"), helpItem("!", "required"))
-	}
-	previewItems = append(previewItems,
-		printHelp+helpItem("esc", "clear"),
+		helpItem("esc", "clear"),
 		helpItem("ctrl+c", "quit"),
 	)
-	preview := strings.Join(previewItems, "  ")
-
-	return []string{
-		footerRuleStyle.Render(strings.Repeat("─", max(width, 24))),
-		centerStyledLine(createEdit, width),
-		centerStyledLine(clipboardHistory, width),
-		centerStyledLine(movement, width),
-		centerStyledLine(preview, width),
-	}
+	return truncateStyledLine(strings.Join(items, "  "), width)
 }
 
 func propertyItem(label, value string) string {
@@ -1133,6 +1196,23 @@ func truncateText(s string, width int) string {
 		return string(runes[:width])
 	}
 	return string(runes[:width-3]) + "..."
+}
+
+func truncateStyledLine(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	cells := styledCells(s)
+	if len(cells) <= width {
+		return s
+	}
+	if width <= 3 {
+		return strings.Join(cells[:width], "")
+	}
+	return strings.Join(cells[:width-3], "") + "..."
 }
 
 func drawDocumentPreview(grid [][]rune, canvas Canvas, doc label.Document) {

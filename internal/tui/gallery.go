@@ -374,7 +374,7 @@ func galleryTerminalPreviewCmd(m Model) tea.Cmd {
 		return clearTerminalLivePreviewCmd(m.canvasPanelWidth())
 	}
 	png := append([]byte(nil), m.GalleryPNG...)
-	cols, rows := m.galleryPreviewCellSize(layoutPropertiesWidth)
+	cols, rows := m.galleryPreviewCellSize(panelContentWidth(layoutPropertiesWidth))
 	return func() tea.Msg {
 		_, _ = writeTerminalLivePreview(os.Stdout, m.Preview.Protocol, png, m.canvasPanelWidth(), cols, rows)
 		return nil

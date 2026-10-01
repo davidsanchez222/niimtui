@@ -103,7 +103,7 @@ func TestGalleryTabsKeepDraftAndConfirmBeforeReplacingIt(t *testing.T) {
 	previous := cloneDocument(m.Document)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(Model)
-	if m.Tab != tabGallery || !strings.Contains(m.View(), "Label gallery") || !strings.Contains(m.View(), "[ Gallery ]") {
+	if m.Tab != tabGallery || !strings.Contains(m.View(), "Label gallery") || !strings.Contains(m.View(), "2 Gallery") {
 		t.Fatalf("gallery tab not visible: %s", m.View())
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})

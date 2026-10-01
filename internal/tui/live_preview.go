@@ -126,7 +126,7 @@ func terminalLivePreviewCmd(m Model) tea.Cmd {
 	protocol := m.Preview.Protocol
 	png := append([]byte(nil), m.Preview.PNG...)
 	canvasPanelWidth := m.canvasPanelWidth()
-	cols, rows := m.livePreviewPanelCellSize(layoutPropertiesWidth)
+	cols, rows := m.livePreviewPanelCellSize(panelContentWidth(layoutPropertiesWidth))
 	return func() tea.Msg {
 		_, _ = writeTerminalLivePreview(os.Stdout, protocol, png, canvasPanelWidth, cols, rows)
 		return nil
@@ -141,21 +141,21 @@ func clearTerminalLivePreviewCmd(canvasPanelWidth int) tea.Cmd {
 }
 
 func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []byte, canvasPanelWidth, cols, rows int) (int, error) {
-	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + layoutPanelGap + 1
+	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 1
 	left := panelLeft
 	top := layoutBodyTop + 2
 	escape := terminalImageEscape(protocol, png, cols, rows)
 	if escape == "" {
 		return 0, nil
 	}
-	return fmt.Fprintf(w, "\x1b7%s%s\x1b[%d;%dH%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, layoutPropertiesWidth, rows), top, left, escape)
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b[%d;%dH%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, panelContentWidth(layoutPropertiesWidth), rows), top, left, escape)
 }
 
 func writeTerminalLivePreviewClear(w io.Writer, canvasPanelWidth int) (int, error) {
-	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + layoutPanelGap + 1
+	panelLeft := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 1
 	left := panelLeft
 	top := layoutBodyTop + 2
-	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, layoutPropertiesWidth, terminalLivePreviewMaxRows))
+	return fmt.Fprintf(w, "\x1b7%s%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, panelContentWidth(layoutPropertiesWidth), terminalLivePreviewMaxRows))
 }
 
 func terminalLivePreviewDeleteEscape() string {

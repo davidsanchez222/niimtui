@@ -107,6 +107,17 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, cmd
 	case tea.KeyMsg:
+		if msg.String() == "1" && !m.MenuOpen && !m.HelpOpen {
+			return m, m.switchTab(tabDesigner)
+		}
+		if msg.String() == "2" && !m.MenuOpen && !m.HelpOpen {
+			return m, m.switchTab(tabGallery)
+		}
+		if msg.String() == "3" && !m.HelpOpen {
+			wasOpen := m.HelpOpen || m.MenuOpen
+			m.toggleMenu()
+			return m, m.livePreviewModalCmd(wasOpen)
+		}
 		if msg.String() == "ctrl+t" && !m.MenuOpen && !m.HelpOpen {
 			if m.Tab == tabGallery {
 				return m, m.switchTab(tabDesigner)
