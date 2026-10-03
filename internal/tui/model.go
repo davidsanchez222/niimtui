@@ -236,7 +236,9 @@ type LivePreviewState struct {
 	LastOpenHash string
 	LastKey      string
 	RedrawSeq    int
-	Err          string
+	// RedrawPending throttles stale-image redraws while the document changes faster than it renders.
+	RedrawPending bool
+	Err           string
 }
 
 func NewModel(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig) Model {
@@ -420,7 +422,18 @@ func connectPrinterCmd(session PrinterSession, seq int) tea.Cmd {
 func detectLivePreviewProtocol() LivePreviewProtocol {
 	termProgram := strings.ToLower(strings.TrimSpace(envValue("TERM_PROGRAM")))
 	term := strings.ToLower(strings.TrimSpace(envValue("TERM")))
+	switch strings.ToLower(envValue("NIIMTUI_GRAPHICS")) {
+	case "kitty":
+		return LivePreviewKitty
+	case "off", "none", "disabled":
+		return LivePreviewDisabled
+	}
 	if envValue("KITTY_WINDOW_ID") != "" || strings.Contains(term, "xterm-kitty") || termProgram == "ghostty" {
+		return LivePreviewKitty
+	}
+	// WezTerm implements the kitty graphics protocol (enable_kitty_graphics) but identifies as xterm-256color.
+	// The WEZTERM_* variables survive tmux, which rewrites TERM_PROGRAM.
+	if termProgram == "wezterm" || envValue("WEZTERM_PANE") != "" || envValue("WEZTERM_EXECUTABLE") != "" {
 		return LivePreviewKitty
 	}
 	return LivePreviewDisabled

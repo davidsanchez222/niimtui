@@ -128,7 +128,7 @@ The TUI is the primary interface for the project.
 - Press `Tab` to focus the printer sidebar. It is a collapsible printer-and-roll tree: `↑/↓` or `k/j` moves through visible rows, `←/→` or `h/l` folds printers, Enter switches printers or selects a roll, `c` connects, `D` disconnects, `r` rescans, and Esc or Tab returns to the editor.
 - Drag over rendered text outside the designer canvas to highlight and copy it, including gallery, menu, and popup text. Canvas dragging still moves and resizes elements. Terminal clipboard copying uses OSC 52 when supported.
 - At startup, the TUI scans once for configured advertising BLE printers. It connects to the sole detected printer, or to the active printer when several are detected. If none is detected, it remains disconnected; a manual `c` in the focused printer sidebar can still try to connect. Auto-selection does not change your saved active printer.
-- Use terminal image preview in supported terminals such as Kitty and Ghostty.
+- Use terminal image preview in supported terminals such as Kitty, Ghostty and WezTerm (WezTerm needs `enable_kitty_graphics = true`). Set `NIIMTUI_GRAPHICS=kitty` to force it on, or `off` to disable it.
 
 The designer works best in a large terminal window. Current minimum target size is roughly `140x30` cells.
 

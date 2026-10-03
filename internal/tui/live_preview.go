@@ -22,10 +22,12 @@ const livePreviewDebounce = 150 * time.Millisecond
 
 const (
 	terminalLivePreviewImageID = 4242
-	terminalLivePreviewMaxRows = 14
-	terminalLivePreviewMinRows = 3
-	terminalLivePreviewMaxCols = 20
-	terminalLivePreviewMinCols = 10
+	// A fixed placement ID makes a=p replace the previous placement instead of stacking another.
+	terminalLivePreviewPlacementID = 1
+	terminalLivePreviewMaxRows     = 14
+	terminalLivePreviewMinRows     = 3
+	terminalLivePreviewMaxCols     = 20
+	terminalLivePreviewMinCols     = 10
 )
 
 type livePreviewTickMsg struct {
@@ -47,6 +49,8 @@ type livePreviewFailedMsg struct {
 
 type livePreviewRedrawMsg struct {
 	Seq int
+	// Place re-places the already transmitted image instead of sending the PNG again.
+	Place bool
 }
 
 func livePreviewDebounceCmd(seq int) tea.Cmd {
@@ -59,6 +63,12 @@ func livePreviewRedrawCmd(seq int) tea.Cmd {
 	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
 		return livePreviewRedrawMsg{Seq: seq}
 	})
+}
+
+func livePreviewQuickRedrawCmd(seq int) tea.Cmd {
+	return func() tea.Msg {
+		return livePreviewRedrawMsg{Seq: seq, Place: true}
+	}
 }
 
 func renderLivePreviewCmd(m Model, seq int) tea.Cmd {
@@ -133,6 +143,20 @@ func terminalLivePreviewCmd(m Model) tea.Cmd {
 	}
 }
 
+// terminalLivePreviewPlaceCmd re-places the image the terminal already holds. It is a few dozen bytes
+// instead of the whole PNG, which makes it cheap enough to run while the user drags.
+func terminalLivePreviewPlaceCmd(m Model) tea.Cmd {
+	if m.isTerminalTooSmall() || m.HelpOpen || m.MenuOpen || m.confirmPromptOpen() {
+		return nil
+	}
+	canvasPanelWidth := m.canvasPanelWidth()
+	cols, rows := m.livePreviewPanelCellSize(panelContentWidth(layoutPropertiesWidth))
+	return func() tea.Msg {
+		_, _ = writeTerminalLivePreviewPlace(os.Stdout, canvasPanelWidth, cols, rows)
+		return nil
+	}
+}
+
 func clearTerminalLivePreviewCmd(canvasPanelWidth int) tea.Cmd {
 	return func() tea.Msg {
 		_, _ = writeTerminalLivePreviewClear(os.Stdout, canvasPanelWidth)
@@ -148,7 +172,16 @@ func writeTerminalLivePreview(w io.Writer, protocol LivePreviewProtocol, png []b
 	if escape == "" {
 		return 0, nil
 	}
-	return fmt.Fprintf(w, "\x1b7%s%s\x1b[%d;%dH%s\x1b8", terminalLivePreviewDeleteEscape(), clearTerminalLivePreview(left, top, panelContentWidth(layoutPropertiesWidth), rows), top, left, escape)
+	// Re-transmitting with the same image ID replaces the previous image in place, so there is no
+	// delete/blank step that would show as a flash. Synchronized output (mode 2026) makes the swap atomic
+	// on terminals that support it and is ignored by the rest.
+	return fmt.Fprintf(w, "\x1b[?2026h\x1b7\x1b[%d;%dH%s\x1b8\x1b[?2026l", top, left, escape)
+}
+
+func writeTerminalLivePreviewPlace(w io.Writer, canvasPanelWidth, cols, rows int) (int, error) {
+	left := layoutLeftPanelWidth + layoutPanelGap + canvasPanelWidth + 2 + layoutPanelGap + 2
+	top := layoutBodyTop + 2
+	return fmt.Fprintf(w, "\x1b[?2026h\x1b7\x1b[%d;%dH\x1b_Ga=p,i=%d,p=%d,c=%d,r=%d,q=2\x1b\\\x1b8\x1b[?2026l", top, left, terminalLivePreviewImageID, terminalLivePreviewPlacementID, cols, rows)
 }
 
 func writeTerminalLivePreviewClear(w io.Writer, canvasPanelWidth int) (int, error) {
@@ -246,7 +279,7 @@ func kittyImageEscape(encoded string, cols, rows int) string {
 			more = 1
 		}
 		if start == 0 {
-			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,i=4242,c=%d,r=%d,m=%d,q=2;%s\x1b\\", cols, rows, more, encoded[start:end])
+			fmt.Fprintf(&b, "\x1b_Ga=T,f=100,i=%d,p=%d,c=%d,r=%d,m=%d,q=2;%s\x1b\\", terminalLivePreviewImageID, terminalLivePreviewPlacementID, cols, rows, more, encoded[start:end])
 			continue
 		}
 		fmt.Fprintf(&b, "\x1b_Gm=%d,q=2;%s\x1b\\", more, encoded[start:end])

@@ -228,9 +228,13 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, nil
 	case livePreviewRedrawMsg:
+		m.Preview.RedrawPending = false
 		if m.hasTerminalLivePreview() && !m.HelpOpen && !m.MenuOpen && !m.confirmPromptOpen() && msg.Seq == m.Preview.RedrawSeq {
 			if m.Tab == tabGallery {
 				return m, galleryTerminalPreviewCmd(m)
+			}
+			if msg.Place {
+				return m, terminalLivePreviewPlaceCmd(m)
 			}
 			return m, terminalLivePreviewCmd(m)
 		}
@@ -283,7 +287,14 @@ func (m Model) withLivePreviewSchedule(beforeKey string, cmd tea.Cmd) (tea.Model
 	}
 	m.Preview.RequestedSeq++
 	m.Preview.LastKey = afterKey
-	return m, tea.Batch(cmd, livePreviewDebounceCmd(m.Preview.RequestedSeq))
+	cmds := []tea.Cmd{cmd, livePreviewDebounceCmd(m.Preview.RequestedSeq)}
+	// Bubble Tea repaints the lines under the image, which makes the terminal drop it until the debounced
+	// render lands. Re-emit the last image on a short throttle so it doesn't vanish while dragging.
+	if m.hasTerminalLivePreview() && !m.Preview.RedrawPending {
+		m.Preview.RedrawPending = true
+		cmds = append(cmds, livePreviewQuickRedrawCmd(m.Preview.RedrawSeq))
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m *Model) reconnectPrinter() tea.Cmd {

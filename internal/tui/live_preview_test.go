@@ -47,6 +47,31 @@ func TestDetectLivePreviewProtocolDoesNotAutoOpenFallback(t *testing.T) {
 	}
 }
 
+func TestDetectLivePreviewProtocolWezTerm(t *testing.T) {
+	for name, env := range map[string]map[string]string{
+		"term program": {"TERM_PROGRAM": "WezTerm", "TERM": "xterm-256color"},
+		"pane var":     {"TERM_PROGRAM": "tmux", "TERM": "screen", "WEZTERM_PANE": "3"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			withEnv(t, env)
+			if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
+				t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewKitty)
+			}
+		})
+	}
+}
+
+func TestDetectLivePreviewProtocolOverride(t *testing.T) {
+	withEnv(t, map[string]string{"NIIMTUI_GRAPHICS": "kitty", "TERM": "xterm-256color"})
+	if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
+		t.Fatalf("override kitty: got %q", got)
+	}
+	withEnv(t, map[string]string{"NIIMTUI_GRAPHICS": "off", "KITTY_WINDOW_ID": "1"})
+	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+		t.Fatalf("override off: got %q", got)
+	}
+}
+
 func TestTerminalImageEscapeKittyIncludesCellSize(t *testing.T) {
 	escape := terminalImageEscape(LivePreviewKitty, []byte{1, 2, 3}, 12, 5)
 	if !strings.Contains(escape, "c=12,r=5") {
