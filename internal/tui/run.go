@@ -34,6 +34,7 @@ func RunWithPresets(widthMM, heightMM float64, shape, fontPath string, printConf
 	p := tea.NewProgram(NewModelWithPresets(widthMM, heightMM, shape, fontPath, printConfig, presets, presetName), options...)
 
 	finalModel, err := p.Run()
+	openPreviewViewer.close()
 	if model, ok := finalModel.(Model); ok {
 		model.closePrinterSession()
 	} else if printConfig.Session != nil {

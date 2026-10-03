@@ -104,6 +104,9 @@ func (m Model) handleLivePreviewRendered(msg livePreviewRenderedMsg) (Model, tea
 	if m.Preview.Protocol == LivePreviewKitty {
 		return m, terminalLivePreviewCmd(m)
 	}
+	if m.Preview.Protocol == LivePreviewOpen {
+		return m, openPreviewRefreshCmd(m.Preview.PNG, m.Preview.PNGHash)
+	}
 	return m, nil
 }
 

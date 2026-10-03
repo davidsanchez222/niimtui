@@ -225,6 +225,8 @@ type LivePreviewProtocol string
 const (
 	LivePreviewDisabled LivePreviewProtocol = ""
 	LivePreviewKitty    LivePreviewProtocol = "kitty"
+	// LivePreviewOpen refreshes a native Preview window for terminals without inline images.
+	LivePreviewOpen LivePreviewProtocol = "open"
 )
 
 type LivePreviewState struct {
@@ -425,6 +427,11 @@ func detectLivePreviewProtocol() LivePreviewProtocol {
 	switch strings.ToLower(envValue("NIIMTUI_GRAPHICS")) {
 	case "kitty":
 		return LivePreviewKitty
+	case "open":
+		if openPreviewAvailable() {
+			return LivePreviewOpen
+		}
+		return LivePreviewDisabled
 	case "off", "none", "disabled":
 		return LivePreviewDisabled
 	}
@@ -435,6 +442,9 @@ func detectLivePreviewProtocol() LivePreviewProtocol {
 	// The WEZTERM_* variables survive tmux, which rewrites TERM_PROGRAM.
 	if termProgram == "wezterm" || envValue("WEZTERM_PANE") != "" || envValue("WEZTERM_EXECUTABLE") != "" {
 		return LivePreviewKitty
+	}
+	if openPreviewAvailable() {
+		return LivePreviewOpen
 	}
 	return LivePreviewDisabled
 }
@@ -451,6 +461,8 @@ func livePreviewProtocolLabel(protocol LivePreviewProtocol) string {
 	switch protocol {
 	case LivePreviewKitty:
 		return "terminal image"
+	case LivePreviewOpen:
+		return "Preview window"
 	default:
 		return "disabled"
 	}

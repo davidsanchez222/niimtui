@@ -72,6 +72,26 @@ func TestDetectLivePreviewProtocolOverride(t *testing.T) {
 	}
 }
 
+func TestDetectLivePreviewProtocolOpenFallback(t *testing.T) {
+	withEnv(t, map[string]string{"TERM_PROGRAM": "Apple_Terminal", "TERM": "alacritty"})
+	openPreviewAvailable = func() bool { return true }
+	if got := detectLivePreviewProtocol(); got != LivePreviewOpen {
+		t.Fatalf("fallback: got %q, want %q", got, LivePreviewOpen)
+	}
+
+	withEnv(t, map[string]string{"TERM_PROGRAM": "WezTerm"})
+	openPreviewAvailable = func() bool { return true }
+	if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
+		t.Fatalf("inline images must win over open: got %q", got)
+	}
+
+	withEnv(t, map[string]string{"NIIMTUI_GRAPHICS": "off"})
+	openPreviewAvailable = func() bool { return true }
+	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+		t.Fatalf("off must disable open: got %q", got)
+	}
+}
+
 func TestTerminalImageEscapeKittyIncludesCellSize(t *testing.T) {
 	escape := terminalImageEscape(LivePreviewKitty, []byte{1, 2, 3}, 12, 5)
 	if !strings.Contains(escape, "c=12,r=5") {
@@ -214,10 +234,22 @@ func TestLivePreviewSchedulesWhenDocumentChanges(t *testing.T) {
 func withEnv(t *testing.T, values map[string]string) {
 	t.Helper()
 	previous := getenv
+	previousOpen := openPreviewAvailable
 	getenv = func(key string) string {
 		return values[key]
 	}
+	openPreviewAvailable = func() bool { return false }
 	t.Cleanup(func() {
 		getenv = previous
+		openPreviewAvailable = previousOpen
 	})
+}
+
+func TestParseBundleID(t *testing.T) {
+	if got := parseBundleID("\"CFBundleIdentifier\"=\"com.apple.Terminal\"\n"); got != "com.apple.Terminal" {
+		t.Fatalf("parseBundleID = %q", got)
+	}
+	if got := parseBundleID("garbage"); got != "" {
+		t.Fatalf("parseBundleID(garbage) = %q, want empty", got)
+	}
 }
