@@ -19,6 +19,29 @@ type Config struct {
 	Printers      []PrinterProfile `json:"printers"`
 	Presets       []LabelPreset    `json:"presets"`
 	DesignPresets []DesignPreset   `json:"design_presets,omitempty"`
+	Preferences   Preferences      `json:"preferences,omitempty"`
+}
+
+// Preferences holds TUI settings changed from the in-app menu.
+type Preferences struct {
+	AutoInsert bool `json:"auto_insert,omitempty"`
+	// LivePreview is one of the LivePreview* modes; empty means auto.
+	LivePreview string `json:"live_preview,omitempty"`
+}
+
+const (
+	LivePreviewAuto     = "auto"
+	LivePreviewTerminal = "terminal"
+	LivePreviewWindow   = "window"
+	LivePreviewOff      = "off"
+)
+
+func validLivePreviewMode(mode string) bool {
+	switch mode {
+	case "", LivePreviewAuto, LivePreviewTerminal, LivePreviewWindow, LivePreviewOff:
+		return true
+	}
+	return false
 }
 
 const appName = "niimtui"
@@ -235,6 +258,10 @@ func (c Config) Validate() error {
 		if preset.MarginsMM < 0 {
 			return fmt.Errorf("config.presets[%q].margins_mm must be >= 0", preset.Name)
 		}
+	}
+
+	if !validLivePreviewMode(c.Preferences.LivePreview) {
+		return fmt.Errorf("config.preferences.live_preview must be one of auto, terminal, window, off; got %q", c.Preferences.LivePreview)
 	}
 
 	for _, printer := range c.Printers {

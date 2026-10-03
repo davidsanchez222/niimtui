@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"niimtui/internal/config"
 	"niimtui/internal/label"
 	"niimtui/internal/render"
 )
@@ -1010,13 +1011,18 @@ func menuModalContent(m Model) []string {
 }
 
 func livePreviewMenuState(m Model) string {
-	if m.Preview.Protocol != LivePreviewDisabled {
-		return "on"
+	switch m.LivePreviewMode {
+	case config.LivePreviewTerminal:
+		return "terminal image"
+	case config.LivePreviewWindow:
+		return "Preview window"
+	case config.LivePreviewOff:
+		return "off"
 	}
 	if m.Preview.Available == LivePreviewDisabled {
-		return "off (unsupported in this terminal)"
+		return "auto (unavailable)"
 	}
-	return "off"
+	return "auto (" + livePreviewProtocolLabel(m.Preview.Available) + ")"
 }
 
 func onOff(enabled bool) string {

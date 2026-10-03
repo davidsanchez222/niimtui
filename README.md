@@ -115,43 +115,46 @@ Inside the designer, press `?` for every shortcut.
 <table>
   <tr>
     <td width="50%" valign="top">
-      <strong>label gallery</strong><br>
-      starter templates for each printer, plus your saved designs.
-      <!-- <img src="assets/screenshots/gallery.png" alt="label gallery"> -->
+      <strong>live image preview</strong><br>
+      see the real render as you edit, inside Kitty, Ghostty or WezTerm. Other macOS terminals fall back to Preview.app.<br><br>
+      <img src="assets/kittyLivePreview.gif" alt="live image preview in Kitty" width="100%">
     </td>
     <td width="50%" valign="top">
-      <strong>font picker</strong><br>
-      search installed fonts and preview each one live on the canvas.
-      <!-- <img src="assets/screenshots/font-picker.png" alt="font picker"> -->
+      <strong>reusable designs</strong><br>
+      name text and QR fields, save the design, then copy its ready-to-run <code>niimtui print</code> command.<br><br>
+      <img src="assets/saveDesign.gif" alt="saving a reusable design" width="100%">
     </td>
   </tr>
   <tr>
+    <td valign="top">
+      <strong>label gallery</strong><br>
+      starter templates for each printer, plus your saved designs.<br><br>
+      <img src="assets/gallery.png" alt="label gallery" width="100%">
+    </td>
     <td valign="top">
       <strong>inverted colors</strong><br>
-      flip black and white for bold, high-contrast labels.
-      <!-- <img src="assets/screenshots/inverted.png" alt="inverted color mode"> -->
-    </td>
-    <td valign="top">
-      <strong>live image preview</strong><br>
-      a real render inside Kitty, Ghostty and WezTerm, with a Preview.app fallback on macOS.
-      <!-- <img src="assets/screenshots/live-preview.png" alt="live image preview"> -->
+      flip black and white for bold, high-contrast labels.<br><br>
+      <img src="assets/invertedColor.png" alt="inverted color mode" width="100%">
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <strong>printer sidebar</strong><br>
-      switch printers and rolls; it auto-connects at startup.
-      <!-- <img src="assets/screenshots/printer-sidebar.png" alt="printer sidebar"> -->
+      <strong>font picker</strong><br>
+      search installed fonts and preview each one live on the canvas.<br><br>
+      <p align="center"><img src="assets/fontPicker.png" alt="font picker" width="70%"></p>
     </td>
     <td valign="top">
-      <strong>reusable designs</strong><br>
-      name text and QR fields, save the design, then copy its ready-to-run <code>niimtui print</code> command.
-      <!-- <img src="assets/screenshots/saved-designs.png" alt="saved designs"> -->
+      <strong>printer sidebar</strong><br>
+      see printer status, switch printers and rolls, and connect. It auto-connects at startup.<br><br>
+      <p align="center">
+        <img src="assets/printersidebar2.png" alt="printer status panel" width="48%">
+        <img src="assets/printersidebar1.png" alt="printer and roll controls" width="48%">
+      </p>
     </td>
   </tr>
 </table>
 
-The designer works best in a terminal of at least `140x30` cells. To control the live preview, set `NIIMTUI_GRAPHICS` to `kitty`, `open` or `off`. WezTerm also needs `enable_kitty_graphics = true`.
+The designer works best in a terminal of at least `140x30` cells. Open the menu (`3`) to switch live preview between auto, terminal image, Preview window and off, or to turn on auto insert. Your choices are saved. WezTerm needs `enable_kitty_graphics = true` for terminal images.
 
 ## cli
 
@@ -179,6 +182,7 @@ niimtui scan
 - `printers`: one profile per device. `default_preset` picks its label roll, and `defaults` holds density and print offsets.
 - `presets`: label rolls with size, shape (`rect` or `round`), layout and margins.
 - `design_presets`: designs saved from the TUI with `s`. `bindings` map names like `url` and `title` to elements, so `--set url=...` can fill them in from the CLI.
+- `preferences`: menu settings. `live_preview` is `auto`, `terminal`, `window` or `off`.
 - `server`: settings for `niimtui serve`. Keep `auth_token` secret.
 
 <details>
@@ -228,6 +232,10 @@ niimtui scan
       "margins_mm": 1
     }
   ],
+  "preferences": {
+    "auto_insert": false,
+    "live_preview": "auto"
+  },
   "design_presets": [
     {
       "name": "garage-bin",
@@ -335,13 +343,4 @@ gofmt -l .                          # should print nothing
 
 CI runs `go test`, `go vet` and `goreleaser check` on macOS for every PR.
 
-### useful environment variables
-
-| variable                 | effect                                                                     |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `XDG_CONFIG_HOME`        | config location; e.g. `XDG_CONFIG_HOME=/tmp/niim` gives a throwaway config |
-| `NIIMTUI_GRAPHICS`       | live preview mode: `kitty`, `open` or `off`                                |
-| `NIIMTUI_PRINT_TIMING=1` | log per-stage print timings                                                |
-| `NIIMTUI_DEBUG_PANIC=1`  | let TUI panics crash with a full stack trace                               |
-
-Built with Go and Bubble Tea/Lip Gloss. See [`docs/RELEASING.md`](./docs/RELEASING.md) for the release process.
+Built with Go and Bubble Tea/Lip Gloss. Debugging options are in [`CONTRIBUTING.md`](./CONTRIBUTING.md#debugging). See [`docs/RELEASING.md`](./docs/RELEASING.md) for the release process.

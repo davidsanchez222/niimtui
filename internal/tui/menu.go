@@ -1,6 +1,10 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+
+	"niimtui/internal/config"
+)
 
 const menuItemCount = 2
 
@@ -47,7 +51,9 @@ func wrapMenuIndex(index int) int {
 
 func (m *Model) activateMenuItem() tea.Cmd {
 	if m.MenuIndex == 1 {
-		return m.toggleLivePreview()
+		cmd := m.cycleLivePreviewMode()
+		m.persistPreferences()
+		return cmd
 	}
 	m.AutoInsert = !m.AutoInsert
 	if m.AutoInsert {
@@ -55,27 +61,49 @@ func (m *Model) activateMenuItem() tea.Cmd {
 	} else {
 		m.setStatus("Auto Insert disabled.")
 	}
+	m.persistPreferences()
 	return nil
 }
 
-// toggleLivePreview turns the live preview (inline image or native Preview window) off and back on.
-func (m *Model) toggleLivePreview() tea.Cmd {
-	if m.Preview.Protocol != LivePreviewDisabled {
-		m.Preview.Protocol = LivePreviewDisabled
-		m.Preview.PNG = nil
-		m.Preview.PNGHash = ""
-		m.Preview.RedrawPending = false
-		openPreviewViewer.close()
-		m.setStatus("Live preview disabled.")
+// livePreviewModes is the menu cycle order. The Preview window mode is skipped where it can't run.
+func livePreviewModes() []string {
+	modes := []string{config.LivePreviewAuto, config.LivePreviewTerminal}
+	if openPreviewAvailable() {
+		modes = append(modes, config.LivePreviewWindow)
+	}
+	return append(modes, config.LivePreviewOff)
+}
+
+func nextLivePreviewMode(current string) string {
+	if current == "" {
+		current = config.LivePreviewAuto
+	}
+	modes := livePreviewModes()
+	for i, mode := range modes {
+		if mode == current {
+			return modes[(i+1)%len(modes)]
+		}
+	}
+	return modes[0]
+}
+
+// cycleLivePreviewMode advances the live preview mode and applies it. While the menu is open the
+// terminal image is already cleared, so switching protocols only needs to drop the old render.
+func (m *Model) cycleLivePreviewMode() tea.Cmd {
+	m.LivePreviewMode = nextLivePreviewMode(m.LivePreviewMode)
+	protocol := detectLivePreviewProtocol(m.LivePreviewMode)
+	m.Preview.Protocol = LivePreviewDisabled
+	m.Preview.PNG = nil
+	m.Preview.PNGHash = ""
+	m.Preview.RedrawPending = false
+	openPreviewViewer.close()
+	if protocol == LivePreviewDisabled {
+		m.setStatus("Live preview: %s.", livePreviewMenuState(*m))
 		return nil
 	}
-	if m.Preview.Available == LivePreviewDisabled {
-		m.setStatus("Live preview isn't available in this terminal.")
-		return nil
-	}
-	m.Preview.Protocol = m.Preview.Available
+	m.Preview.Protocol = protocol
 	m.Preview.RequestedSeq++
 	m.Preview.LastKey = m.livePreviewKey()
-	m.setStatus("Live preview enabled.")
+	m.setStatus("Live preview: %s.", livePreviewMenuState(*m))
 	return livePreviewDebounceCmd(m.Preview.RequestedSeq)
 }

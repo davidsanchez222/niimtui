@@ -298,6 +298,7 @@ func runTUI(args []string) error {
 	var svc *service.Service
 	var printers []config.PrinterProfile
 	var designPresets []config.DesignPreset
+	var preferences config.Preferences
 	preferredPrinter := ""
 	resolvedConfigPath := *configPath
 	printerSelector := *printer
@@ -337,6 +338,7 @@ func runTUI(args []string) error {
 		preferredPrinter = cfg.ActivePrinter
 		printers = cfg.Printers
 		designPresets = cfg.DesignPresets
+		preferences = cfg.Preferences
 		printerProfile := cfg.Printers[0]
 		if printerSelector != "" || cfg.ActivePrinter != "" {
 			var err error
@@ -389,7 +391,7 @@ func runTUI(args []string) error {
 			return svc.Scan(ctx, "ble")
 		}
 	}
-	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{NewSession: newSession, Discover: discover, ConfigPath: resolvedConfigPath, Printers: printers, DesignPresets: designPresets, Printer: printerProfileName, PreferredPrinter: preferredPrinter, ExplicitPrinter: *printer != "", Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
+	return tui.RunWithPresets(*widthMM, *heightMM, shape, *fontPath, tui.PrintConfig{NewSession: newSession, Discover: discover, ConfigPath: resolvedConfigPath, Preferences: preferences, Printers: printers, DesignPresets: designPresets, Printer: printerProfileName, PreferredPrinter: preferredPrinter, ExplicitPrinter: *printer != "", Model: printerModel, DeviceName: deviceName, Identifier: identifier, OffsetXMM: offsetXMM, OffsetYMM: offsetYMM, Copies: 1}, presets, activePresetName)
 }
 
 func defaultPreset(cfg config.Config, printerSelector string) (config.LabelPreset, error) {

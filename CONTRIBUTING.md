@@ -26,6 +26,16 @@ XDG_CONFIG_HOME=/tmp/niimtui-dev go run ./cmd/niimtui
 
 A printer is only needed for real prints. Tests and PNG previews (`niimtui preview --out`) run without one.
 
+### Debugging
+
+These environment variables are for development only. They aren't user settings.
+
+| variable                 | effect                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `XDG_CONFIG_HOME`        | where the config lives; point it at a temp dir for a throwaway config                                |
+| `NIIMTUI_PRINT_TIMING=1` | log per-stage print timings to stderr; use with CLI commands like `print`, since it garbles the TUI |
+| `NIIMTUI_DEBUG_PANIC=1`  | let TUI panics crash with a full stack trace instead of being caught                                 |
+
 ## Project layout
 
 | path                         | what lives there                               |

@@ -813,28 +813,81 @@ func TestMenuFooterShowsOnlyBrowseAndSelect(t *testing.T) {
 	}
 }
 
-func TestMenuTogglesLivePreview(t *testing.T) {
+func TestMenuCyclesLivePreviewModes(t *testing.T) {
+	withEnv(t, map[string]string{"KITTY_WINDOW_ID": "1"})
+	openPreviewAvailable = func() bool { return true }
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
-	m.Preview.Available = LivePreviewKitty
-	m.Preview.Protocol = LivePreviewKitty
+	m.toggleMenu()
+	m.MenuIndex = 1
+
+	steps := []struct {
+		mode     string
+		protocol LivePreviewProtocol
+	}{
+		{config.LivePreviewTerminal, LivePreviewKitty},
+		{config.LivePreviewWindow, LivePreviewOpen},
+		{config.LivePreviewOff, LivePreviewDisabled},
+		{config.LivePreviewAuto, LivePreviewKitty},
+	}
+	for _, step := range steps {
+		cmd := m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+		if m.LivePreviewMode != step.mode || m.Preview.Protocol != step.protocol {
+			t.Fatalf("mode = %q protocol = %q, want %q %q", m.LivePreviewMode, m.Preview.Protocol, step.mode, step.protocol)
+		}
+		if (cmd != nil) != (step.protocol != LivePreviewDisabled) {
+			t.Fatalf("mode %q: render scheduled = %v", step.mode, cmd != nil)
+		}
+	}
+}
+
+func TestMenuSkipsPreviewWindowModeWhenUnavailable(t *testing.T) {
+	withEnv(t, map[string]string{})
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.LivePreviewMode = config.LivePreviewTerminal
 	m.toggleMenu()
 	m.MenuIndex = 1
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.Preview.Protocol != LivePreviewDisabled {
-		t.Fatalf("protocol = %q, want disabled", m.Preview.Protocol)
+	if m.LivePreviewMode != config.LivePreviewOff {
+		t.Fatalf("mode = %q, want off", m.LivePreviewMode)
 	}
-	if cmd := m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
-		t.Fatal("re-enabling should schedule a render")
-	}
-	if m.Preview.Protocol != LivePreviewKitty {
-		t.Fatalf("protocol = %q, want kitty", m.Preview.Protocol)
-	}
+}
 
-	m.Preview.Available = LivePreviewDisabled
-	m.Preview.Protocol = LivePreviewDisabled
+func TestNewModelUsesSavedPreferences(t *testing.T) {
+	withEnv(t, map[string]string{"KITTY_WINDOW_ID": "1"})
+	m := NewModel(50, 30, "rect", "", PrintConfig{Preferences: config.Preferences{AutoInsert: true, LivePreview: config.LivePreviewOff}})
+	if !m.AutoInsert || m.LivePreviewMode != config.LivePreviewOff {
+		t.Fatalf("auto insert = %v mode = %q", m.AutoInsert, m.LivePreviewMode)
+	}
+	if m.Preview.Protocol != LivePreviewDisabled || m.Preview.Available != LivePreviewKitty {
+		t.Fatalf("protocol = %q available = %q", m.Preview.Protocol, m.Preview.Available)
+	}
+}
+
+func TestMenuSavesPreferencesToConfig(t *testing.T) {
+	withEnv(t, map[string]string{"KITTY_WINDOW_ID": "1"})
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := config.Config{
+		Server:   config.ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "token"},
+		Printers: []config.PrinterProfile{{Name: "b1", Model: "B1", Transport: "ble", DeviceName: "B1-Test", DefaultPreset: "p"}},
+		Presets:  []config.LabelPreset{{Name: "p", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2}},
+	}
+	if err := config.Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(50, 30, "rect", "", PrintConfig{ConfigPath: path})
+	m.toggleMenu()
+	m.MenuIndex = 0
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.Preview.Protocol != LivePreviewDisabled {
-		t.Fatal("unsupported terminal must stay disabled")
+	m.MenuIndex = 1
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := config.Preferences{AutoInsert: true, LivePreview: config.LivePreviewTerminal}
+	if loaded.Preferences != want {
+		t.Fatalf("saved preferences = %+v, want %+v", loaded.Preferences, want)
 	}
 }
 

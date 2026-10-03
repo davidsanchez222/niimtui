@@ -75,3 +75,34 @@ func TestValidateRejectsUnknownActivePrinter(t *testing.T) {
 		t.Fatal("Validate() error = nil, want unknown active printer error")
 	}
 }
+
+func TestPreferencesValidateAndRoundTrip(t *testing.T) {
+	cfg := Config{
+		Server:   ServerConfig{Listen: "127.0.0.1:8443", AuthToken: "token"},
+		Printers: []PrinterProfile{{Name: "b1", Model: "B1", Transport: "ble", DeviceName: "B1-Test", DefaultPreset: "p"}},
+		Presets:  []LabelPreset{{Name: "p", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2}},
+	}
+	for _, mode := range []string{"", LivePreviewAuto, LivePreviewTerminal, LivePreviewWindow, LivePreviewOff} {
+		cfg.Preferences.LivePreview = mode
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("Validate() with live_preview %q error = %v", mode, err)
+		}
+	}
+	cfg.Preferences.LivePreview = "kitty"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() accepted unknown live_preview mode")
+	}
+
+	cfg.Preferences = Preferences{AutoInsert: true, LivePreview: LivePreviewWindow}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Preferences != cfg.Preferences {
+		t.Fatalf("preferences = %+v, want %+v", loaded.Preferences, cfg.Preferences)
+	}
+}

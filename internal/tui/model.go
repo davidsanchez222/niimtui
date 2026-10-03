@@ -35,6 +35,7 @@ type PrintConfig struct {
 	PreferredPrinter string
 	ExplicitPrinter  bool
 	ConfigPath       string
+	Preferences      config.Preferences
 	Printers         []config.PrinterProfile
 	DesignPresets    []config.DesignPreset
 	Printer          string
@@ -184,11 +185,13 @@ type Model struct {
 	FontPreviewIndex int
 	FontPreviewID    string
 
-	FocusPickerOpen  bool
-	HelpOpen         bool
-	MenuOpen         bool
-	MenuIndex        int
-	AutoInsert       bool
+	FocusPickerOpen bool
+	HelpOpen        bool
+	MenuOpen        bool
+	MenuIndex       int
+	AutoInsert      bool
+	// LivePreviewMode is the saved config.LivePreview* mode; empty means auto.
+	LivePreviewMode  string
 	SidebarFocused   bool
 	SidebarIndex     int
 	SidebarCollapsed map[string]bool
@@ -260,8 +263,10 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 	if printConfig.Discover != nil {
 		status = "Scanning for configured printers. You can start designing now."
 	}
-	detected := detectLivePreviewProtocol()
-	preview := LivePreviewState{Protocol: detected, Available: detected}
+	preview := LivePreviewState{
+		Protocol:  detectLivePreviewProtocol(printConfig.Preferences.LivePreview),
+		Available: detectLivePreviewProtocol(config.LivePreviewAuto),
+	}
 	if preview.Protocol != LivePreviewDisabled {
 		preview.RequestedSeq = 1
 		preview.LastKey = documentPreviewKey(doc, printConfig)
@@ -298,6 +303,8 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 		NextID:          1,
 		FontPath:        fontPath,
 		Fonts:           fonts,
+		AutoInsert:      printConfig.Preferences.AutoInsert,
+		LivePreviewMode: printConfig.Preferences.LivePreview,
 		FontPickerIndex: fontOptionIndex(fonts, fontPath),
 		Print:           printConfig,
 		Connection:      connection,
@@ -426,20 +433,22 @@ func connectPrinterCmd(session PrinterSession, seq int) tea.Cmd {
 	}
 }
 
-func detectLivePreviewProtocol() LivePreviewProtocol {
-	termProgram := strings.ToLower(strings.TrimSpace(envValue("TERM_PROGRAM")))
-	term := strings.ToLower(strings.TrimSpace(envValue("TERM")))
-	switch strings.ToLower(envValue("NIIMTUI_GRAPHICS")) {
-	case "kitty":
+// detectLivePreviewProtocol resolves a config.LivePreview* mode to a protocol. Auto (or empty)
+// detects what the terminal supports; terminal forces kitty graphics for terminals detection misses.
+func detectLivePreviewProtocol(mode string) LivePreviewProtocol {
+	switch mode {
+	case config.LivePreviewTerminal:
 		return LivePreviewKitty
-	case "open":
+	case config.LivePreviewWindow:
 		if openPreviewAvailable() {
 			return LivePreviewOpen
 		}
 		return LivePreviewDisabled
-	case "off", "none", "disabled":
+	case config.LivePreviewOff:
 		return LivePreviewDisabled
 	}
+	termProgram := strings.ToLower(strings.TrimSpace(envValue("TERM_PROGRAM")))
+	term := strings.ToLower(strings.TrimSpace(envValue("TERM")))
 	if envValue("KITTY_WINDOW_ID") != "" || strings.Contains(term, "xterm-kitty") || termProgram == "ghostty" {
 		return LivePreviewKitty
 	}

@@ -18,7 +18,7 @@ func TestDetectLivePreviewProtocolPrefersKitty(t *testing.T) {
 		"TERM":            "xterm-256color",
 	})
 
-	if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
+	if got := detectLivePreviewProtocol(""); got != LivePreviewKitty {
 		t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewKitty)
 	}
 }
@@ -30,7 +30,7 @@ func TestDetectLivePreviewProtocolITermUsesFallback(t *testing.T) {
 		"TERM":            "xterm-256color",
 	})
 
-	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+	if got := detectLivePreviewProtocol(""); got != LivePreviewDisabled {
 		t.Fatalf("detectLivePreviewProtocol() = %q, want disabled", got)
 	}
 }
@@ -42,7 +42,7 @@ func TestDetectLivePreviewProtocolDoesNotAutoOpenFallback(t *testing.T) {
 		"TERM":            "xterm-256color",
 	})
 
-	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+	if got := detectLivePreviewProtocol(""); got != LivePreviewDisabled {
 		t.Fatalf("detectLivePreviewProtocol() = %q, want disabled", got)
 	}
 }
@@ -54,40 +54,48 @@ func TestDetectLivePreviewProtocolWezTerm(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			withEnv(t, env)
-			if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
+			if got := detectLivePreviewProtocol(""); got != LivePreviewKitty {
 				t.Fatalf("detectLivePreviewProtocol() = %q, want %q", got, LivePreviewKitty)
 			}
 		})
 	}
 }
 
-func TestDetectLivePreviewProtocolOverride(t *testing.T) {
-	withEnv(t, map[string]string{"NIIMTUI_GRAPHICS": "kitty", "TERM": "xterm-256color"})
-	if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
-		t.Fatalf("override kitty: got %q", got)
+func TestDetectLivePreviewProtocolModes(t *testing.T) {
+	withEnv(t, map[string]string{"TERM": "xterm-256color"})
+	if got := detectLivePreviewProtocol(config.LivePreviewTerminal); got != LivePreviewKitty {
+		t.Fatalf("terminal mode: got %q", got)
 	}
-	withEnv(t, map[string]string{"NIIMTUI_GRAPHICS": "off", "KITTY_WINDOW_ID": "1"})
-	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
-		t.Fatalf("override off: got %q", got)
+	withEnv(t, map[string]string{"KITTY_WINDOW_ID": "1"})
+	if got := detectLivePreviewProtocol(config.LivePreviewOff); got != LivePreviewDisabled {
+		t.Fatalf("off mode: got %q", got)
+	}
+	withEnv(t, map[string]string{"KITTY_WINDOW_ID": "1"})
+	if got := detectLivePreviewProtocol(config.LivePreviewWindow); got != LivePreviewDisabled {
+		t.Fatalf("window mode without Preview.app: got %q", got)
+	}
+	openPreviewAvailable = func() bool { return true }
+	if got := detectLivePreviewProtocol(config.LivePreviewWindow); got != LivePreviewOpen {
+		t.Fatalf("window mode: got %q", got)
 	}
 }
 
 func TestDetectLivePreviewProtocolOpenFallback(t *testing.T) {
 	withEnv(t, map[string]string{"TERM_PROGRAM": "Apple_Terminal", "TERM": "alacritty"})
 	openPreviewAvailable = func() bool { return true }
-	if got := detectLivePreviewProtocol(); got != LivePreviewOpen {
+	if got := detectLivePreviewProtocol(""); got != LivePreviewOpen {
 		t.Fatalf("fallback: got %q, want %q", got, LivePreviewOpen)
 	}
 
 	withEnv(t, map[string]string{"TERM_PROGRAM": "WezTerm"})
 	openPreviewAvailable = func() bool { return true }
-	if got := detectLivePreviewProtocol(); got != LivePreviewKitty {
+	if got := detectLivePreviewProtocol(""); got != LivePreviewKitty {
 		t.Fatalf("inline images must win over open: got %q", got)
 	}
 
-	withEnv(t, map[string]string{"NIIMTUI_GRAPHICS": "off"})
+	withEnv(t, map[string]string{})
 	openPreviewAvailable = func() bool { return true }
-	if got := detectLivePreviewProtocol(); got != LivePreviewDisabled {
+	if got := detectLivePreviewProtocol(config.LivePreviewOff); got != LivePreviewDisabled {
 		t.Fatalf("off must disable open: got %q", got)
 	}
 }
