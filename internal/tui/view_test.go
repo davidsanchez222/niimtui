@@ -370,8 +370,8 @@ func TestPrinterTreeCanSelectRollOnAnotherPrinter(t *testing.T) {
 	stocks := []config.LabelPreset{{Name: "b1-round", WidthMM: 50, HeightMM: 50, Shape: "round"}, {Name: "d110-small", WidthMM: 40, HeightMM: 12, Shape: "rect"}}
 	m := NewModelWithPresets(50, 50, "round", "", PrintConfig{ConfigPath: filepath.Join(t.TempDir(), "missing.json"), Printers: printers, Printer: "b1", Model: "B1", NewSession: func(string) (PrinterSession, error) { return noopPrinterSession{}, nil }}, stocks, "b1-round")
 	m.focusSidebar()
-	if got := len(m.sidebarRows()); got != 4 {
-		t.Fatalf("tree has %d rows, want two printers and two rolls", got)
+	if got := len(m.sidebarRows()); got != 5 {
+		t.Fatalf("tree has %d rows, want two printers, two rolls and a spacer", got)
 	}
 	m.handleSidebarKey(testKey("j")) // B1 roll
 	m.handleSidebarKey(testKey("j")) // D110 printer

@@ -99,6 +99,13 @@ func (m *Model) clickTextAt(x, y int) (bool, tea.Cmd) {
 	if m.Prompt.Mode != PromptNone || m.MenuOpen || m.HelpOpen || m.EditingText {
 		return true, nil
 	}
+	if m.Tab == tabDesigner && x < layoutLeftPanelWidth && y > layoutBodyTop {
+		if !m.SidebarFocused {
+			m.focusSidebar()
+			return true, nil
+		}
+		return true, m.clickSidebar(x, y)
+	}
 	if m.Tab == tabGallery && y >= layoutBodyTop+3 && x < layoutLeftPanelWidth {
 		rows := m.galleryRows()
 		start, _ := sidebarWindow(len(rows), m.GalleryIndex, max(1, m.canvasPanelHeight()-7))

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"niimtui/internal/config"
 )
@@ -13,11 +14,107 @@ type sidebarRow struct {
 	Roll    config.LabelPreset
 	Header  bool
 	Empty   bool
+	Spacer  bool
+}
+
+// Screen geometry of the sidebar list inside the left panel: the border takes one column, and the first
+// row sits below the title and hint lines (verified against the rendered view in sidebar_test.go).
+const (
+	sidebarContentX = 1
+	sidebarFirstRow = layoutBodyTop + 2
+)
+
+type chipAction int
+
+const (
+	chipNone chipAction = iota
+	chipConnect
+	chipDisconnect
+	chipReconnect
+)
+
+// sidebarChip describes the right-aligned connection chip on a printer header and what clicking it does.
+func sidebarChip(m Model, printer config.PrinterProfile) (string, lipgloss.Style, chipAction) {
+	if printer.Name == m.Print.Printer {
+		switch m.Connection {
+		case ConnectionConnected:
+			return "● connected", lipgloss.NewStyle().Foreground(lipgloss.Color("42")), chipDisconnect
+		case ConnectionConnecting:
+			return "◐ connecting", lipgloss.NewStyle().Foreground(lipgloss.Color("215")), chipNone
+		case ConnectionDisconnected:
+			return "○ reconnect", lipgloss.NewStyle().Foreground(lipgloss.Color("203")), chipReconnect
+		default:
+			return "○ unavailable", mutedStyle, chipNone
+		}
+	}
+	switch {
+	case m.DetectedNames == nil:
+		return "○ connect", mutedStyle, chipConnect
+	case m.DetectedNames[printer.Name]:
+		return "○ connect", lipgloss.NewStyle().Foreground(catColor(mochaSky)), chipConnect
+	default:
+		return "· not seen", mutedStyle, chipConnect
+	}
+}
+
+// sidebarChipSpan returns the half-open screen column range of a header's chip within the sidebar content.
+func sidebarChipSpan(m Model, printer config.PrinterProfile, width int) (int, int) {
+	text, _, _ := sidebarChip(m, printer)
+	w := lipgloss.Width(text)
+	return width - w, width
+}
+
+func (m *Model) activateSidebarChip(printer config.PrinterProfile) tea.Cmd {
+	_, _, action := sidebarChip(*m, printer)
+	switch action {
+	case chipDisconnect:
+		m.disconnectPrinter()
+	case chipReconnect:
+		return m.reconnectPrinter()
+	case chipConnect:
+		return m.applyPrinter(printer)
+	default:
+		m.setStatus("Printer is %s.", m.Connection)
+	}
+	return nil
+}
+
+func (m Model) sidebarVisibleRange(rows []sidebarRow) (int, int) {
+	return sidebarWindow(len(rows), m.SidebarIndex, max(1, m.canvasPanelHeight()-8))
+}
+
+// clickSidebar handles a left click at screen (x, y) on the focused sidebar list.
+func (m *Model) clickSidebar(x, y int) tea.Cmd {
+	rows := m.sidebarRows()
+	start, _ := m.sidebarVisibleRange(rows)
+	index := start + y - sidebarFirstRow
+	if y < sidebarFirstRow || index < 0 || index >= len(rows) {
+		return nil
+	}
+	row := rows[index]
+	if row.Empty || row.Spacer {
+		return nil
+	}
+	m.SidebarIndex = index
+	if !row.Header {
+		return m.selectSidebarRow(row)
+	}
+	width := panelContentWidth(layoutLeftPanelWidth)
+	chipStart, chipEnd := sidebarChipSpan(*m, row.Printer, width)
+	col := x - sidebarContentX
+	if col >= chipStart && col < chipEnd {
+		return m.activateSidebarChip(row.Printer)
+	}
+	m.foldSidebarPrinter(row.Printer.Name, !m.SidebarCollapsed[row.Printer.Name])
+	return nil
 }
 
 func (m Model) sidebarRows() []sidebarRow {
 	rows := make([]sidebarRow, 0, len(m.Print.Printers)+len(m.AllPresets))
-	for _, printer := range m.Print.Printers {
+	for i, printer := range m.Print.Printers {
+		if i > 0 {
+			rows = append(rows, sidebarRow{Spacer: true})
+		}
 		rows = append(rows, sidebarRow{Printer: printer, Header: true})
 		if m.SidebarCollapsed[printer.Name] {
 			continue
@@ -109,7 +206,7 @@ func (m *Model) handleSidebarKey(key tea.KeyMsg) tea.Cmd {
 		}
 		for i := 0; i < len(rows); i++ {
 			m.SidebarIndex = (m.SidebarIndex + step + len(rows)) % len(rows)
-			if !rows[m.SidebarIndex].Empty {
+			if !rows[m.SidebarIndex].Empty && !rows[m.SidebarIndex].Spacer {
 				break
 			}
 		}
@@ -124,11 +221,11 @@ func (m *Model) handleSidebarKey(key tea.KeyMsg) tea.Cmd {
 		}
 		m.foldSidebarPrinter(row.Printer.Name, collapsed)
 	case "enter":
-		if row, ok := m.currentSidebarRow(); ok && !row.Empty {
+		if row, ok := m.currentSidebarRow(); ok && !row.Empty && !row.Spacer {
 			return m.selectSidebarRow(row)
 		}
 	case "c":
-		if row, ok := m.currentSidebarRow(); ok && !row.Empty {
+		if row, ok := m.currentSidebarRow(); ok && !row.Empty && !row.Spacer {
 			return m.selectSidebarRow(row)
 		}
 		return m.reconnectPrinter()
@@ -151,9 +248,13 @@ func sidebarWindow(length, selected, limit int) (int, int) {
 func sidebarLines(m Model, width int) []string {
 	lines := []string{propertyTitleStyle.Render("Printer controls"), mutedStyle.Render("↑/↓ k/j browse · enter select")}
 	rows := m.sidebarRows()
-	start, end := sidebarWindow(len(rows), m.SidebarIndex, max(1, m.canvasPanelHeight()-8))
+	start, end := m.sidebarVisibleRange(rows)
 	for i := start; i < end; i++ {
 		row := rows[i]
+		if row.Spacer {
+			lines = append(lines, "")
+			continue
+		}
 		prefix := "  "
 		if i == m.SidebarIndex {
 			prefix = "> "
@@ -163,18 +264,11 @@ func sidebarLines(m Model, width int) []string {
 			if m.SidebarCollapsed[row.Printer.Name] {
 				arrow = "▸ "
 			}
-			active := ""
-			if row.Printer.Name == m.Print.Printer {
-				active = " *"
-			}
-			if m.DetectedNames != nil {
-				if m.DetectedNames[row.Printer.Name] {
-					active += " seen"
-				} else {
-					active += " unseen"
-				}
-			}
-			lines = append(lines, truncateText(prefix+arrow+row.Printer.Name+active, width))
+			chip, chipStyle, _ := sidebarChip(m, row.Printer)
+			name := truncateText(row.Printer.Name, max(width-lipgloss.Width(chip)-lipgloss.Width(prefix+arrow)-1, 1))
+			pad := strings.Repeat(" ", max(width-lipgloss.Width(prefix+arrow+name)-lipgloss.Width(chip), 1))
+			nameStyle := lipgloss.NewStyle().Foreground(catColor(mochaMauve)).Bold(row.Printer.Name == m.Print.Printer)
+			lines = append(lines, prefix+arrow+nameStyle.Render(name)+pad+chipStyle.Render(chip))
 			continue
 		}
 		if row.Empty {
@@ -194,7 +288,7 @@ func sidebarLines(m Model, width int) []string {
 	if m.Discovering {
 		lines = append(lines, mutedStyle.Render("Scanning for printers..."))
 	}
-	lines = append(lines, helpItem("r", "rescan"), mutedStyle.Render("←/→ h/l fold · space toggle"))
+	lines = append(lines, helpItem("r", "rescan"), mutedStyle.Render("←/→ fold · click ○ to connect"))
 	return padLines(lines, width)
 }
 
