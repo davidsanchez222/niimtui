@@ -94,6 +94,16 @@ brew install davidsanchez222/tap/niimtui
 
 macOS on Apple Silicon is tested. Intel Macs are built but untested. Linux and Windows aren't packaged yet; see [support](#support).
 
+### recommended: a modern terminal
+
+For the best experience, use a terminal that can show the live label preview inline, next to the designer:
+
+- [Ghostty](https://ghostty.org)
+- [Kitty](https://sw.kovidgoyal.net/kitty/)
+- [WezTerm](https://wezterm.org) (set `enable_kitty_graphics = true`)
+
+You don't need one. Other terminals, such as Terminal.app, iTerm2 and Alacritty, run the full designer too. The live preview opens in a Preview.app window that refreshes as you edit.
+
 ## quick start
 
 ```bash
