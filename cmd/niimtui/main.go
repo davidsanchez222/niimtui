@@ -174,12 +174,12 @@ func calibrationPreset(cfg config.Config, printer config.PrinterProfile, presetN
 
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	configPath := fs.String("config", "config.example.json", "path to config JSON")
+	configPath := fs.String("config", "", "path to config JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadOptional(*configPath)
 	if err != nil {
 		return err
 	}
@@ -246,13 +246,13 @@ func runProbe(args []string) error {
 
 func runScan(args []string) error {
 	fs := flag.NewFlagSet("scan", flag.ContinueOnError)
-	configPath := fs.String("config", "config.example.json", "path to config JSON")
+	configPath := fs.String("config", "", "path to config JSON")
 	transportName := fs.String("transport", "ble", "transport to scan")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadOptional(*configPath)
 	if err != nil {
 		return err
 	}
@@ -448,18 +448,18 @@ func printUsage() {
 
 Usage:
   niimtui
-  niimtui serve --config ./config.example.json
+  niimtui serve
   niimtui setup
-  niimtui calibrate --config ./config.example.json --printer b1-round --preset b1-50x30 --preview-out ./calibration.png
-  niimtui print --config ./config.example.json --printer d110-desk --image ./testlabels/preview.png
+  niimtui calibrate --printer b1-round --preset b1-50x30 --preview-out ./calibration.png
+  niimtui print --printer d110-desk --image ./testlabels/preview.png
   niimtui print --qr https://example.com --title "Garage Bin 4"
   niimtui print --design garage-bin --set url=https://example.com
   niimtui preview --design garage-bin --set url=https://example.com --out ./preview.png
   niimtui designs
-  niimtui probe --config ./config.example.json --printer d110-desk
-  niimtui scan --config ./config.example.json --transport ble
-  niimtui printers --config ./config.example.json
-  niimtui presets --config ./config.example.json
+  niimtui probe --printer d110-desk
+  niimtui scan --transport ble
+  niimtui printers
+  niimtui presets
   niimtui tui --width-mm 50 --height-mm 30 --font-path /path/to/font.ttf
   niimtui --version
 `)
