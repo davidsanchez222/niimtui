@@ -19,6 +19,13 @@ import (
 	"niimtui/internal/tui"
 )
 
+// Set by release ldflags; see .goreleaser.yaml.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		var exit *commandExit
@@ -61,6 +68,9 @@ func run(args []string) error {
 		return runPresets(args[1:])
 	case "tui":
 		return runTUI(args[1:])
+	case "version", "--version", "-v":
+		fmt.Fprintln(os.Stdout, versionString())
+		return nil
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -423,6 +433,10 @@ func defaultPresetForPrinter(cfg config.Config, printer config.PrinterProfile) (
 	return config.LabelPreset{}, fmt.Errorf("printer %q references unknown default preset %q", printer.Name, printer.DefaultPreset)
 }
 
+func versionString() string {
+	return fmt.Sprintf("niimtui %s (commit %s, built %s)", version, commit, date)
+}
+
 func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -447,5 +461,6 @@ Usage:
   niimtui printers --config ./config.example.json
   niimtui presets --config ./config.example.json
   niimtui tui --width-mm 50 --height-mm 30 --font-path /path/to/font.ttf
+  niimtui --version
 `)
 }

@@ -1,3 +1,5 @@
 testlabels/
-docs/
+docs/*
+!docs/RELEASING.md
 plans/
+dist/

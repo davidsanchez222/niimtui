@@ -87,6 +87,16 @@ It is built around the terminal workflow first: open the designer, compose a lab
 - **Niimbot protocol work** - working macOS BLE paths for `D110_M` v4-class devices and `B1`, with model-specific print task selection.
 - **automation-ready** - CLI commands and a local service exist alongside the TUI for scripts, probes, scans, previews, and future Homebox workflows.
 
+## install
+
+Packaged installs are being prepared for macOS first. After the first packaged release, the supported install path will be:
+
+```bash
+brew install davidsanchez222/tap/niimtui
+```
+
+Apple Silicon is the tested macOS platform; Intel builds will be published but remain untested until verified. Linux and Windows packages are planned, but will remain experimental until tested with real BLE printing setups. Until then, run from source with Go as shown below.
+
 ## quick start
 
 Run the default flow. If no default config exists, `niimtui` starts setup first; otherwise it opens the TUI.
@@ -210,7 +220,8 @@ The current service/CLI path supports QR text plus optional title/subtitle, reso
 | Full HTTPS Homebox integration                                    | ❌     |
 | Homebrew tap release (`brew install davidsanchez222/tap/niimtui`) | ❌     |
 | Homebrew Core submission (`brew install niimtui`)                 | ❌     |
-| Windows package manager publishing: winget, Scoop, Chocolatey     | ❌     |
+| Windows package manager publishing: winget, then Scoop            | ❌     |
+| Linux packaging: Arch (`niimtui-bin`), then apt `.deb`, then Nix  | ❌     |
 | Linux testing                                                     | ❌     |
 | Windows testing                                                   | ❌     |
 | SSH session testing                                               | ❌     |
@@ -223,6 +234,7 @@ More implementation detail lives in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) - technical overview and design notes
 - [`docs/TESTED_SETUP.md`](./docs/TESTED_SETUP.md) - verified setup and printer-specific commands
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) - milestones and future work
+- [`docs/RELEASING.md`](./docs/RELEASING.md) - packaging and release process
 
 ## development
 

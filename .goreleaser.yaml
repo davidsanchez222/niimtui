@@ -1,0 +1,64 @@
+# GoReleaser config for the first packaging milestone: macOS archives plus a
+# Homebrew tap formula. See docs/RELEASING.md.
+version: 2
+
+project_name: niimtui
+
+builds:
+  - id: niimtui
+    main: ./cmd/niimtui
+    binary: niimtui
+    # The macOS BLE stack (tinygo.org/x/bluetooth -> cbgo) uses cgo. Go turns
+    # cgo off when cross-compiling, so force it on for the amd64 build on an
+    # arm64 macOS runner. Builds must run on macOS with Xcode tools.
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Tag }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ time "2006-01-02" }}
+
+archives:
+  - id: niimtui
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+
+release:
+  github:
+    owner: davidsanchez222
+    name: niimtui
+
+# `brews` is deprecated upstream in favor of casks, but it remains the smallest
+# path to `brew install davidsanchez222/tap/niimtui` for a CLI formula.
+brews:
+  - name: niimtui
+    repository:
+      owner: davidsanchez222
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/davidsanchez222/niimtui
+    description: Terminal-first label design and printing for Niimbot printers
+    license: MIT
+    commit_author:
+      name: David Sanchez
+    commit_msg_template: "Update niimtui to {{ .Tag }}"
+    install: |
+      bin.install "niimtui"
+    test: |
+      system "#{bin}/niimtui", "--version"
