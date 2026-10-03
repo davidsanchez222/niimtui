@@ -64,14 +64,17 @@
 
 <div align="center">
   <video
-    src="https://github.com/user-attachments/assets/205564aa-506e-4792-ae7e-b0abf91e681b"
+    src="https://github.com/user-attachments/assets/8656b58b-12e7-4bf0-8572-b91d0f667313"
     width="500"
     loop
     muted
     >
   </video>
+  > risks
 </div>
 
+> [!NOTE]
+> notice how the mouse wasn't used once to make the label above. only keystrokes! however, niimtui still has full mouse support
 ---
 
 `niimtui` is a Go TUI for designing labels in the terminal and printing them to Niimbot printers over Bluetooth Low Energy.
