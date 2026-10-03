@@ -36,6 +36,8 @@ checksum:
 
 changelog:
   use: github
+  # Never include commit author emails: show the GitHub username, else the author name.
+  format: "{{ .SHA }}: {{ .Message }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }}{{ end }})"
 
 release:
   github:
