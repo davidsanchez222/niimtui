@@ -70,7 +70,6 @@
     muted
     >
   </video>
-  > risks
 </div>
 
 > [!NOTE]
