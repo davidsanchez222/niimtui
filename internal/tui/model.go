@@ -163,6 +163,8 @@ type Model struct {
 	DesignPreset  int
 	Bindings      []config.DesignBinding
 	Grid          bool
+	// Count is a pending vim-style move count typed before h/j/k/l or an arrow.
+	Count int
 
 	SelectedID string
 	Drag       DragState

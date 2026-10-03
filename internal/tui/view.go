@@ -29,7 +29,7 @@ var (
 				Bold(true)
 
 	gridStyle = lipgloss.NewStyle().
-			Foreground(catColor(mochaSurface1))
+			Foreground(catColor(mochaRed))
 
 	propertyTitleStyle = lipgloss.NewStyle().
 				Bold(true).
@@ -966,6 +966,8 @@ func helpModalContent() []string {
 		helpRow("tab / ctrl+t", "Printer controls / switch designer and gallery"),
 		helpRow("s", "Save current design preset"),
 		helpRow("↑↓←→ / kjhl", "Move selected element by one canvas cell"),
+		helpRow("shift+↑↓←→", "Move selected element by 5 canvas cells"),
+		helpRow("4-9 then kjhl", "Move by a typed count of cells (e.g. 12l)"),
 		helpRow("H / L", "Shrink / grow selected width"),
 		helpRow("K / J", "Shrink / grow selected height"),
 		helpRow("[ ] / { }", "Resize diagonally from the bottom-right"),

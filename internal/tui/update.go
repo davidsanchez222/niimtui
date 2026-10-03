@@ -107,6 +107,10 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, cmd
 	case tea.KeyMsg:
+		m.dropStaleCount(msg.String())
+		if m.Count > 0 && m.Tab == tabDesigner && !m.MenuOpen && !m.HelpOpen && m.extendCount(msg.String()) {
+			return m, nil
+		}
 		if msg.String() == "1" {
 			return m, m.switchTopTab(tabDesigner)
 		}
@@ -406,14 +410,24 @@ func (m *Model) handleCommandKey(msg tea.KeyMsg) bool {
 		return true
 	case "delete", "backspace":
 		return m.deleteSelected()
+	case "4", "5", "6", "7", "8", "9":
+		return m.extendCount(msg.String())
 	case "k", "up":
-		return m.nudgeSelectedCells(0, -1)
+		return m.nudgeSelectedCells(0, -m.takeCount(1))
 	case "j", "down":
-		return m.nudgeSelectedCells(0, 1)
+		return m.nudgeSelectedCells(0, m.takeCount(1))
 	case "h", "left":
-		return m.nudgeSelectedCells(-1, 0)
+		return m.nudgeSelectedCells(-m.takeCount(1), 0)
 	case "l", "right":
-		return m.nudgeSelectedCells(1, 0)
+		return m.nudgeSelectedCells(m.takeCount(1), 0)
+	case "shift+up":
+		return m.nudgeSelectedCells(0, -m.takeCount(fastMoveCells))
+	case "shift+down":
+		return m.nudgeSelectedCells(0, m.takeCount(fastMoveCells))
+	case "shift+left":
+		return m.nudgeSelectedCells(-m.takeCount(fastMoveCells), 0)
+	case "shift+right":
+		return m.nudgeSelectedCells(m.takeCount(fastMoveCells), 0)
 	case "H":
 		return m.resizeSelectedDimensions(-1, 0)
 	case "J":

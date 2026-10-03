@@ -343,6 +343,54 @@ func (m *Model) applySelectedFont() bool {
 	return true
 }
 
+// fastMoveCells is how far shift+arrow moves the selected element, in canvas cells.
+const (
+	fastMoveCells = 5
+	maxMoveCount  = 99
+)
+
+// extendCount appends a digit to the pending move count. Counts start with 4-9 because 1, 2 and 3 are
+// global tab and menu keys, but once a count is pending every digit extends it.
+func (m *Model) extendCount(key string) bool {
+	if len(key) != 1 || key[0] < '0' || key[0] > '9' {
+		return false
+	}
+	if _, ok := m.selectedElement(); !ok {
+		return false
+	}
+	if m.Count == 0 && key[0] < '4' {
+		return false
+	}
+	m.Count = min(m.Count*10+int(key[0]-'0'), maxMoveCount)
+	m.setStatus("Count: %d", m.Count)
+	return true
+}
+
+// takeCount returns the pending count (or base when none is pending, multiplied by the count otherwise)
+// and clears it.
+func (m *Model) takeCount(base int) int {
+	n := base
+	if m.Count > 0 {
+		n = base * m.Count
+	}
+	m.Count = 0
+	return n
+}
+
+// dropStaleCount clears a pending count when the next key isn't a digit or a move key.
+func (m *Model) dropStaleCount(key string) {
+	if m.Count == 0 {
+		return
+	}
+	switch key {
+	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+		"h", "j", "k", "l", "up", "down", "left", "right",
+		"shift+up", "shift+down", "shift+left", "shift+right":
+		return
+	}
+	m.Count = 0
+}
+
 func (m *Model) nudgeSelected(dxMM, dyMM float64) bool {
 	element, ok := m.selectedElement()
 	if !ok {
