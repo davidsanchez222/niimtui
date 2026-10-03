@@ -768,10 +768,73 @@ func TestMenuKeepsPreferencesButNotDesignAndRollActions(t *testing.T) {
 	if !strings.Contains(view, "Auto Insert") || strings.Contains(view, "Label roll") || strings.Contains(view, "Saved preset") || strings.Contains(view, "Save current design") {
 		t.Fatalf("menu content = %q", view)
 	}
+	if !strings.Contains(view, "Live Preview") || strings.Contains(view, "Close") {
+		t.Fatalf("menu content = %q", view)
+	}
+}
+
+func TestMenuLeavesOnlyThroughTabKeys(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Width, m.Height, m.Ready = 200, 60, true
+	m.reflow()
+	m = pressRunes(m, "3")
+	if !m.MenuOpen {
+		t.Fatal("3 did not open the menu")
+	}
+	for _, msg := range []tea.KeyMsg{{Type: tea.KeyEsc}, {Type: tea.KeyRunes, Runes: []rune("3")}, {Type: tea.KeyRunes, Runes: []rune("?")}, {Type: tea.KeyCtrlT}} {
+		m = pressKey(m, msg)
+		if !m.MenuOpen {
+			t.Fatalf("%q left the menu", msg.String())
+		}
+	}
+	m = pressRunes(m, "1")
+	if m.MenuOpen || m.Tab != tabDesigner {
+		t.Fatalf("1 should leave the menu for the designer: menu=%v tab=%v", m.MenuOpen, m.Tab)
+	}
+	m = pressRunes(pressRunes(m, "3"), "2")
+	if m.MenuOpen || m.Tab != tabGallery {
+		t.Fatalf("2 should leave the menu for the gallery: menu=%v tab=%v", m.MenuOpen, m.Tab)
+	}
+}
+
+func TestMenuFooterShowsOnlyBrowseAndSelect(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.toggleMenu()
+	footer := strings.Join(footerHelpLines(m, 120), "\n")
+	for _, want := range []string{"browse", "select"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("menu footer = %q, want %q", footer, want)
+		}
+	}
+	for _, unwanted := range []string{"open", "move", "text", "fold", "esc"} {
+		if strings.Contains(footer, unwanted) {
+			t.Fatalf("menu footer = %q, must not contain %q", footer, unwanted)
+		}
+	}
+}
+
+func TestMenuTogglesLivePreview(t *testing.T) {
+	m := NewModel(50, 30, "rect", "", PrintConfig{})
+	m.Preview.Available = LivePreviewKitty
+	m.Preview.Protocol = LivePreviewKitty
+	m.toggleMenu()
 	m.MenuIndex = 1
 	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.MenuOpen {
-		t.Fatal("Close did not close preferences menu")
+	if m.Preview.Protocol != LivePreviewDisabled {
+		t.Fatalf("protocol = %q, want disabled", m.Preview.Protocol)
+	}
+	if cmd := m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
+		t.Fatal("re-enabling should schedule a render")
+	}
+	if m.Preview.Protocol != LivePreviewKitty {
+		t.Fatalf("protocol = %q, want kitty", m.Preview.Protocol)
+	}
+
+	m.Preview.Available = LivePreviewDisabled
+	m.Preview.Protocol = LivePreviewDisabled
+	m.handleMenuKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.Preview.Protocol != LivePreviewDisabled {
+		t.Fatal("unsupported terminal must stay disabled")
 	}
 }
 

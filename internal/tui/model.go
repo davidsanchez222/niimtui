@@ -232,7 +232,9 @@ const (
 )
 
 type LivePreviewState struct {
-	Protocol     LivePreviewProtocol
+	Protocol LivePreviewProtocol
+	// Available is what the terminal supports; Protocol is what is currently active (off when toggled).
+	Available    LivePreviewProtocol
 	RequestedSeq int
 	RenderedSeq  int
 	PNG          []byte
@@ -258,7 +260,8 @@ func NewModelWithPresets(widthMM, heightMM float64, shape, fontPath string, prin
 	if printConfig.Discover != nil {
 		status = "Scanning for configured printers. You can start designing now."
 	}
-	preview := LivePreviewState{Protocol: detectLivePreviewProtocol()}
+	detected := detectLivePreviewProtocol()
+	preview := LivePreviewState{Protocol: detected, Available: detected}
 	if preview.Protocol != LivePreviewDisabled {
 		preview.RequestedSeq = 1
 		preview.LastKey = documentPreviewKey(doc, printConfig)

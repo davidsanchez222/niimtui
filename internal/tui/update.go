@@ -125,7 +125,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.HelpOpen = false
 			return m, m.livePreviewModalCmd(wasOpen)
 		}
-		if msg.String() == "?" {
+		if msg.String() == "?" && !m.MenuOpen {
 			wasOpen := m.HelpOpen || m.MenuOpen
 			m.HelpOpen = !m.HelpOpen
 			if m.HelpOpen {
@@ -138,7 +138,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			return m, m.livePreviewModalCmd(wasOpen)
 		}
-		if msg.String() == "ctrl+t" {
+		if msg.String() == "ctrl+t" && !m.MenuOpen {
 			if m.Tab == tabGallery {
 				return m, m.switchTopTab(tabDesigner)
 			}

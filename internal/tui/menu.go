@@ -14,14 +14,12 @@ func (m *Model) toggleMenu() bool {
 	m.FocusPickerOpen = false
 	m.closeFontPicker()
 	m.MenuIndex = clampInt(m.MenuIndex, 0, menuItemCount-1)
-	m.setStatus("Menu opened. Use ↑/↓ or k/j to move, Enter to select, Esc to close.")
+	m.setStatus("Menu opened. Use ↑/↓ or k/j to move, Enter to select, 1 or 2 to leave.")
 	return true
 }
 
 func (m *Model) handleMenuKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
-	case "esc", "3":
-		m.closeMenu("Menu closed.")
 	case "up", "k":
 		m.MenuIndex = wrapMenuIndex(m.MenuIndex - 1)
 	case "down", "j":
@@ -49,8 +47,7 @@ func wrapMenuIndex(index int) int {
 
 func (m *Model) activateMenuItem() tea.Cmd {
 	if m.MenuIndex == 1 {
-		m.closeMenu("Menu closed.")
-		return nil
+		return m.toggleLivePreview()
 	}
 	m.AutoInsert = !m.AutoInsert
 	if m.AutoInsert {
@@ -59,4 +56,26 @@ func (m *Model) activateMenuItem() tea.Cmd {
 		m.setStatus("Auto Insert disabled.")
 	}
 	return nil
+}
+
+// toggleLivePreview turns the live preview (inline image or native Preview window) off and back on.
+func (m *Model) toggleLivePreview() tea.Cmd {
+	if m.Preview.Protocol != LivePreviewDisabled {
+		m.Preview.Protocol = LivePreviewDisabled
+		m.Preview.PNG = nil
+		m.Preview.PNGHash = ""
+		m.Preview.RedrawPending = false
+		openPreviewViewer.close()
+		m.setStatus("Live preview disabled.")
+		return nil
+	}
+	if m.Preview.Available == LivePreviewDisabled {
+		m.setStatus("Live preview isn't available in this terminal.")
+		return nil
+	}
+	m.Preview.Protocol = m.Preview.Available
+	m.Preview.RequestedSeq++
+	m.Preview.LastKey = m.livePreviewKey()
+	m.setStatus("Live preview enabled.")
+	return livePreviewDebounceCmd(m.Preview.RequestedSeq)
 }

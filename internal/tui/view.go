@@ -987,7 +987,7 @@ func menuModalContent(m Model) []string {
 	}
 	items := []string{
 		"Auto Insert on Text/QR Creation: " + autoInsert,
-		"Close",
+		"Live Preview: " + livePreviewMenuState(m),
 	}
 	lines := []string{
 		propertyTitleStyle.Render("Menu"),
@@ -1004,9 +1004,19 @@ func menuModalContent(m Model) []string {
 	}
 	lines = append(lines,
 		"",
-		mutedStyle.Render("↑/↓ or k/j move, enter selects, esc closes"),
+		mutedStyle.Render("↑/↓ or k/j move, enter selects, 1 or 2 leaves the menu"),
 	)
 	return lines
+}
+
+func livePreviewMenuState(m Model) string {
+	if m.Preview.Protocol != LivePreviewDisabled {
+		return "on"
+	}
+	if m.Preview.Available == LivePreviewDisabled {
+		return "off (unsupported in this terminal)"
+	}
+	return "off"
 }
 
 func onOff(enabled bool) string {
@@ -1025,6 +1035,11 @@ func footerLines(m Model, width int) []string {
 }
 
 func footerHelpLines(m Model, width int) []string {
+	if m.MenuOpen {
+		return []string{
+			truncateStyledLine(helpItem("↑/↓ k/j", "browse")+"  "+helpItem("enter", "select"), width),
+		}
+	}
 	if m.Tab == tabGallery {
 		return []string{
 			truncateStyledLine(helpItem("↑/↓ k/j", "browse")+"  "+helpItem("←/→ h/l", "fold")+"  "+helpItem("enter", "open"), width),
