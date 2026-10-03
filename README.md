@@ -292,17 +292,18 @@ The goal is a local `niimtui` service that accepts authenticated print requests 
 
 ## roadmap
 
-| Item                                                              | Status |
-| ----------------------------------------------------------------- | ------ |
-| Homebrew tap release (`brew install davidsanchez222/tap/niimtui`) | ✅     |
-| Serial/USB support                                                | ❌     |
-| Full HTTPS Homebox integration                                    | ❌     |
-| Homebrew Core submission (`brew install niimtui`)                 | ❌     |
-| Windows package manager publishing: winget, then Scoop            | ❌     |
-| Linux packaging: Arch (`niimtui-bin`), then apt `.deb`, then Nix  | ❌     |
-| Linux testing                                                     | ❌     |
-| Windows testing                                                   | ❌     |
-| SSH session testing                                               | ❌     |
+| Item                                                             | Status |
+| ---------------------------------------------------------------- | ------ |
+| Support for ALL niimbot printers                                 | ❌     |
+| Serial/USB support                                               | ❌     |
+| Full HTTPS Homebox integration                                   | ❌     |
+| Automatic RFID label roll detection                              | ❌     |
+| Homebrew Core submission (`brew install niimtui`)                | ❌     |
+| Windows package manager publishing: winget, then Scoop           | ❌     |
+| Linux packaging: Arch (`niimtui-bin`), then apt `.deb`, then Nix | ❌     |
+| Linux testing                                                    | ❌     |
+| Windows testing                                                  | ❌     |
+| SSH session testing                                              | ❌     |
 
 ## development
 
