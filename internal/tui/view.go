@@ -673,7 +673,8 @@ func renderCanvas(m Model) string {
 				hx := handle.x - canvas.X
 				hy := handle.y - canvas.Y
 				if hy >= 0 && hy < len(grid) && hx >= 0 && hx < len(grid[hy]) {
-					grid[hy][hx] = '●'
+					glyph := '■'
+					grid[hy][hx] = glyph
 				}
 			}
 		}

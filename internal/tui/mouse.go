@@ -193,6 +193,10 @@ func (m Model) elementScreenRect(element label.Element) screenRect {
 	maxY := m.Canvas.Y + m.Canvas.Height - 2
 	width := min(max(int(math.Round(element.WidthMM*m.Canvas.CellsPerMMX))-1, 1), max(maxX-minX, 1))
 	height := min(max(int(math.Round(element.HeightMM*m.Canvas.CellsPerMMY))-1, 1), max(maxY-minY, 1))
+	if height > 2 && height%2 == 1 {
+		// Keep an even row span so the side handles sit on the true middle row.
+		height--
+	}
 
 	left := minX + int(math.Round(element.XMM*m.Canvas.CellsPerMMX))
 	top := minY + int(math.Round(element.YMM*m.Canvas.CellsPerMMY))
