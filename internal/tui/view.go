@@ -1470,13 +1470,19 @@ func drawPrintableAreaGuide(grid [][]rune, canvas Canvas, m Model) {
 		return
 	}
 	printableWidthMM := render.ModelPrintableWidthMM(m.Print.Model)
+	direction := effectivePrintDirection(m)
+	if strings.EqualFold(strings.TrimSpace(m.Print.Model), "B1") &&
+		((!direction.horizontal() && m.Document.WidthMM == 50 && m.Document.HeightMM == 80) ||
+			(direction.horizontal() && m.Document.WidthMM == 80 && m.Document.HeightMM == 50)) {
+		return
+	}
 	if printableWidthMM <= 0 || printableWidthMM >= m.Document.WidthMM {
-		if effectivePrintDirection(m).horizontal() && printableWidthMM > 0 && printableWidthMM < m.Document.HeightMM {
+		if direction.horizontal() && printableWidthMM > 0 && printableWidthMM < m.Document.HeightMM {
 			drawHorizontalPrintableAreaGuide(grid, canvas, m, printableWidthMM)
 		}
 		return
 	}
-	if effectivePrintDirection(m).horizontal() {
+	if direction.horizontal() {
 		if printableWidthMM < m.Document.HeightMM {
 			drawHorizontalPrintableAreaGuide(grid, canvas, m, printableWidthMM)
 		}

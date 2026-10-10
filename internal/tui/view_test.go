@@ -84,6 +84,32 @@ func TestDrawPrintableAreaGuideRespectsCanvasRotation(t *testing.T) {
 	}
 }
 
+func TestB150x80CanvasHasNoPrintableAreaGuide(t *testing.T) {
+	tests := []struct {
+		name     string
+		widthMM  float64
+		heightMM float64
+		rotation int
+		want     bool
+	}{
+		{name: "stock orientation", widthMM: 50, heightMM: 80},
+		{name: "rotated orientation", widthMM: 80, heightMM: 50, rotation: 90},
+		{name: "other B1 roll", widthMM: 50, heightMM: 70, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewModel(tt.widthMM, tt.heightMM, "rect", "", PrintConfig{Model: "B1"})
+			m.Document.Rotation = tt.rotation
+			m.Canvas = newCanvas(100, 30, tt.widthMM, tt.heightMM)
+			view := ansi.Strip(renderCanvas(m))
+			hasGuide := strings.ContainsAny(view, string([]rune{printableGuideRune, printableGuideHorz, '┬', '┴', '├', '┤'}))
+			if hasGuide != tt.want {
+				t.Fatalf("printable guide visible = %t, want %t", hasGuide, tt.want)
+			}
+		})
+	}
+}
+
 func TestPanelTitleBorderFillsWidth(t *testing.T) {
 	line := ansi.Strip(panelLines("Keybinds", []string{""}, 80, 3, false)[0])
 	if lipgloss.Width(line) != 80 {
