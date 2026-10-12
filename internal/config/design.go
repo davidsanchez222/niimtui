@@ -53,5 +53,6 @@ func (preset DesignPreset) Bind(values map[string]string) (label.Document, error
 }
 
 func MatchesStock(doc label.Document, stock LabelPreset) bool {
-	return doc.WidthMM == stock.WidthMM && doc.HeightMM == stock.HeightMM && strings.EqualFold(doc.Shape, stock.Shape)
+	width, height := doc.PhysicalDimensionsMM()
+	return width == stock.WidthMM && height == stock.HeightMM && strings.EqualFold(doc.Shape, stock.Shape)
 }

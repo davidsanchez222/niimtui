@@ -386,7 +386,8 @@ func (m Model) galleryPreviewCellSize(width int) (int, int) {
 	if !ok {
 		return m.livePreviewPanelCellSize(width)
 	}
-	return previewPanelCellSize(width, item.Document.WidthMM, item.Document.HeightMM)
+	physicalWidth, physicalHeight := item.Document.PhysicalDimensionsMM()
+	return previewPanelCellSize(width, physicalWidth, physicalHeight)
 }
 
 func galleryListLines(m Model, width int) []string {

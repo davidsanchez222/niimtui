@@ -478,10 +478,11 @@ func (m *Model) rotateCanvas() bool {
 	m.Document.WidthMM = oldHeight
 	m.Document.HeightMM = oldWidth
 	m.Document.Rotation = normalizedTUIRotation(m.Document.Rotation + 90)
-	m.Preset = -1
+	m.Preset = activePresetIndex(m.Presets, "", m.Document)
 	m.reflow()
 	m.commitHistory("rotate canvas")
-	m.setStatus("Rotated canvas to %d deg (%.1f x %.1fmm).", m.Document.Rotation, m.Document.WidthMM, m.Document.HeightMM)
+	width, height := m.Document.PhysicalDimensionsMM()
+	m.setStatus("Rotated view to %d deg; label remains %.1f x %.1fmm.", m.Document.Rotation, width, height)
 	return true
 }
 

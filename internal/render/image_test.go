@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
@@ -81,6 +82,61 @@ func TestFitToPrinterWidthScalesB1ImagesToPrintableWidth(t *testing.T) {
 	}
 	if !foundLeftEdge {
 		t.Fatal("left-edge source content was not preserved after fitting")
+	}
+}
+
+func TestFitToPrinterWidthKeepsB150x80FullLength(t *testing.T) {
+	img := image.NewGray(image.Rect(0, 0, 400, 640))
+	for i := range img.Pix {
+		img.Pix[i] = 255
+	}
+	img.SetGray(0, 0, color.Gray{Y: 0})
+	img.SetGray(399, 639, color.Gray{Y: 0})
+
+	result, err := FitToPrinterWidth(Result{Image: img, WidthPx: 400, HeightPx: 640, PrintablePx: img.Bounds(), Shape: "rect"}, "B1")
+	if err != nil {
+		t.Fatalf("FitToPrinterWidth() error = %v", err)
+	}
+	if result.WidthPx != 384 || result.HeightPx != 640 {
+		t.Fatalf("render size = %dx%d, want 384x640", result.WidthPx, result.HeightPx)
+	}
+	for _, point := range []image.Point{{X: 0, Y: 0}, {X: 383, Y: 639}} {
+		if got := result.Image.(*image.Gray).GrayAt(point.X, point.Y).Y; got != 0 {
+			t.Errorf("print pixel at %v = %d, want black", point, got)
+		}
+	}
+	preview, err := png.Decode(bytes.NewReader(result.PreviewPNG))
+	if err != nil {
+		t.Fatalf("decode preview: %v", err)
+	}
+	for _, point := range []image.Point{{X: 0, Y: 0}, {X: 383, Y: 639}} {
+		if got := color.GrayModel.Convert(preview.At(point.X, point.Y)).(color.Gray).Y; got != 0 {
+			t.Errorf("preview pixel at %v = %d, want black", point, got)
+		}
+	}
+}
+
+func TestFitToPrinterWidthStillFitsOtherB1RollsProportionally(t *testing.T) {
+	tests := []struct {
+		name   string
+		shape  string
+		height int
+	}{
+		{name: "round 50x50", shape: "round", height: 400},
+		{name: "rectangular 50x70", shape: "rect", height: 560},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			img := image.NewGray(image.Rect(0, 0, 400, tt.height))
+			result, err := FitToPrinterWidth(Result{Image: img, Shape: tt.shape}, "B1")
+			if err != nil {
+				t.Fatalf("FitToPrinterWidth() error = %v", err)
+			}
+			fitted := result.Image.(*image.Gray)
+			if fitted.GrayAt(0, 0).Y != 255 || fitted.GrayAt(0, tt.height/2).Y != 0 || fitted.GrayAt(0, tt.height-1).Y != 255 {
+				t.Fatal("other B1 rolls should retain their centered, proportional fit")
+			}
+		})
 	}
 }
 

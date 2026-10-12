@@ -879,10 +879,11 @@ func propertyPanelLines(m Model, width int) []string {
 		)
 		lines = append(lines, fontPickerLinesWithLimit(m, width, min(fontPickerPageSize, itemLimit))...)
 	}
+	physicalWidth, physicalHeight := m.Document.PhysicalDimensionsMM()
 	lines = append(lines,
 		propertyTitleStyle.Render("Properties"),
-		propertyItem("Label W", fmt.Sprintf("%.1f mm", m.Document.WidthMM)),
-		propertyItem("Label H", fmt.Sprintf("%.1f mm", m.Document.HeightMM)),
+		propertyItem("Label W", fmt.Sprintf("%.1f mm", physicalWidth)),
+		propertyItem("Label H", fmt.Sprintf("%.1f mm", physicalHeight)),
 		propertyItem("Shape", m.Document.Shape),
 		propertyItem("Canvas Rot", fmt.Sprintf("%d deg", m.Document.Rotation)),
 		propertyItem("Invert", onOff(m.Document.Inverted)),

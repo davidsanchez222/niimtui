@@ -18,3 +18,12 @@ func NewDocument(widthMM, heightMM float64) Document {
 		Elements: []Element{},
 	}
 }
+
+// PhysicalDimensionsMM returns the roll dimensions independently of the editing orientation.
+func (d Document) PhysicalDimensionsMM() (float64, float64) {
+	rotation := (d.Rotation%360 + 360) % 360
+	if rotation == 90 || rotation == 270 {
+		return d.HeightMM, d.WidthMM
+	}
+	return d.WidthMM, d.HeightMM
+}

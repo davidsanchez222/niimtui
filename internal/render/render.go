@@ -348,9 +348,15 @@ func scaleNearest(dst draw.Image, dstRect image.Rectangle, src image.Image, srcR
 	}
 
 	for y := dstRect.Min.Y; y < dstRect.Max.Y; y++ {
-		sy := srcRect.Min.Y + ((y-dstRect.Min.Y)*srcRect.Dy())/dstRect.Dy()
+		sy := srcRect.Min.Y
+		if dstRect.Dy() > 1 {
+			sy += ((y - dstRect.Min.Y) * (srcRect.Dy() - 1)) / (dstRect.Dy() - 1)
+		}
 		for x := dstRect.Min.X; x < dstRect.Max.X; x++ {
-			sx := srcRect.Min.X + ((x-dstRect.Min.X)*srcRect.Dx())/dstRect.Dx()
+			sx := srcRect.Min.X
+			if dstRect.Dx() > 1 {
+				sx += ((x - dstRect.Min.X) * (srcRect.Dx() - 1)) / (dstRect.Dx() - 1)
+			}
 			dst.Set(x, y, src.At(sx, sy))
 		}
 	}

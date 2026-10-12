@@ -25,7 +25,8 @@ var (
 )
 
 type documentRenderOptions struct {
-	threshold uint8
+	threshold           uint8
+	physicalOrientation bool
 }
 
 func init() {
@@ -43,7 +44,7 @@ func init() {
 }
 
 func RenderDocument(doc label.Document) (Result, error) {
-	return renderDocumentWithOptions(doc, documentRenderOptions{threshold: textThreshold})
+	return renderDocumentWithOptions(doc, documentRenderOptions{threshold: textThreshold, physicalOrientation: true})
 }
 
 func RenderDocumentForTUI(doc label.Document) (Result, error) {
@@ -76,6 +77,12 @@ func renderDocumentWithOptions(doc label.Document, opts documentRenderOptions) (
 	}
 	if strings.EqualFold(doc.Shape, "round") {
 		maskRound(canvas)
+	}
+	if opts.physicalOrientation && normalizedRotation(doc.Rotation) != 0 {
+		// Canvas rotation is an editing orientation; the printhead still sees
+		// the label in its original stock orientation.
+		canvas = rotateGray(canvas, 360-normalizedRotation(doc.Rotation))
+		widthPx, heightPx = canvas.Bounds().Dx(), canvas.Bounds().Dy()
 	}
 
 	var preview bytes.Buffer

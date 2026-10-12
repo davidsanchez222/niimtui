@@ -52,3 +52,29 @@ func TestValidateRejectsBrokenDesignBindings(t *testing.T) {
 		t.Fatal("duplicate binding was accepted")
 	}
 }
+
+func TestMatchesStockUsesPhysicalDimensionsAfterCanvasRotation(t *testing.T) {
+	stock := LabelPreset{WidthMM: 50, HeightMM: 80, Shape: "rect"}
+	tests := []struct {
+		name     string
+		width    float64
+		height   float64
+		rotation int
+		want     bool
+	}{
+		{name: "original", width: 50, height: 80, want: true},
+		{name: "clockwise", width: 80, height: 50, rotation: 90, want: true},
+		{name: "upside down", width: 50, height: 80, rotation: 180, want: true},
+		{name: "counterclockwise", width: 80, height: 50, rotation: 270, want: true},
+		{name: "different stock", width: 80, height: 50},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := label.NewDocument(tt.width, tt.height)
+			doc.Rotation = tt.rotation
+			if got := MatchesStock(doc, stock); got != tt.want {
+				t.Fatalf("MatchesStock() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}

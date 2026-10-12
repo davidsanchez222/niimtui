@@ -173,6 +173,29 @@ func TestLivePreviewPanelCellSizeUsesDocumentAspect(t *testing.T) {
 	}
 }
 
+func TestRotatedDesignerPreviewPlacementMatchesLandscapeImage(t *testing.T) {
+	m := NewModel(50, 80, "rect", "", PrintConfig{Model: "B1"})
+	m.Width, m.Height = 180, 36
+	m.Preview.Protocol = LivePreviewKitty
+	m.Preview.RequestedSeq = 1
+	m, _ = m.handleLivePreviewRendered(renderLivePreviewCmd(m, 1)().(livePreviewRenderedMsg))
+	_, beforeRows := m.livePreviewPanelCellSize(28)
+
+	if !m.rotateCanvas() {
+		t.Fatal("rotateCanvas() failed")
+	}
+	m.Preview.RequestedSeq = 2
+	msg := renderLivePreviewCmd(m, 2)().(livePreviewRenderedMsg)
+	if msg.WidthPx != 640 || msg.HeightPx != 384 {
+		t.Fatalf("rotated preview pixels = %dx%d, want 640x384", msg.WidthPx, msg.HeightPx)
+	}
+	m, _ = m.handleLivePreviewRendered(msg)
+	_, afterRows := m.livePreviewPanelCellSize(28)
+	if beforeRows != 14 || afterRows != 5 {
+		t.Fatalf("portrait/landscape placement = %d/%d rows, want 14/5", beforeRows, afterRows)
+	}
+}
+
 func TestLivePreviewResizeClearsWhenTerminalTooSmall(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{})
 	m.Preview.Protocol = LivePreviewKitty

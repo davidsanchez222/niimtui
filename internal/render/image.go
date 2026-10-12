@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"strings"
 )
 
 func PNGFile(path string) (Result, error) {
@@ -71,6 +72,12 @@ func FitToPrinterWidth(result Result, model string) (Result, error) {
 
 	scale := float64(maxWidth) / float64(bounds.Dx())
 	scaledHeight := int(math.Round(float64(bounds.Dy()) * scale))
+	if strings.EqualFold(strings.TrimSpace(model), "B1") && strings.EqualFold(result.Shape, "rect") &&
+		bounds.Dx() == mmToPx(50) && bounds.Dy() == mmToPx(80) {
+		// Preserve the full feed length of this roll while fitting its 50 mm width
+		// to the B1's 48 mm printhead.
+		scaledHeight = bounds.Dy()
+	}
 	if scaledHeight < 1 {
 		scaledHeight = 1
 	}
@@ -119,6 +126,31 @@ func ApplyPrintOffset(result Result, offsetXMM, offsetYMM float64) (Result, erro
 	result.WidthPx = shifted.Bounds().Dx()
 	result.HeightPx = shifted.Bounds().Dy()
 	result.PrintablePx = shifted.Bounds()
+	result.PreviewPNG = preview.Bytes()
+	result.PreviewBytes = preview.Len()
+	return result, nil
+}
+
+// RotateResult turns a rendered image while preserving its pixel scale.
+func RotateResult(result Result, rotation int) (Result, error) {
+	rotation = normalizedRotation(rotation)
+	if rotation == 0 {
+		return result, nil
+	}
+	gray, ok := result.Image.(*image.Gray)
+	if !ok {
+		return Result{}, fmt.Errorf("expected grayscale rendered image")
+	}
+	rotated := rotateGray(gray, rotation)
+	var preview bytes.Buffer
+	if err := png.Encode(&preview, rotated); err != nil {
+		return Result{}, fmt.Errorf("encode rotated preview: %w", err)
+	}
+	result.Image = rotated
+	result.WidthPx = rotated.Bounds().Dx()
+	result.HeightPx = rotated.Bounds().Dy()
+	result.PrintablePx = rotateRect(result.PrintablePx, gray.Bounds().Dx(), gray.Bounds().Dy(), rotation)
+	result.Rotation = normalizedRotation(result.Rotation + rotation)
 	result.PreviewPNG = preview.Bytes()
 	result.PreviewBytes = preview.Len()
 	return result, nil

@@ -83,6 +83,10 @@ func renderLivePreviewCmd(m Model, seq int) tea.Cmd {
 		if err != nil {
 			return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("fit preview: %w", err)}
 		}
+		result, err = render.RotateResult(result, doc.Rotation)
+		if err != nil {
+			return livePreviewFailedMsg{Seq: seq, Err: fmt.Errorf("orient preview: %w", err)}
+		}
 		return livePreviewRenderedMsg{
 			Seq:      seq,
 			PNG:      result.PreviewPNG,
@@ -100,6 +104,8 @@ func (m Model) handleLivePreviewRendered(msg livePreviewRenderedMsg) (Model, tea
 	m.Preview.RenderedSeq = msg.Seq
 	m.Preview.PNG = msg.PNG
 	m.Preview.PNGHash = msg.PNGHash
+	m.Preview.WidthPx = msg.WidthPx
+	m.Preview.HeightPx = msg.HeightPx
 	m.Preview.Err = ""
 	if m.Preview.Protocol == LivePreviewKitty {
 		return m, terminalLivePreviewCmd(m)
@@ -254,7 +260,11 @@ func terminalImageEscape(protocol LivePreviewProtocol, png []byte, cols, rows in
 }
 
 func (m Model) livePreviewPanelCellSize(width int) (int, int) {
-	return previewPanelCellSize(width, m.Document.WidthMM, m.Document.HeightMM)
+	if len(m.Preview.PNG) > 0 && m.Preview.WidthPx > 0 && m.Preview.HeightPx > 0 {
+		return previewPanelCellSize(width, float64(m.Preview.WidthPx), float64(m.Preview.HeightPx))
+	}
+	physicalWidth, physicalHeight := m.Document.PhysicalDimensionsMM()
+	return previewPanelCellSize(width, physicalWidth, physicalHeight)
 }
 
 func previewPanelCellSize(width int, aspectWidth, aspectHeight float64) (int, int) {
