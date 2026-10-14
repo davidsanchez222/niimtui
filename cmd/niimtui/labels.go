@@ -46,6 +46,20 @@ func (s *setValues) Set(input string) error {
 	return nil
 }
 
+type bindingInfo struct {
+	Name     string            `json:"name"`
+	Type     label.ElementType `json:"type"`
+	Required bool              `json:"required"`
+}
+
+type designInfo struct {
+	Name     string        `json:"name"`
+	WidthMM  float64       `json:"width_mm"`
+	HeightMM float64       `json:"height_mm"`
+	Shape    string        `json:"shape"`
+	Bindings []bindingInfo `json:"bindings"`
+}
+
 func runDesigns(args []string) error {
 	fs := flag.NewFlagSet("designs", flag.ContinueOnError)
 	path := fs.String("config", "", "path to config JSON")
@@ -62,18 +76,10 @@ func runDesigns(args []string) error {
 	if err != nil {
 		return err
 	}
-	type bindingInfo struct {
-		Name     string            `json:"name"`
-		Type     label.ElementType `json:"type"`
-		Required bool              `json:"required"`
-	}
-	type designInfo struct {
-		Name     string        `json:"name"`
-		WidthMM  float64       `json:"width_mm"`
-		HeightMM float64       `json:"height_mm"`
-		Shape    string        `json:"shape"`
-		Bindings []bindingInfo `json:"bindings"`
-	}
+	return printJSON(designInfos(cfg))
+}
+
+func designInfos(cfg config.Config) []designInfo {
 	result := make([]designInfo, 0, len(cfg.DesignPresets))
 	for _, preset := range cfg.DesignPresets {
 		item := designInfo{Name: preset.Name, WidthMM: preset.Document.WidthMM, HeightMM: preset.Document.HeightMM, Shape: preset.Document.Shape, Bindings: []bindingInfo{}}
@@ -87,7 +93,7 @@ func runDesigns(args []string) error {
 		}
 		result = append(result, item)
 	}
-	return printJSON(result)
+	return result
 }
 
 func runPrint(args []string) error   { return runLabelCommand("print", args) }
@@ -105,29 +111,35 @@ func runLabelCommand(action string, args []string) error {
 	if errors.As(err, &exit) {
 		return err
 	}
-	code := service.ErrInvalidRequest
-	var mismatch *stockMismatchError
-	if errors.As(err, &mismatch) {
-		code = "LABEL_STOCK_MISMATCH"
-	}
-	if err := printJSON(api.PrintResponse{OK: false, Error: &api.ErrorBody{Code: code, Message: err.Error()}}); err != nil {
+	if err := printJSON(api.PrintResponse{OK: false, Error: errorBody(err)}); err != nil {
 		return err
 	}
 	return &commandExit{code: 1}
 }
 
+func errorBody(err error) *api.ErrorBody {
+	code := service.ErrInvalidRequest
+	var mismatch *stockMismatchError
+	if errors.As(err, &mismatch) {
+		code = "LABEL_STOCK_MISMATCH"
+	}
+	return &api.ErrorBody{Code: code, Message: err.Error()}
+}
+
 func executeLabelCommand(action string, args []string) error {
 	fs := flag.NewFlagSet(action, flag.ContinueOnError)
 	path := fs.String("config", "", "path to config JSON")
-	printerName := fs.String("printer", "", "printer profile (defaults to active printer)")
-	presetName := fs.String("preset", "", "installed label roll (defaults to printer preset)")
-	designName := fs.String("design", "", "saved TUI design name")
-	qrText := fs.String("qr", "", "QR contents for a quick label")
-	imagePath := fs.String("image", "", "PNG to print or preview")
-	title := fs.String("title", "", "quick label title")
-	subtitle := fs.String("subtitle", "", "quick label subtitle")
-	copies := fs.Int("copies", 1, "number of copies (1-20)")
-	out := fs.String("out", "", "preview output PNG path")
+	var spec labelSpec
+	fs.StringVar(&spec.Printer, "printer", "", "printer profile (defaults to active printer)")
+	fs.StringVar(&spec.Preset, "preset", "", "installed label roll (defaults to printer preset)")
+	fs.StringVar(&spec.Design, "design", "", "saved TUI design name")
+	fs.StringVar(&spec.QR, "qr", "", "QR contents for a quick label")
+	fs.StringVar(&spec.Image, "image", "", "PNG to print or preview")
+	fs.StringVar(&spec.Title, "title", "", "quick label title")
+	fs.StringVar(&spec.Subtitle, "subtitle", "", "quick label subtitle")
+	fs.IntVar(&spec.Copies, "copies", 1, "number of copies (1-20)")
+	batch := fs.String("batch", "", "JSONL file of --set values, one label per line (- for stdin); requires --design")
+	out := fs.String("out", "", "preview output PNG path (a directory with --batch)")
 	var values setValues
 	fs.Var(&values, "set", "set a named design binding (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -136,138 +148,188 @@ func executeLabelCommand(action string, args []string) error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	sources := 0
-	for _, source := range []string{*designName, *qrText, *imagePath} {
-		if source != "" {
-			sources++
-		}
-	}
-	if sources != 1 {
-		return errors.New("choose exactly one of --design, --qr, or --image")
-	}
-	if *copies < 1 || *copies > 20 {
-		return errors.New("--copies must be between 1 and 20")
-	}
+	spec.Values = values
 	if action == "preview" && *out == "" {
 		return errors.New("preview requires --out")
 	}
 	if action == "print" && *out != "" {
 		return errors.New("--out is only available with preview")
 	}
-	if action == "preview" && *copies != 1 {
+	if action == "preview" && spec.Copies != 1 {
 		return errors.New("--copies is only available with print")
 	}
-	if *designName == "" && len(values) != 0 {
-		return errors.New("--set requires --design")
-	}
-	if *qrText == "" && (*title != "" || *subtitle != "") {
-		return errors.New("--title and --subtitle require --qr")
-	}
-	if *subtitle != "" && *title == "" {
-		return errors.New("--subtitle requires --title")
-	}
-	if *imagePath != "" && *presetName != "" {
-		return errors.New("--preset does not apply to an image")
+	if *batch != "" {
+		if spec.Design == "" {
+			return errors.New("--batch requires --design")
+		}
+		if len(values) != 0 {
+			return errors.New("--batch and --set cannot be combined; put the values in the batch rows")
+		}
+		rows, err := readBatchFile(*batch)
+		if err != nil {
+			return err
+		}
+		cfg, err := config.LoadOptional(*path)
+		if err != nil {
+			return err
+		}
+		return runBatch(action, cfg, spec, rows, *out)
 	}
 
 	cfg, err := config.LoadOptional(*path)
 	if err != nil {
 		return err
 	}
-	printer, _, err := printerForSelector(cfg, *printerName)
+	job, err := prepareLabel(cfg, spec, action == "print")
 	if err != nil {
 		return err
 	}
-	preset := printer.DefaultPreset
-	if *presetName != "" {
-		preset = *presetName
+	svc, err := service.New(cfg)
+	if err != nil {
+		return err
+	}
+	defer svc.Close()
+	ctx := context.Background()
+	if action == "print" {
+		return reportPrint(job.print(ctx, svc))
+	}
+	png, err := job.previewPNG(ctx, svc)
+	if err != nil {
+		return err
+	}
+	return writePreview(*out, png, job.printer.Name, job.preset)
+}
+
+// labelSpec is one label request, whether it came from CLI flags, a batch row
+// or an MCP tool call. Exactly one of Design, QR or Image is set.
+type labelSpec struct {
+	Printer  string
+	Preset   string
+	Design   string
+	Values   map[string]string
+	QR       string
+	Title    string
+	Subtitle string
+	Image    string
+	Copies   int
+}
+
+// labelJob is a validated, rendered label: printing it can only fail at the printer.
+type labelJob struct {
+	printer  config.PrinterProfile
+	preset   string
+	copies   int
+	qr       *api.PrintRequest // quick QR labels are laid out by the service
+	rendered render.Result
+}
+
+func prepareLabel(cfg config.Config, spec labelSpec, forPrint bool) (labelJob, error) {
+	sources := 0
+	for _, source := range []string{spec.Design, spec.QR, spec.Image} {
+		if source != "" {
+			sources++
+		}
+	}
+	if sources != 1 {
+		return labelJob{}, errors.New("choose exactly one of --design, --qr, or --image")
+	}
+	if spec.Copies == 0 {
+		spec.Copies = 1
+	}
+	if spec.Copies < 1 || spec.Copies > 20 {
+		return labelJob{}, errors.New("--copies must be between 1 and 20")
+	}
+	if spec.Design == "" && len(spec.Values) != 0 {
+		return labelJob{}, errors.New("--set requires --design")
+	}
+	if spec.QR == "" && (spec.Title != "" || spec.Subtitle != "") {
+		return labelJob{}, errors.New("--title and --subtitle require --qr")
+	}
+	if spec.Subtitle != "" && spec.Title == "" {
+		return labelJob{}, errors.New("--subtitle requires --title")
+	}
+	if spec.Image != "" && spec.Preset != "" {
+		return labelJob{}, errors.New("--preset does not apply to an image")
+	}
+
+	printer, _, err := printerForSelector(cfg, spec.Printer)
+	if err != nil {
+		return labelJob{}, err
+	}
+	job := labelJob{printer: printer, preset: printer.DefaultPreset, copies: spec.Copies}
+	if spec.Preset != "" {
+		job.preset = spec.Preset
+	}
+	if spec.Image != "" {
+		job.preset = ""
+		job.rendered, err = render.PNGFile(spec.Image)
+		return job, err
 	}
 	var stock config.LabelPreset
-	if *imagePath == "" {
-		found := false
-		for _, candidate := range cfg.Presets {
-			if candidate.Name == preset {
-				stock, found = candidate, true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("unknown label preset %q", preset)
+	found := false
+	for _, candidate := range cfg.Presets {
+		if candidate.Name == job.preset {
+			stock, found = candidate, true
+			break
 		}
 	}
-	ctx := context.Background()
-	var rendered render.Result
-	if *qrText != "" {
+	if !found {
+		return labelJob{}, fmt.Errorf("unknown label preset %q", job.preset)
+	}
+	if spec.QR != "" {
 		layout := api.LayoutQROnly
-		if *title != "" {
+		if spec.Title != "" {
 			layout = api.LayoutQRTitle
 		}
-		if *subtitle != "" {
+		if spec.Subtitle != "" {
 			layout = api.LayoutQRTitleSubtitle
 		}
-		req := api.PrintRequest{Printer: api.PrinterSelector{Selector: printer.Name}, Label: api.LabelRequest{Preset: preset, Layout: layout}, QR: api.QRRequest{Text: *qrText}, Content: api.ContentRequest{Title: *title, Subtitle: *subtitle}, Options: api.PrintOptions{Copies: *copies}}
-		svc, err := service.New(cfg)
-		if err != nil {
-			return err
-		}
-		defer svc.Close()
-		if action == "print" {
-			return reportPrint(svc.Print(ctx, req))
-		}
-		png, err := svc.RenderPreview(ctx, req)
-		if err != nil {
-			return err
-		}
-		return writePreview(*out, png, printer.Name, preset)
+		job.qr = &api.PrintRequest{Printer: api.PrinterSelector{Selector: printer.Name}, Label: api.LabelRequest{Preset: job.preset, Layout: layout}, QR: api.QRRequest{Text: spec.QR}, Content: api.ContentRequest{Title: spec.Title, Subtitle: spec.Subtitle}, Options: api.PrintOptions{Copies: spec.Copies}}
+		return job, nil
 	}
-	if *imagePath != "" {
-		rendered, err = render.PNGFile(*imagePath)
-		if err != nil {
-			return err
-		}
-		preset = ""
-	} else {
-		var design *config.DesignPreset
-		for i := range cfg.DesignPresets {
-			if cfg.DesignPresets[i].Name == *designName {
-				design = &cfg.DesignPresets[i]
-				break
-			}
-		}
-		if design == nil {
-			return fmt.Errorf("unknown design %q; run `niimtui designs`", *designName)
-		}
-		var doc label.Document
-		doc, err = design.Bind(values)
-		if err != nil {
-			return err
-		}
-		if action == "print" && !config.MatchesStock(doc, stock) {
-			return &stockMismatchError{message: fmt.Sprintf("design %q does not match selected stock: design %.3gx%.3g mm %s; preset %q %.3gx%.3g mm %s (select matching stock with --preset)", design.Name, doc.WidthMM, doc.HeightMM, doc.Shape, stock.Name, stock.WidthMM, stock.HeightMM, stock.Shape)}
-		}
-		rendered, err = render.RenderDocument(doc)
-		if err != nil {
-			return err
+	var design *config.DesignPreset
+	for i := range cfg.DesignPresets {
+		if cfg.DesignPresets[i].Name == spec.Design {
+			design = &cfg.DesignPresets[i]
+			break
 		}
 	}
-	if action == "print" {
-		svc, err := service.New(cfg)
-		if err != nil {
-			return err
-		}
-		defer svc.Close()
-		return reportPrint(svc.PrintImage(ctx, printer.Name, rendered, *copies))
+	if design == nil {
+		return labelJob{}, fmt.Errorf("unknown design %q; run `niimtui designs`", spec.Design)
 	}
-	rendered, err = render.FitToPrinterWidth(rendered, printer.Model)
+	doc, err := design.Bind(spec.Values)
 	if err != nil {
-		return err
+		return labelJob{}, err
 	}
-	x, y := render.ModelPrintOffsetMM(printer.Model, printer.Defaults.OffsetXMM, printer.Defaults.OffsetYMM)
+	if forPrint && !config.MatchesStock(doc, stock) {
+		return labelJob{}, &stockMismatchError{message: fmt.Sprintf("design %q does not match selected stock: design %.3gx%.3g mm %s; preset %q %.3gx%.3g mm %s (select matching stock with --preset)", design.Name, doc.WidthMM, doc.HeightMM, doc.Shape, stock.Name, stock.WidthMM, stock.HeightMM, stock.Shape)}
+	}
+	job.rendered, err = render.RenderDocument(doc)
+	return job, err
+}
+
+func (j labelJob) print(ctx context.Context, svc *service.Service) api.PrintResponse {
+	if j.qr != nil {
+		return svc.Print(ctx, *j.qr)
+	}
+	return svc.PrintImage(ctx, j.printer.Name, j.rendered, j.copies)
+}
+
+// previewPNG renders exactly what print would send, fitted and offset for the printer.
+func (j labelJob) previewPNG(ctx context.Context, svc *service.Service) ([]byte, error) {
+	if j.qr != nil {
+		return svc.RenderPreview(ctx, *j.qr)
+	}
+	rendered, err := render.FitToPrinterWidth(j.rendered, j.printer.Model)
+	if err != nil {
+		return nil, err
+	}
+	x, y := render.ModelPrintOffsetMM(j.printer.Model, j.printer.Defaults.OffsetXMM, j.printer.Defaults.OffsetYMM)
 	rendered, err = render.ApplyPrintOffset(rendered, x, y)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return writePreview(*out, rendered.PreviewPNG, printer.Name, preset)
+	return rendered.PreviewPNG, nil
 }
 
 func reportPrint(resp api.PrintResponse) error {
@@ -281,11 +343,18 @@ func reportPrint(resp api.PrintResponse) error {
 }
 
 func writePreview(path string, png []byte, printer, preset string) error {
+	if err := writePNG(path, png); err != nil {
+		return err
+	}
+	return printJSON(map[string]any{"ok": true, "path": path, "printer": printer, "preset": preset})
+}
+
+func writePNG(path string, png []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create preview directory: %w", err)
 	}
 	if err := os.WriteFile(path, png, 0o644); err != nil {
 		return fmt.Errorf("write preview: %w", err)
 	}
-	return printJSON(map[string]any{"ok": true, "path": path, "printer": printer, "preset": preset})
+	return nil
 }

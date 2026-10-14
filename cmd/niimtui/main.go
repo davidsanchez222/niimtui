@@ -54,6 +54,8 @@ func run(args []string) error {
 		return runPreview(args[1:])
 	case "designs":
 		return runDesigns(args[1:])
+	case "mcp":
+		return runMCP(args[1:])
 	case "calibrate":
 		return runCalibrate(args[1:])
 	case "probe":
@@ -457,7 +459,10 @@ Usage:
   niimtui print --qr https://example.com --title "Garage Bin 4"
   niimtui print --design garage-bin --set url=https://example.com
   niimtui preview --design garage-bin --set url=https://example.com --out ./preview.png
+  niimtui print --design garage-bin --batch ./items.jsonl
+  niimtui preview --design garage-bin --batch ./items.jsonl --out ./previews
   niimtui designs
+  niimtui mcp
   niimtui probe --printer d110-desk
   niimtui scan --transport ble
   niimtui printers

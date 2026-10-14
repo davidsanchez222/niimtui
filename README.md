@@ -183,7 +183,35 @@ niimtui designs
 niimtui scan
 ```
 
+Print a whole batch from one design. Each line of the JSONL file holds one label's `--set` values. Every row is checked before anything prints, and printing stops at the first printer error:
+
+```bash
+niimtui print --design garage-bin --batch ./items.jsonl
+niimtui preview --design garage-bin --batch ./items.jsonl --out ./previews   # one PNG per row
+```
+
+```jsonl
+{"url": "https://homebox.example/item/1", "title": "Garage Bin 1"}
+{"url": "https://homebox.example/item/2", "title": "Shelf 2"}
+```
+
 `--printer`, `--preset` and `--config` override the defaults. Commands print JSON to stdout, and a failed print exits nonzero. Run `niimtui help` to see every command.
+
+## ai agents
+
+Agents that can run shell commands can use the CLI above directly: every command returns JSON, and a failure exits nonzero. A typical flow is `designs`, then `preview` (the agent reads the PNG), then `print --batch`. Design the label once in the TUI; after that, each label costs the agent one short command.
+
+For clients that can't run commands, such as Claude Desktop, `niimtui mcp` runs a stdio [MCP](https://modelcontextprotocol.io) server. It has these tools: `list_designs`, `list_printers`, `preview_label` (returns the PNG as an image), `print_label` and `print_labels`.
+
+```json
+{
+  "mcpServers": {
+    "niimtui": { "command": "niimtui", "args": ["mcp"] }
+  }
+}
+```
+
+Desktop apps often don't inherit your shell's `PATH`; if the client can't find `niimtui`, use the full path from `which niimtui`. The server reloads the config on every call, so designs you save in the TUI show up without a restart.
 
 ## configuration
 
