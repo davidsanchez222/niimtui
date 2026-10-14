@@ -42,9 +42,26 @@ func (s *Session) Connect(ctx context.Context) (map[string]any, error) {
 	defer s.mu.Unlock()
 
 	if s.conn != nil {
-		return s.conn.Metadata(), nil
+		connected, err := s.conn.Connected()
+		if err == nil && connected {
+			return s.conn.Metadata(), nil
+		}
+		_ = s.closeLocked()
 	}
 	return s.connectLocked(ctx)
+}
+
+func (s *Session) Connected() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conn == nil {
+		return false, nil
+	}
+	connected, err := s.conn.Connected()
+	if err != nil || !connected {
+		_ = s.closeLocked()
+	}
+	return connected && err == nil, err
 }
 
 func (s *Session) connectLocked(ctx context.Context) (map[string]any, error) {

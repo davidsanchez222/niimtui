@@ -270,6 +270,56 @@ func TestSessionConnectPreparesAndKeepsSuccessfulConnection(t *testing.T) {
 	}
 }
 
+func TestSessionDropsPoweredOffConnectionBeforeReconnect(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{}
+	svc.transport = transport.NewManager(backend)
+	session, err := svc.NewSession("b1-round")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if _, err := session.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	backend.mu.Lock()
+	backend.offline = true
+	backend.mu.Unlock()
+	connected, err := session.Connected()
+	if err != nil || connected || session.Metadata() != nil {
+		t.Fatalf("powered-off session: connected = %t, err = %v, metadata = %v", connected, err, session.Metadata())
+	}
+	backend.mu.Lock()
+	backend.offline = false
+	backend.mu.Unlock()
+	if _, err := session.Connect(context.Background()); err != nil || backend.connections() != 2 {
+		t.Fatalf("reconnect: err = %v, attempts = %d; want 2", err, backend.connections())
+	}
+}
+
+func TestSessionConnectReplacesStaleConnection(t *testing.T) {
+	svc := mustService(t)
+	backend := &testBackend{}
+	svc.transport = transport.NewManager(backend)
+	session, err := svc.NewSession("b1-round")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if _, err := session.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	backend.mu.Lock()
+	backend.offline = true
+	backend.mu.Unlock()
+	if _, err := session.Connect(context.Background()); err != nil {
+		t.Fatalf("Connect() with stale connection: %v", err)
+	}
+	if backend.connections() != 2 || backend.closed() != 1 {
+		t.Fatalf("connections = %d, closed = %d; want 2 and 1", backend.connections(), backend.closed())
+	}
+}
+
 func TestSessionClosesConnectionAfterFailedRetry(t *testing.T) {
 	svc := mustService(t)
 	backend := &testBackend{failEveryPrint: true}
@@ -320,6 +370,7 @@ func TestServiceSerializesPrintsToSamePrinter(t *testing.T) {
 
 type testBackend struct {
 	mu             sync.Mutex
+	offline        bool
 	connectCount   int
 	closeCount     int
 	prepareCount   int
@@ -396,6 +447,11 @@ func (c *testConnection) Probe(context.Context) error {
 	defer c.backend.mu.Unlock()
 	c.backend.probeCount++
 	return nil
+}
+func (c *testConnection) Connected() (bool, error) {
+	c.backend.mu.Lock()
+	defer c.backend.mu.Unlock()
+	return !c.backend.offline, nil
 }
 func (*testConnection) Metadata() map[string]any { return map[string]any{"connected": true} }
 func (c *testConnection) Close() error {

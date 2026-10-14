@@ -683,6 +683,67 @@ func TestDisconnectShortcutClosesSessionAndAllowsReconnect(t *testing.T) {
 	}
 }
 
+func TestPoweredOffPrinterUpdatesConnectionStatus(t *testing.T) {
+	session := &powerOffPrinterSession{connected: true}
+	m := NewModel(50, 30, "rect", "", PrintConfig{Session: session})
+	m, tick := m.update(printerConnectedMsg{Info: ConnectionInfo{Meta: map[string]any{"address": "device"}}, Seq: m.ConnectSeq})
+	if tick == nil || m.Connection != ConnectionConnected {
+		t.Fatalf("connected state = %s, scheduled check = %t", m.Connection, tick != nil)
+	}
+	m, check := m.update(printerStatusTickMsg{Seq: m.ConnectSeq})
+	m, nextTick := m.update(check())
+	if m.Connection != ConnectionConnected || nextTick == nil {
+		t.Fatalf("healthy link: state = %s, next check scheduled = %t", m.Connection, nextTick != nil)
+	}
+
+	session.connected = false
+	m, check = m.update(printerStatusTickMsg{Seq: m.ConnectSeq})
+	if check == nil {
+		t.Fatal("connected printer did not schedule a connection check")
+	}
+	m, _ = m.update(check())
+	if m.Connection != ConnectionDisconnected || m.ConnectMeta != nil {
+		t.Fatalf("after power off: state = %s, metadata = %v", m.Connection, m.ConnectMeta)
+	}
+}
+
+func TestStalePrinterStatusCannotOverrideManualDisconnectOrReconnect(t *testing.T) {
+	session := &powerOffPrinterSession{connected: true}
+	m := NewModel(50, 30, "rect", "", PrintConfig{Session: session})
+	m, _ = m.update(printerConnectedMsg{Seq: m.ConnectSeq})
+	oldSeq := m.ConnectSeq
+	m.disconnectPrinter()
+	m, _ = m.update(printerStatusMsg{Seq: oldSeq, Connected: true})
+	if m.Connection != ConnectionDisconnected {
+		t.Fatalf("stale status restored disconnected session: %s", m.Connection)
+	}
+	m, _ = m.update(printerStatusTickMsg{Seq: oldSeq})
+	if m.Connection != ConnectionDisconnected {
+		t.Fatalf("stale tick restored disconnected session: %s", m.Connection)
+	}
+	m.focusSidebar()
+	m, reconnect := m.update(testKey("c"))
+	if reconnect == nil || m.Connection != ConnectionConnecting {
+		t.Fatalf("reconnect: state = %s, command scheduled = %t", m.Connection, reconnect != nil)
+	}
+	m, _ = m.update(printerStatusMsg{Seq: oldSeq, Connected: false})
+	if m.Connection != ConnectionConnecting {
+		t.Fatalf("old check interrupted reconnect: %s", m.Connection)
+	}
+	m, _ = m.update(reconnect())
+	m, _ = m.update(printerStatusMsg{Seq: oldSeq, Connected: false})
+	if m.Connection != ConnectionConnected {
+		t.Fatalf("old check disconnected new session: %s", m.Connection)
+	}
+}
+
+type powerOffPrinterSession struct {
+	trackingPrinterSession
+	connected bool
+}
+
+func (s *powerOffPrinterSession) Connected() (bool, error) { return s.connected, nil }
+
 type trackingPrinterSession struct{ closes, connects int }
 
 func (s *trackingPrinterSession) Connect(context.Context) (map[string]any, error) {
@@ -694,6 +755,7 @@ func (*trackingPrinterSession) PrintImage(context.Context, render.Result, int) a
 }
 func (*trackingPrinterSession) Metadata() map[string]any { return nil }
 func (s *trackingPrinterSession) Close() error           { s.closes++; return nil }
+func (*trackingPrinterSession) Connected() (bool, error) { return true, nil }
 
 func TestPrintResultKeepsConnectedPrinter(t *testing.T) {
 	m := NewModel(50, 30, "rect", "", PrintConfig{Session: noopPrinterSession{}})
@@ -731,6 +793,7 @@ func (noopPrinterSession) PrintImage(context.Context, render.Result, int) api.Pr
 func (noopPrinterSession) Close() error { return nil }
 
 func (noopPrinterSession) Metadata() map[string]any { return map[string]any{"connected": true} }
+func (noopPrinterSession) Connected() (bool, error) { return true, nil }
 
 func newTestGrid(canvas Canvas) [][]rune {
 	grid := make([][]rune, canvas.Height)

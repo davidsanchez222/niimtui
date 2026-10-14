@@ -2,9 +2,33 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+const printerStatusInterval = 2 * time.Second
+
+type printerStatusTickMsg struct{ Seq int }
+
+type printerStatusMsg struct {
+	Seq       int
+	Connected bool
+	Err       error
+}
+
+func printerStatusTickCmd(seq int) tea.Cmd {
+	return tea.Tick(printerStatusInterval, func(time.Time) tea.Msg {
+		return printerStatusTickMsg{Seq: seq}
+	})
+}
+
+func checkPrinterStatusCmd(session PrinterSession, seq int) tea.Cmd {
+	return func() tea.Msg {
+		connected, err := session.Connected()
+		return printerStatusMsg{Seq: seq, Connected: connected, Err: err}
+	}
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	beforePreviewKey := m.livePreviewKey()
@@ -38,7 +62,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if m.Prompt.Mode != PromptNone {
 			m.refreshPromptStatus()
 		}
-		return m, nil
+		return m, printerStatusTickCmd(m.ConnectSeq)
 	}
 	if failed, ok := msg.(printerConnectionFailedMsg); ok {
 		if failed.Seq != m.ConnectSeq {
@@ -47,6 +71,34 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Connection = ConnectionDisconnected
 		m.ConnectErr = failed.Err.Error()
 		m.setStatus("Printer connection failed: %v", failed.Err)
+		if m.Prompt.Mode != PromptNone {
+			m.refreshPromptStatus()
+		}
+		return m, nil
+	}
+	if tick, ok := msg.(printerStatusTickMsg); ok {
+		if tick.Seq != m.ConnectSeq || m.Connection != ConnectionConnected || m.Print.Session == nil {
+			return m, nil
+		}
+		return m, checkPrinterStatusCmd(m.Print.Session, tick.Seq)
+	}
+	if status, ok := msg.(printerStatusMsg); ok {
+		if status.Seq != m.ConnectSeq || m.Connection != ConnectionConnected {
+			return m, nil
+		}
+		if status.Err == nil && status.Connected {
+			return m, printerStatusTickCmd(m.ConnectSeq)
+		}
+		m.ConnectSeq++
+		m.Connection = ConnectionDisconnected
+		m.ConnectMeta = nil
+		if status.Err != nil {
+			m.ConnectErr = status.Err.Error()
+			m.setStatus("Printer connection lost: %v. Press c to reconnect.", status.Err)
+		} else {
+			m.ConnectErr = ""
+			m.setStatus("Printer disconnected. Press c to reconnect.")
+		}
 		if m.Prompt.Mode != PromptNone {
 			m.refreshPromptStatus()
 		}

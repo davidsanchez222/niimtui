@@ -326,6 +326,10 @@ func (c *connection) Close() error {
 	return c.device.Disconnect()
 }
 
+func (c *connection) Connected() (bool, error) {
+	return c.device.Connected()
+}
+
 func (c *connection) Metadata() map[string]any {
 	c.metaMu.Lock()
 	defer c.metaMu.Unlock()

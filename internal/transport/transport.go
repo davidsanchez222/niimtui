@@ -16,6 +16,7 @@ type Connection interface {
 	Prepare(ctx context.Context, printer config.PrinterProfile) error
 	Print(ctx context.Context, printer config.PrinterProfile, job Job) error
 	Probe(ctx context.Context) error
+	Connected() (bool, error)
 	Close() error
 	Metadata() map[string]any
 }

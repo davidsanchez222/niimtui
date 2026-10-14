@@ -19,6 +19,7 @@ import (
 
 type PrinterSession interface {
 	Connect(ctx context.Context) (map[string]any, error)
+	Connected() (bool, error)
 	PrintImage(ctx context.Context, rendered render.Result, copies int) api.PrintResponse
 	Metadata() map[string]any
 	Close() error
