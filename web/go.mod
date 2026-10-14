@@ -32,4 +32,4 @@ require (
 
 replace niimtui => ../
 
-replace github.com/charmbracelet/bubbletea => ../../bubbletea
+replace github.com/charmbracelet/bubbletea => github.com/davidsanchez222/bubbletea v0.0.0-20261014030636-0b31e4c2e644
