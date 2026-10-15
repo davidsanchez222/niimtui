@@ -11,8 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/image/font/gofont/goregular"
 
-	"niimtui/internal/config"
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 func TestAutoFitTextElementGrowsHeightForWrappedText(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 func TestDesignBindingsCopyDefaultsAndRequired(t *testing.T) {

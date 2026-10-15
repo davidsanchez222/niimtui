@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 const focusHintAlphabet = "asdfghjklqwertyuiopzxcvbnm1234567890"

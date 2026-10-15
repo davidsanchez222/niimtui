@@ -3,7 +3,7 @@ package ble
 import (
 	"testing"
 
-	"niimtui/internal/protocol/niimbot"
+	"github.com/davidsanchez222/niimtui/internal/protocol/niimbot"
 )
 
 func TestFindResponseSinceAfterNotificationHistoryWraps(t *testing.T) {

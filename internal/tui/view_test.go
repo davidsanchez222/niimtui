@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 func TestDrawPrintableAreaGuideSkipsRoundLabels(t *testing.T) {

@@ -1,4 +1,4 @@
-module niimtui/web
+module github.com/davidsanchez222/niimtui/web
 
 go 1.25.0
 
@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/muesli/termenv v0.16.0
-	niimtui v0.0.0
+	github.com/davidsanchez222/niimtui v0.0.0
 )
 
 require (
@@ -30,6 +30,6 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 )
 
-replace niimtui => ../
+replace github.com/davidsanchez222/niimtui => ../
 
 replace github.com/charmbracelet/bubbletea => github.com/davidsanchez222/bubbletea v0.0.0-20261014030636-0b31e4c2e644

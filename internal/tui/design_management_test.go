@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/config"
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 func testKey(key string) tea.KeyMsg {

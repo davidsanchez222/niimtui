@@ -1,4 +1,4 @@
-module niimtui
+module github.com/davidsanchez222/niimtui
 
 go 1.25.0
 

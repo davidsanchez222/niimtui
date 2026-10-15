@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 const pasteOffsetMM = 2.0

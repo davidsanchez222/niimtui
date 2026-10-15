@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 type Config struct {

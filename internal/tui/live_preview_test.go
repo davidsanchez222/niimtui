@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/config"
 )
 
 func TestDetectLivePreviewProtocolPrefersKitty(t *testing.T) {

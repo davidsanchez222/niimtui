@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/config"
 )
 
 func shellQuote(s string) string {

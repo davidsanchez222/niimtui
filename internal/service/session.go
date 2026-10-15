@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/printtrace"
-	"niimtui/internal/render"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/printtrace"
+	"github.com/davidsanchez222/niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 )
 
 type Session struct {

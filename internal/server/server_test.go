@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"niimtui/internal/config"
-	"niimtui/internal/service"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/service"
 )
 
 func TestHealthAllowsConfiguredOriginWithoutAuth(t *testing.T) {

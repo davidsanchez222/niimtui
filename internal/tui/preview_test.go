@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/label"
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 func TestPrintCurrentDocumentKeepsSessionOpen(t *testing.T) {

@@ -9,12 +9,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/label"
-	"niimtui/internal/printtrace"
-	"niimtui/internal/render"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/printtrace"
+	"github.com/davidsanchez222/niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 )
 
 type PrinterSession interface {

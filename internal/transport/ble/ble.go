@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"niimtui/internal/config"
-	"niimtui/internal/printtrace"
-	"niimtui/internal/protocol/niimbot"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/printtrace"
+	"github.com/davidsanchez222/niimtui/internal/protocol/niimbot"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 
 	"tinygo.org/x/bluetooth"
 )

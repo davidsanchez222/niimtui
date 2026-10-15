@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/image/font/gofont/gobold"
 
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 func fontPreviewModel(t *testing.T) (Model, string) {

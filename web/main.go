@@ -21,8 +21,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"niimtui/internal/config"
-	"niimtui/internal/tui"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/tui"
 )
 
 var demoPrinter = config.PrinterProfile{

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 func testLabelConfig(t *testing.T) string {

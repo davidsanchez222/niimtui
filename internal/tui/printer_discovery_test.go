@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"niimtui/internal/config"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 )
 
 func testDiscoveryPrinters() ([]config.PrinterProfile, []config.LabelPreset) {
@@ -155,5 +155,7 @@ func TestConnectionResultUpdatesWhileSavePromptOpen(t *testing.T) {
 		t.Fatalf("connection result lost while prompting: state=%s status=%q", m.Connection, m.Status)
 	}
 	updated, _ = m.Update(printerConnectionFailedMsg{Err: errors.New("stale"), Seq: m.ConnectSeq - 1})
-	if updated.(Model).Connection != ConnectionConnected { t.Fatal("stale connection result changed state") }
+	if updated.(Model).Connection != ConnectionConnected {
+		t.Fatal("stale connection result changed state")
+	}
 }
