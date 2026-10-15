@@ -92,6 +92,20 @@
 brew install davidsanchez222/tap/niimtui
 ```
 
+Without Homebrew, the install script downloads the latest release into `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidsanchez222/niimtui/main/install.sh | sh
+```
+
+To try it without installing anything, run it from a temp folder:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidsanchez222/niimtui/main/install.sh | sh -s -- --try
+```
+
+The script also takes `--version <tag>` and `--dir <path>`; put them before `--try`.
+
 Or build from source with Go 1.25+ and a C compiler (Xcode Command Line Tools on macOS; the Bluetooth library uses cgo):
 
 ```bash
