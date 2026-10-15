@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 func (m Model) confirmPromptOpen() bool {

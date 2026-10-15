@@ -92,6 +92,12 @@
 brew install davidsanchez222/tap/niimtui
 ```
 
+Or build from source with Go 1.25+ and a C compiler (Xcode Command Line Tools on macOS; the Bluetooth library uses cgo):
+
+```bash
+go install github.com/davidsanchez222/niimtui/cmd/niimtui@latest
+```
+
 macOS on Apple Silicon is tested. Intel Macs are built but untested. Linux and Windows aren't packaged yet; see [support](#support).
 
 ### recommended: a modern terminal

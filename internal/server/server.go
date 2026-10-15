@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/printtrace"
-	"niimtui/internal/service"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/printtrace"
+	"github.com/davidsanchez222/niimtui/internal/service"
 )
 
 type Server struct {

@@ -3,7 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/config"
 )
 
 const menuItemCount = 2

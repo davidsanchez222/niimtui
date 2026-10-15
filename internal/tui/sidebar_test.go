@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/config"
 )
 
 func sidebarTestModel(t *testing.T, session PrinterSession) Model {

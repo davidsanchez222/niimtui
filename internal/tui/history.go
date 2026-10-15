@@ -3,8 +3,8 @@ package tui
 import (
 	"reflect"
 
-	"niimtui/internal/config"
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 func (m *Model) initHistory() {

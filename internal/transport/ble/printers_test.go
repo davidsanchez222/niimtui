@@ -3,8 +3,8 @@ package ble
 import (
 	"testing"
 
-	"niimtui/internal/config"
-	"niimtui/internal/protocol/niimbot"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/protocol/niimbot"
 )
 
 func TestInfoForPrinterSelectsVerifiedPrintTasks(t *testing.T) {

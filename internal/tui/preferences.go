@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/config"
 )
 
 func (m Model) preferences() config.Preferences {

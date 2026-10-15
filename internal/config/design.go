@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 // Bind returns a copy of the saved document with named values substituted.

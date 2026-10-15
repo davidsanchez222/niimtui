@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/config"
 )
 
 //go:embed data/niimbot-label-sizes.json

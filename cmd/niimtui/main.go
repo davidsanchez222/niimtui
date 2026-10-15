@@ -11,12 +11,12 @@ import (
 	"strings"
 	"syscall"
 
-	"niimtui/internal/config"
-	"niimtui/internal/render"
-	"niimtui/internal/server"
-	"niimtui/internal/service"
-	"niimtui/internal/transport"
-	"niimtui/internal/tui"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/server"
+	"github.com/davidsanchez222/niimtui/internal/service"
+	"github.com/davidsanchez222/niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/tui"
 )
 
 // Set by release ldflags; see .goreleaser.yaml.

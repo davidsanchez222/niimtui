@@ -9,9 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/config"
-	"niimtui/internal/printtrace"
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/printtrace"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 const previewOutputPath = "testlabels/preview.png"

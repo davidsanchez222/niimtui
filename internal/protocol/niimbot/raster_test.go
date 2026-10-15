@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 func TestPrepareRasterJobRotatesLandscapeToNinetySixWide(t *testing.T) {

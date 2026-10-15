@@ -14,8 +14,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/label"
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 const livePreviewDebounce = 150 * time.Millisecond

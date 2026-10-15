@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"niimtui/internal/config"
-	"niimtui/internal/printtrace"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/printtrace"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 )
 
 // printerConnection serializes access to a physical printer, including its

@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"niimtui/internal/config"
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 func Run(widthMM, heightMM float64, shape, fontPath string, printConfig PrintConfig) error {

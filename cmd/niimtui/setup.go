@@ -13,10 +13,10 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"niimtui/internal/catalog"
-	"niimtui/internal/config"
-	"niimtui/internal/service"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/catalog"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/service"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 )
 
 var (

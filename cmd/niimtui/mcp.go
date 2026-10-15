@@ -13,9 +13,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/service"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/service"
 )
 
 const mcpInstructions = `niimtui prints labels on a Niimbot printer over Bluetooth, typically QR labels for Homebox items.

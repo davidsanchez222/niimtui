@@ -9,9 +9,9 @@ import (
 
 	"github.com/skip2/go-qrcode"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/label"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/label"
 )
 
 func TestRenderDocumentProducesPNG(t *testing.T) {

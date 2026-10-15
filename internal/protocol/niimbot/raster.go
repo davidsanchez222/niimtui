@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 
-	"niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/render"
 )
 
 type RasterJob struct {

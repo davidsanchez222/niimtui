@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"niimtui/internal/api"
-	"niimtui/internal/config"
-	"niimtui/internal/render"
-	"niimtui/internal/transport"
+	"github.com/davidsanchez222/niimtui/internal/api"
+	"github.com/davidsanchez222/niimtui/internal/config"
+	"github.com/davidsanchez222/niimtui/internal/render"
+	"github.com/davidsanchez222/niimtui/internal/transport"
 )
 
 func TestValidateRequestUsesDefaultPresetAndQROnlyDefaultLayout(t *testing.T) {
