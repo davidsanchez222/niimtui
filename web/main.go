@@ -4,13 +4,16 @@
 // terminal emulator and talks to this program through globalThis.niimtui:
 //
 //	page sets:    cols, rows, onOutput(Uint8Array), onExit(error?)
-//	program sets: input(string), resize(cols, rows)
+//	program sets: input(string), resize(cols, rows),
+//	              mouse(action, button, x, y, alt, ctrl, shift)
 //
-// Printing, live image previews and saving to disk are unavailable here.
+// Printing, live image previews and saving to disk are unavailable here; the
+// printer is a display-only B1 profile.
 package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"syscall/js"
 
@@ -21,6 +24,19 @@ import (
 	"niimtui/internal/config"
 	"niimtui/internal/tui"
 )
+
+var demoPrinter = config.PrinterProfile{
+	Name:          "b1",
+	Model:         "B1",
+	Transport:     "ble",
+	DeviceName:    "B1-demo",
+	DefaultPreset: "b1-50x30",
+}
+
+var demoPresets = []config.LabelPreset{
+	{Name: "b1-50x30", WidthMM: 50, HeightMM: 30, Shape: "rect", Layout: "qr-title", MarginsMM: 2},
+	{Name: "b1-50x50-round", WidthMM: 50, HeightMM: 50, Shape: "round", Layout: "qr-title-subtitle", MarginsMM: 2},
+}
 
 // input buffers keystrokes from JS callbacks, which must never block.
 type input chan []byte
@@ -53,7 +69,18 @@ func main() {
 	model := tui.NewModelWithPresets(50, 30, "rect", "", tui.PrintConfig{
 		DiscoveryContext: context.Background(),
 		Preferences:      config.Preferences{LivePreview: config.LivePreviewOff},
-	}, nil, "")
+		// A display-only printer so the sidebar shows the B1 art, roll and
+		// margins; connecting reports that printing is unavailable here.
+		NewSession: func(string) (tui.PrinterSession, error) {
+			return nil, errors.New("printing is unavailable in the browser demo")
+		},
+		Printers:         []config.PrinterProfile{demoPrinter},
+		Printer:          demoPrinter.Name,
+		PreferredPrinter: demoPrinter.Name,
+		Model:            demoPrinter.Model,
+		DeviceName:       demoPrinter.DeviceName,
+		Copies:           1,
+	}, demoPresets, demoPrinter.DefaultPreset)
 	p := tea.NewProgram(model,
 		tea.WithInput(keys),
 		tea.WithOutput(output{host.Get("onOutput")}),
@@ -77,6 +104,32 @@ func main() {
 		return nil
 	}))
 	resize(host.Get("cols").Int(), host.Get("rows").Int())
+
+	// The terminal emulator doesn't encode mouse reports, so the page sends
+	// cell coordinates and Bubble Tea's action and button values directly.
+	// One goroutine forwards them so press, drag and release stay in order.
+	mouse := make(chan tea.MouseMsg, 256)
+	go func() {
+		for msg := range mouse {
+			p.Send(msg)
+		}
+	}()
+	host.Set("mouse", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		msg := tea.MouseMsg{
+			Action: tea.MouseAction(args[0].Int()),
+			Button: tea.MouseButton(args[1].Int()),
+			X:      args[2].Int(),
+			Y:      args[3].Int(),
+			Alt:    args[4].Bool(),
+			Ctrl:   args[5].Bool(),
+			Shift:  args[6].Bool(),
+		}
+		select {
+		case mouse <- msg:
+		default: // drop motion rather than stall the page
+		}
+		return nil
+	}))
 
 	_, err := p.Run()
 	close(keys)
