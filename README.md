@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="assets/logo.svg" alt="niimtui logo" width="128">
-  <h1>niimtui</h1>
+  <img src="assets/logo-with-text.svg" alt="niimtui logo" width="250">
   <p>
     <a href="https://github.com/davidsanchez222/niimtui/releases/latest">
       <img
